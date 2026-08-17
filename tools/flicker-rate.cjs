@@ -250,7 +250,39 @@ const edir = path.join(root, 'src/elements');
 for (const fn of fs.readdirSync(edir).sort()) if (fn.endsWith('.js')) require(path.join(edir, fn));
 
 const SEEDS = [0, 7, 42, 555];
-const NAMES = ['neon', 'shopSpill', 'signals', 'holo'];
+/* THE LIST OF ELEMENTS THIS TOOL ACTUALLY MEASURES, and it is a hardcoded list rather than "every
+ * element that moves", which is a trap that has already sprung once. It held only the four signage
+ * elements for as long as signage was the only thing in the build that pulsed. A content pass then
+ * added a police lightbar strobing at 2.2 Hz, storey-scale advertising with a travelling wipe, and
+ * aerial traffic carrying a 0.42 Hz freighter beacon — and this tool went on printing PASS for all
+ * six sky presets without looking at any of them. Two separate authors noticed independently that
+ * their own element was invisible to the safety tool and said so in their reports; neither could
+ * fix it, because neither owned tools/.
+ *
+ * A PASS from a safety tool that does not measure the hazard is worse than no tool, because it is
+ * read as clearance. So: anything that modulates over time goes in this list, and the rule for
+ * anyone adding an element from here on is that if it pulses, blinks, strobes, sweeps or wipes,
+ * its name belongs on this line in the same commit that introduces it. */
+const NAMES = ['neon', 'shopSpill', 'signals', 'holo', 'police', 'ads', 'skylanes'];
+
+/* EXPECTED CONSEQUENCE OF THE LINE ABOVE: `--sky=mist` NOW REPORTS NOT_APPLICABLE, EXIT 3.
+ * It used to report PASS, and that is not a regression — it is the rule at the top of this file
+ * doing its job on a wider set of elements than it used to see.
+ *
+ * skylanes deliberately switches itself off in fog: its visibility term falls to 0.06 under mist's
+ * fog of 1.00 and it returns before taking a single hash, which is correct — you cannot see aerial
+ * traffic through a fog bank, and its own header says so. So under mist it paints zero cells at
+ * every seed, sections 2 and 4 have nothing to measure, and this tool refuses to score an empty
+ * set as a pass. That refusal is the whole point of the NOT MEASURED block; softening it here so
+ * the line goes green would be exactly the "we never looked" reading it exists to prevent.
+ *
+ * So the expected results, and what a gate should require, are:
+ *     clear drizzle rain downpour storm   ->  RESULT: PASS            (exit 0)
+ *     mist                                ->  RESULT: NOT_APPLICABLE  (exit 3), skylanes only
+ * This mirrors tools/lightning-rate.cjs, which already reports NOT_APPLICABLE on clear and mist
+ * because those presets carry no storms. A NOT_APPLICABLE whose NOT MEASURED block names ONLY
+ * skylanes is the expected answer under mist. A NOT_APPLICABLE naming anything else, or any FAIL,
+ * is a finding. */
 const MAX_CELL_RATE = 1.0;      // big steps a second in one cell, above which it is flicker
 const COLS = 200, ROWS = 60;
 

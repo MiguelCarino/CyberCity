@@ -1173,8 +1173,11 @@
     var i, j, c, aa, l, hue = hash2(9, 0, sd) < 0.7 ? P.warm : P.spring;
     /* The opening reaches the kerb and stops. It ran to 2.4 m first, which is past the kerb line
      * into the carriageway on any corridor narrower than six metres — a stairwell with cars
-     * driving over it. The pavement here is the 1.4 m strip raycast.configureFor lays out. */
-    for (i = 0; i < 5; i++) {
+     * driving over it. The pavement here is the CC.PAVE strip raycast.configureFor lays out, and
+     * the sixth step is what the strip going from 1.4 m to 2.15 m bought: at five the throat
+     * stopped 28 cm short of the kerb and left a band of bare pavement between the two, which is
+     * the one thing this ramp exists not to do. Last step lands at wallC + 2.17. */
+    for (i = 0; i < 6; i++) {
       c = wp + inw * (0.22 + i * 0.30);
       l = 118 - i * 19;                              // brightest at the throat, against the wall
       for (j = 0; j < 5; j++) {
@@ -1225,7 +1228,14 @@
         for (n = alongLo(axis, 6); n <= alongHi(axis, 6); n++) {
           for (side = 0; side < 2; side++) {
             r = hash2(idx * 2 + side, n, BASE ^ 0x9701);
-            if (r > 0.50) continue;                  // about one prop every eleven metres per side
+            /* 0.72, up from 0.50: about one prop every eight metres per side rather than every
+             * eleven. The pavement went from 1.06 m of walkable strip to 1.81 m (CC.PAVE), which
+             * is the whole reason this can be raised — at the old width a vending machine standing
+             * 0.45 m off the wall and a bollard on the kerb line were within a metre of each other,
+             * so packing them closer would have read as a barricade rather than as a street. The
+             * props sit in the pavement band, so they cost the frame nothing that was carrying an
+             * image: they are drawn over floor cells that measured 4.9 points of the frame BLANK. */
+            if (r > 0.72) continue;
             along = n * 6 + hash2(idx * 2 + side, n, BASE ^ 0x9702) * 4.6;
             wallC = side ? SPAN.c1 : SPAN.c0;
             inw = side ? -1 : 1;                     // from the building face toward the centre

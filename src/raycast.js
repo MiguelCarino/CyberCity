@@ -90,7 +90,7 @@
    * in and, for a cross street, hand floorTex its coordinates transposed — otherwise the kerbs and
    * the centreline run across the view instead of away from it, and the road stops reading as a
    * road at all.
-   * The kerb is also pulled 1.4 m in off the building line: city.js has the facades abutting the
+   * The kerb is also pulled CC.PAVE in off the building line: city.js has the facades abutting the
    * carriageway, and a kerb painted hard against a wall reads as a skirting board, not a street. */
   var swapFloor = 0;
   /* Latched across frames on purpose. A bare afx>afz comparison flips the ENTIRE floor texture
@@ -139,7 +139,12 @@
       swapLatch = want;
       if (want) { swapFloor = 1; cx = cC; hw = cW; }
       else { cx = aC; hw = aW; }
-      hw = hw - 1.4; if (hw < 1.6) hw = 1.6;
+      /* city.js abuts the facades to the street cells, so the width it reports is measured to the
+       * BUILDING LINE. The carriageway is that inset by a pavement on each side. The floor is what
+       * keeps the meanest side street a street: at CC.PAVE 2.15 a 3.5 m half-width would leave
+       * 1.35 m of tarmac, which is not a road, so those streets give the pavement back a little
+       * rather than the road giving up. */
+      hw = hw - CC.PAVE; if (hw < 1.7) hw = 1.7;
     }
     /* streetPeriod 0 disables the wrap: we know the real centreline, and a wrapped copy of the
      * road markings would surface on pavements and down alleys where there is no road. */
@@ -175,10 +180,11 @@
      * camera still owns the kerb the camera is standing next to. */
     for (i = k0 - 1; i <= k0 + 6 && n < 8; i++) {
       cf.xc[n] = (swapFloor ? city.aveX(i) : city.crossZ(i)) + 0.5;
-      /* Same 1.4 m inset the kerb takes, for the same reason: city.js abuts the facades to the
-       * carriageway and a junction mouth measured to the building line swallows both pavements. */
-      var w = (swapFloor ? city.aveW(i) : city.crossW(i)) + 0.5 - 1.4;
-      cf.xw[n] = w < 1.6 ? 1.6 : w;
+      /* The same inset and the same floor as configureFor above, and they have to be the same or
+       * the junction mouth stops where the kerb does not: city.js abuts the facades to the
+       * carriageway, so a mouth measured to the building line swallows both pavements. */
+      var w = (swapFloor ? city.aveW(i) : city.crossW(i)) + 0.5 - CC.PAVE;
+      cf.xw[n] = w < 1.7 ? 1.7 : w;
       if (n === 0) cf.xz0 = cf.xc[0];
       n++;
     }

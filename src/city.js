@@ -75,24 +75,42 @@
        * screen. Measured over 480 frames across 60 seeds, that printed as amber 27.2% of lit energy
        * against azure 22.7% — the pillars a stop apart instead of level. At 0.25/0.24 the same 480
        * frames give 26.8/23.1, and nothing else moves: sky stays 2.0% of cells, facade 63.9%. */
+      /* EVERY litRate BELOW IS THE OLD ONE TIMES 1.35, and the uniform factor is the whole point.
+       * The frame was measured at 39.1% of its cells BLANK — no glyph written at all — and 30.1
+       * points of that 39.1 were facade. Facade is 70% of the picture and 43% of it was nothing,
+       * which is the "too much empty space" this change answers.
+       *
+       * It cannot be answered by painting the dark tiers instead. surfaces.js argues at length
+       * that the unlit spandrel and the dead glass are held blank on purpose, and the print
+       * histogram agrees: the muddy 9-119 band is already 32.4% against core.js's <30 target, so
+       * every dim cell added there comes straight off a budget that is already overdrawn. A LIT
+       * BAY is the opposite trade — it lands at v>119, where the frame is thin (11.7% upper, 3.4%
+       * hot against a 3.5-5 target, i.e. under it).
+       *
+       * A uniform factor is what keeps the census these numbers were fitted to. The comment below
+       * describes a fit of facade-area x litRate against the reference colour split; that product
+       * is a RATIO between districts, so scaling all six by one constant moves every district's
+       * share by exactly nothing and only the total energy changes. Anything else here — a bit
+       * more on the pillars, a bit less on concrete — would be re-tasting a split that was
+       * measured over 480 frames, and it is not what was wrong with the picture. */
       { name: 'sodium',   hue: P.amber,  mix: P.azure,  mixP: 0.86, accent: P.warm,  styles: [0, 3, 0],
-        hMin: 15, hMax: 34, lit: 0.24, signP: 0.34, landmark: 0.010, w: 0.25 },
+        hMin: 15, hMax: 34, lit: 0.32, signP: 0.34, landmark: 0.010, w: 0.25 },
       { name: 'screen',   hue: P.azure,  mix: P.amber,  mixP: 0.86, accent: P.white, styles: [1, 4, 1],
-        hMin: 24, hMax: 56, lit: 0.20, signP: 0.16, landmark: 0.030, w: 0.24 },
+        hMin: 24, hMax: 56, lit: 0.27, signP: 0.16, landmark: 0.030, w: 0.24 },
       { name: 'concrete', hue: P.slate,  mix: P.white,  mixP: 0.80, accent: P.white, styles: [2, 5],
-        hMin: 16, hMax: 32, lit: 0.16, signP: 0.05, landmark: 0.006, w: 0.20 },
+        hMin: 16, hMax: 32, lit: 0.22, signP: 0.05, landmark: 0.006, w: 0.20 },
       // ember is the low industrial pocket — it exists to open the sky slot back up.
       { name: 'ember',    hue: P.ember,  mix: P.amber,  mixP: 0.55, accent: P.red,   styles: [5, 2],
-        hMin: 8,  hMax: 19, lit: 0.16, signP: 0.13, landmark: 0.002, w: 0.11 },
+        hMin: 8,  hMax: 19, lit: 0.22, signP: 0.13, landmark: 0.002, w: 0.11 },
       { name: 'spring',   hue: P.spring, mix: P.azure,  mixP: 0.50, accent: P.white, styles: [2, 0],
-        hMin: 15, hMax: 29, lit: 0.18, signP: 0.16, landmark: 0.006, w: 0.12 },
+        hMin: 15, hMax: 29, lit: 0.24, signP: 0.16, landmark: 0.006, w: 0.12 },
       // The entertainment strip. Its facades are ordinary azure/amber on purpose: violet is a
       // signage colour only, and a whole wall of it turns the frame into the cliche the
       // references deliberately avoid.
       // ...and the accent obeys that too: it used to be P.violet, which put 16-column violet
       // walls in the frame in direct contradiction of the comment directly above it.
       { name: 'arcade',   hue: P.azure,  mix: P.amber,  mixP: 0.55, accent: P.warm,  styles: [1, 3],
-        hMin: 13, hMax: 27, lit: 0.22, signP: 0.60, landmark: 0.004, w: 0.06 }
+        hMin: 13, hMax: 27, lit: 0.30, signP: 0.60, landmark: 0.004, w: 0.06 }
     ];
     var acc = 0;
     for (var i = 0; i < DIST.length; i++) { acc += DIST[i].w; DIST[i].acc = acc; }

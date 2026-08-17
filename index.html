@@ -197,8 +197,10 @@ var CC = (function () {
 
   var Compose = { post: function (f) { tone(f); } };
 
+  var PAVE = 2.15;
+
   return {
-    PALETTE: PALETTE, P: P, GLYPHS: GLYPHS, g: g, GI: GI,
+    PALETTE: PALETTE, P: P, GLYPHS: GLYPHS, g: g, GI: GI, PAVE: PAVE,
     tone: tone, Compose: Compose, EXPOSURE: EXPOSURE,
     makeFrame: makeFrame, clearFrame: clearFrame, put: put, poke: poke,
     hash1: hash1, hash2: hash2, mulberry: mulberry,
@@ -374,19 +376,19 @@ var CC = (function () {
     DIST = [
 
       { name: 'sodium',   hue: P.amber,  mix: P.azure,  mixP: 0.86, accent: P.warm,  styles: [0, 3, 0],
-        hMin: 15, hMax: 34, lit: 0.24, signP: 0.34, landmark: 0.010, w: 0.25 },
+        hMin: 15, hMax: 34, lit: 0.32, signP: 0.34, landmark: 0.010, w: 0.25 },
       { name: 'screen',   hue: P.azure,  mix: P.amber,  mixP: 0.86, accent: P.white, styles: [1, 4, 1],
-        hMin: 24, hMax: 56, lit: 0.20, signP: 0.16, landmark: 0.030, w: 0.24 },
+        hMin: 24, hMax: 56, lit: 0.27, signP: 0.16, landmark: 0.030, w: 0.24 },
       { name: 'concrete', hue: P.slate,  mix: P.white,  mixP: 0.80, accent: P.white, styles: [2, 5],
-        hMin: 16, hMax: 32, lit: 0.16, signP: 0.05, landmark: 0.006, w: 0.20 },
+        hMin: 16, hMax: 32, lit: 0.22, signP: 0.05, landmark: 0.006, w: 0.20 },
 
       { name: 'ember',    hue: P.ember,  mix: P.amber,  mixP: 0.55, accent: P.red,   styles: [5, 2],
-        hMin: 8,  hMax: 19, lit: 0.16, signP: 0.13, landmark: 0.002, w: 0.11 },
+        hMin: 8,  hMax: 19, lit: 0.22, signP: 0.13, landmark: 0.002, w: 0.11 },
       { name: 'spring',   hue: P.spring, mix: P.azure,  mixP: 0.50, accent: P.white, styles: [2, 0],
-        hMin: 15, hMax: 29, lit: 0.18, signP: 0.16, landmark: 0.006, w: 0.12 },
+        hMin: 15, hMax: 29, lit: 0.24, signP: 0.16, landmark: 0.006, w: 0.12 },
 
       { name: 'arcade',   hue: P.azure,  mix: P.amber,  mixP: 0.55, accent: P.warm,  styles: [1, 3],
-        hMin: 13, hMax: 27, lit: 0.22, signP: 0.60, landmark: 0.004, w: 0.06 }
+        hMin: 13, hMax: 27, lit: 0.30, signP: 0.60, landmark: 0.004, w: 0.06 }
     ];
     var acc = 0;
     for (var i = 0; i < DIST.length; i++) { acc += DIST[i].w; DIST[i].acc = acc; }
@@ -814,6 +816,8 @@ var CC = (function () {
       G_8 = g('8'), G_O = g('O'), G_0 = g('0'), G_X = g('X'), G_Z = g('Z'), G_W = g('W'),
       G_M = g('M'), G_TILDE = g('~'), G_oo = g('o'), G_DQ = g('"'), G_V = g('V');
 
+  var SHOP_OPEN = 0.52;
+
   var FILL   = [G_8, G_0, G_O, G_HASH, G_X, G_Z, G_8, G_M, G_W, G_PCT];
   var FILL_N = FILL.length;
   var DIMGL  = [G_COLON, G_DOT, G_QUOTE, G_DASH, G_SEMI, G_COMMA, G_TICK, G_UNDER];
@@ -1044,9 +1048,10 @@ var CC = (function () {
         var stg = hash2(Math.floor(u * 3.1), Math.floor(v * 1.5), sd ^ 0x7C2);
         if (stg < 0.50) return fset(G_PIPE, P.shadow, 24 + stg * 46);
       }
-      if (hash2((u * 3.2) | 0, (v * 3.2) | 0, sd ^ 0xE5) < 0.82) return fset(0, P.shadow, 0);
+
+      if (hash2((u * 3.2) | 0, (v * 3.2) | 0, sd ^ 0xE5) < 0.74) return fset(0, P.shadow, 0);
       return fset(DIMGL[(hash2((u * 3.2) | 0, (v * 3.2) | 0, sd ^ 0xD3) * DIMGL_N) | 0],
-                  P.shadow, 8 + hash2((u * 3.2) | 0, (v * 3.2) | 0, sd ^ 0xC1) * 14);
+                  P.shadow, 16 + hash2((u * 3.2) | 0, (v * 3.2) | 0, sd ^ 0xC1) * 26);
     }
 
     if (!lit) {
@@ -1057,9 +1062,9 @@ var CC = (function () {
                           : fset(0, P.shadow, 0);
       }
 
-      return hash2(wu, wv, sd ^ 0x1B) < 0.31
+      return hash2(wu, wv, sd ^ 0x1B) < 0.38
         ? fset(hash2(wu, wv, sd ^ 0x2C) < 0.5 ? G_COLON : G_QUOTE,
-               P.shadow, 6 + hash2(wu, wv, sd ^ 0x2C) * 8)
+               P.shadow, 15 + hash2(wu, wv, sd ^ 0x2C) * 16)
         : fset(0, P.shadow, 0);
     }
 
@@ -1099,10 +1104,198 @@ var CC = (function () {
     return t;
   })();
 
+  var L_LOW = [103,  52, 135, 133, 154, 165,  71, 255, 124, 110,  47, 255];
+  var L_LIT = [157,  79, 206, 206, 239, 254, 109, 255, 190, 169,  72, 255];
+  var L_HOT = [240, 120, 255, 255, 255, 255, 165, 255, 255, 255, 109, 255];
+
+  var T_NOODLE = 0, T_CONV = 1, T_LAUNDRY = 2, T_BAR = 3,
+      T_ARCADE = 4, T_HARD = 5, T_PHARM = 6, T_BARBER = 7;
+
+  function typeOf(su, sd) {
+    var r = hash2(su, 29, sd ^ 0x9F51);
+    if (r < 0.21) return T_NOODLE;
+    if (r < 0.34) return T_CONV;
+    if (r < 0.46) return T_LAUNDRY;
+    if (r < 0.58) return T_BAR;
+    if (r < 0.68) return T_ARCADE;
+    if (r < 0.79) return T_HARD;
+    if (r < 0.90) return T_PHARM;
+    return T_BARBER;
+  }
+
+  var T_LEAN = [1, -1, -1, 1, -1, 0, -1, 0];
+  function lean(ty, lite, su, sd, sel) {
+    var b = T_LEAN[ty];
+    if (b === 0) return lite;
+    var pil = b < 0 ? P.azure : P.amber;
+    if (lite === pil) return lite;
+
+    var q = hash2(su, sel, sd ^ 0x9F63);
+    if (lite === P.warm) return q < 0.30 ? pil : lite;
+    if (lite === P.amber || lite === P.azure) return q < 0.20 ? pil : lite;
+    return lite;
+  }
+
+  var T_AWN = [1, 0, 1, 1, 0, 1, 0, 0];
+
+  var SIGN_FILL  = [0.92, 0.98, 0.80, 0.56, 0.86, 0.92, 0.72, 0.68];
+  var SIGN_PITCH = [0.30, 1.70, 0.64, 0.44, 0.34, 0.92, 0.52, 0.40];
+
+  function storeIn(ty, u, v, su, sd, lite, lite2, gTop) {
+    var xm = u - su * 2.55;
+    var h, a, b, i, j;
+    switch (ty) {
+
+    case T_NOODLE:
+
+      if (v > 0.99 && v < 1.31) {
+        h = hash2((u * 3) | 0, 0, sd ^ 0x9F71);
+        return fset(h < 0.5 ? G_EQ : G_8, lite,
+                    (v > 1.19 ? L_HOT[lite] : L_LIT[lite]) * (0.90 + h * 0.18));
+      }
+      if (v > 0.80 && v < 0.99) {
+        h = xm / 0.62; h -= Math.floor(h);
+        return h < 0.34 ? fset(G_oo, lite, L_LOW[lite]) : fset(0, P.shadow, 0);
+      }
+
+      if (v > 0.66 && v < 0.80) {
+        h = hash2((u * 2.2) | 0, 0, sd ^ 0x9F79);
+        return h < 0.74 ? fset(G_UNDER, lite, L_LOW[lite]) : fset(0, P.shadow, 0);
+      }
+      if (v < 0.99) return fset(0, P.shadow, 0);
+      if (v > 1.58 && v < 2.24) {
+        h = hash2((u / 0.42) | 0, 0, sd ^ 0x9F83);
+        if (h < 0.72) {
+          a = h < 0.20 ? lite2 : lite;
+          return fset(FILL[(h * 1.7 * FILL_N) | 0], a, L_LIT[a] * (0.88 + h * 0.20));
+        }
+        return fset(0, P.shadow, 0);
+      }
+
+      if (v > 2.26 && v < 2.46) {
+        h = xm / 1.27; h -= Math.floor(h);
+        if (h > 0.36 && h < 0.60) return fset(G_0, P.warm, L_HOT[P.warm]);
+      }
+      return fset(0, P.shadow, 0);
+
+    case T_CONV:
+
+      if (xm > 1.62 && xm < 2.18) {
+        if (xm < 1.72 || xm > 2.08) return fset(G_PIPE, lite, L_HOT[lite]);
+        if (v > gTop - 0.30) return fset(G_DASH, lite, L_HOT[lite]);
+        return fset(0, P.shadow, 0);
+      }
+      h = v / 0.58; h -= Math.floor(h);
+      if (h < 0.24) return fset(G_EQ, lite, L_HOT[lite]);
+      h = hash2((u * 1.6) | 0, (v * 1.7) | 0, sd ^ 0x9F91);
+      a = h < 0.22 ? lite2 : lite;
+
+      return fset(FILL[(h * FILL_N) | 0], a, L_HOT[a] * (0.90 + h * 0.14));
+
+    case T_LAUNDRY:
+
+      if (v > 0.72 && v < 1.98) {
+        b = (v - 0.72) / 0.63; j = b | 0; b -= j;
+        a = xm / 0.52; i = su * 5 + (a | 0); a -= a | 0;
+        a -= 0.5; b -= 0.5;
+        h = (a * a + b * b) * 4;
+        if (h < 0.52) {
+          a = hash2(i, j, sd ^ 0x9FA3) < 0.24 ? lite2 : lite;
+          return fset(h < 0.22 ? G_0 : G_O, a, h < 0.22 ? L_HOT[a] : L_LIT[a]);
+        }
+        if (h < 0.78) return fset(G_oo, lite, L_LOW[lite]);
+        return fset(0, P.shadow, 0);
+      }
+      if (v > 2.08 && v < 2.30) return fset(G_DASH, lite, L_LIT[lite]);
+      return fset(0, P.shadow, 0);
+
+    case T_BAR:
+
+      if (v > 1.52 && v < 1.74) {
+        i = su * 17 + ((xm / 0.15) | 0);
+        h = hash2(i, 0, sd ^ 0x9FB1);
+        if (h < 0.62) {
+          a = h < 0.18 ? lite2 : lite;
+          return fset(h < 0.30 ? G_8 : G_PIPE, a, L_LIT[a] * (0.84 + h * 0.30));
+        }
+        return fset(0, P.shadow, 0);
+      }
+      if (v > 1.06 && v < 1.20) return fset(G_DASH, lite, L_LOW[lite]);
+      return fset(0, P.shadow, 0);
+
+    case T_ARCADE:
+
+      a = xm / 0.62; i = su * 5 + (a | 0); a -= a | 0;
+      b = v / 0.52;  j = b | 0; b -= j;
+      if (a > 0.07 && b > 0.10) {
+        h = hash2(i, j, sd ^ 0x9FD1);
+        if (h > 0.90) return fset(0, P.shadow, 0);
+        a = h < 0.09 ? P.violet : (h < 0.30 ? lite2 : lite);
+
+        b = hash2(i, j, sd ^ 0xA0E3);
+        return fset(FILL[(b * FILL_N) | 0], a,
+                    (b < 0.34 ? L_HOT[a] : L_LIT[a]) * (0.88 + b * 0.22));
+      }
+      return fset(0, P.shadow, 0);
+
+    case T_HARD:
+
+      if (v > 2.14 && v < 2.30) return fset(G_DASH, lite, L_LIT[lite]);
+      if (v > 1.30 && v < 2.14) {
+        h = xm / 0.26; i = su * 10 + (h | 0); h -= h | 0;
+        b = hash2(i, 0, sd ^ 0x9FE1);
+        if (h < 0.58 && v > 1.84 - b * 0.54) {
+          a = b < 0.20 ? lite2 : lite;
+          return fset(b < 0.34 ? G_PIPE : G_V, a, L_LIT[a] * 0.94);
+        }
+        return fset(0, P.shadow, 0);
+      }
+      if (v < 1.24) {
+        h = hash2((u / 0.44) | 0, (v / 0.31) | 0, sd ^ 0x9FE3);
+        return h < 0.55 ? fset(G_HASH, lite, L_LOW[lite]) : fset(0, P.shadow, 0);
+      }
+      return fset(0, P.shadow, 0);
+
+    case T_PHARM:
+
+      a = xm - 1.27; if (a < 0) a = -a;
+      b = v - (gTop - 0.90); if (b < 0) b = -b;
+      if ((a < 0.15 && b < 0.52) || (b < 0.15 && a < 0.52))
+        return fset(a < 0.15 && b < 0.15 ? G_8 : G_HASH, P.white, L_LIT[P.white]);
+
+      if (a < 0.72 && b < 0.72) return fset(0, P.shadow, 0);
+      if (v > 0.70 && v < gTop - 0.20) {
+
+        h = hash2((u / 0.45) | 0, (v / 0.45) | 0, sd ^ 0x9FC1);
+        if (h < 0.46) return fset(FILL[(h * 2.1 * FILL_N) | 0], lite, L_LIT[lite] * (0.94 + h * 0.16));
+        return fset(0, P.shadow, 0);
+      }
+      return fset(0, P.shadow, 0);
+
+    default:
+
+      if (xm > 0.16 && xm < 0.38 && v > 1.10 && v < 2.05) {
+        h = v * 2.9 + xm * 2.2; h -= Math.floor(h);
+
+        return h < 0.5 ? fset(G_8, P.white, L_LIT[P.white]) : fset(G_8, P.red, L_LOW[P.red]);
+      }
+      if (v > 0.86 && v < gTop - 0.24) {
+        a = (xm > 0.58 && xm < 1.14) || (xm > 1.48 && xm < 2.04) ? 1 : 0;
+        if (a) {
+          h = hash2((v / 0.28) | 0, su, sd ^ 0x9FF1);
+          if (h < 0.76) return fset(h < 0.28 ? G_8 : G_EQ, lite, L_LIT[lite] * (0.90 + h * 0.18));
+        }
+        return fset(0, P.shadow, 0);
+      }
+      return fset(0, P.shadow, 0);
+    }
+  }
+
   function ground(u, v, st, sd, cell, lod, t) {
     var su = Math.floor(u / 2.55), fs = u / 2.55 - Math.floor(u / 2.55);
     var r = hash2(su, 0, sd ^ 0x7E31);
-    var open = r < 0.40;
+
+    var open = r < SHOP_OPEN;
 
     var cr = hash2(su, 3, sd ^ 0x1D7);
     var roll = SHOP[hueOf(cell, sd) & 15];
@@ -1110,48 +1303,83 @@ var CC = (function () {
 
     var lite2 = roll[(hash2(su, 11, sd ^ 0x1D8) * 16) | 0];
 
+    var ty = typeOf(su, sd);
+    if (open) { lite = lean(ty, lite, su, sd, 31); lite2 = lean(ty, lite2, su, sd, 37); }
+
     if (v > st.gnd - 0.42) {
-      return fset(G_EQ, open ? lite : P.slate, open ? 58 : 7);
+      return open ? fset(G_EQ, lite, 58) : fset(0, P.shadow, 0);
     }
-    if (fs < 0.06 || fs > 0.94) {
-      return fset(G_PIPE, P.slate, 7);
-    }
+
+    if (fs < 0.06 || fs > 0.94) return fset(0, P.shadow, 0);
     if (open) {
 
-      if (hash2(su, 21, sd ^ 0x8A1) < 0.40 && v > st.gnd - 2.55 && v < st.gnd - 1.62) {
+      if (T_AWN[ty] && hash2(su, 21, sd ^ 0x8A1) < 0.46 &&
+          v > st.gnd - 2.55 && v < st.gnd - 1.62) {
         var aw = (st.gnd - 1.62 - v) / 0.93;
         if (aw > 0.86) {
 
           var vg = u / 0.42; vg -= Math.floor(vg);
-          return fset(vg < 0.5 ? G_V : G_UNDER, lite, 44 + hash2(su, (u * 2.4) | 0, sd ^ 0x8A2) * 30);
+          return fset(vg < 0.5 ? G_V : G_UNDER, lite,
+                      L_LOW[lite] * (1.00 + hash2(su, (u * 2.4) | 0, sd ^ 0x8A2) * 0.20));
         }
-        var ag = u / 0.55; ag -= Math.floor(ag);
-        return fset(ag < 0.5 ? G_SLASH : G_EQ, ag < 0.5 ? lite : P.slate,
-                    ag < 0.5 ? 26 + aw * 34 : 12 + aw * 14);
+
+        var ag = u / 0.42; ag -= Math.floor(ag);
+        if (ag < 0.30) return fset(G_SLASH, lite, L_LOW[lite] * (1.18 - aw * 0.20));
+        return fset(0, P.shadow, 0);
       }
 
       if (v > st.gnd - 1.55) {
+        var sp = u / SIGN_PITCH[ty];
+        var sg = hash2(sp | 0, su, sd ^ 0x515);
+        if (sg > SIGN_FILL[ty]) return fset(0, P.shadow, 0);
 
-        var sc = r < 0.09 ? accentOf(cell, sd) : lite;
-        var sg = hash2(su, Math.floor(u * 3.1), sd ^ 0x515);
-        return fset(sg < 0.22 ? 0 : FILL[(sg * FILL_N) | 0], sc,
-                    sg < 0.22 ? 0 : 176 + sg * 79);
+        var sc = ty === T_ARCADE && sg < 0.20 ? P.violet
+               : (ty === T_PHARM && sg < 0.05 ? P.white
+               : (hash2(su, 47, sd ^ 0x517) < 0.10 ? accentOf(cell, sd) : lite));
+
+        return fset(FILL[((sg / SIGN_FILL[ty]) * FILL_N) | 0], sc, L_HOT[sc] * (1.00 + sg * 0.14));
       }
       if (v < 0.62)
         return hash2(su, Math.floor(v * 6), sd ^ 0x3) < 0.5 ? fset(G_UNDER, P.shadow, 14)
                                                             : fset(0, P.shadow, 0);
 
       var fm = u / 0.85; fm -= Math.floor(fm);
-      if (fm < 0.10) return fset(G_PIPE, P.slate, 9);
+      if (fm < 0.10) return fset(0, P.shadow, 0);
 
-      var col = hash2(Math.floor(u * 0.8), Math.floor(v * 1.3), sd ^ 0x6C1) < 0.34 ? lite2 : lite;
-      var fall = clamp(1 - (v - 0.62) / (st.gnd - 2.2), 0, 1);
-      var lum = 92 + fall * 104 + hash2(su, Math.floor(v * 2.2), sd) * 34;
-      if (hash2(su, Math.floor(v * 3.1), sd ^ 0x5) < 0.26) lum *= 0.40;
-      return fset(FILL[(hash2(su, Math.floor(v * 1.7), sd ^ 0x2) * FILL_N) | 0], col,
-                  lum * grain(u, v, sd, lod));
+      if (lod > 0) return storeIn(ty, u, v, su, sd, lite, lite2, st.gnd - 1.55);
+
+      var fcov = 0.30 + SIGN_FILL[ty] * 0.38;
+      var fh = hash2(Math.floor(u * 1.1), Math.floor(v * 1.1), sd ^ 0x6C1);
+      if (fh > fcov) return fset(0, P.shadow, 0);
+      var fcol = hash2(Math.floor(u * 0.8), Math.floor(v * 1.3), sd ^ 0x6C3) < 0.30 ? lite2 : lite;
+      return fset(FILL[((fh / fcov) * FILL_N) | 0], fcol, L_LIT[fcol] * (0.90 + fh * 0.20));
     }
-    if (r < 0.42) return fset(0, P.shadow, 0);
+
+    var sh1 = hash2(su, 41, sd ^ 0xA31), sh2 = hash2(su, 53, sd ^ 0xA32),
+        sh3 = hash2(su, 67, sd ^ 0xA33), sh4 = hash2(su, 79, sd ^ 0xA35);
+
+    if (v > st.gnd - 0.72) return fset(G_DASH, roll[(sh4 * 16) | 0], 90 + sh1 * 44);
+
+    if (sh2 < 0.11 && v < 0.34)
+      return fset(v < 0.17 ? G_UNDER : G_EQ, lite, 128 + sh3 * 58);
+
+    if (sh2 > 0.68 && sh2 < 0.79) {
+      var dl = v - 2.28, du = fs - 0.80;
+      if (du < 0) du = -du;
+      if (du < 0.075 && dl > -0.16 && dl < 0.16) return fset(G_0, P.warm, 156 + sh3 * 40);
+    }
+
+    if (sh1 < 0.34 && v > 1.05 && v < 2.15) {
+      var tgu = (u - su * 2.55 - 0.28) / 1.75;
+      if (tgu > 0 && tgu < 1) {
+        var tg = hash2(Math.floor(tgu * 9), Math.floor((v - 1.05) * 6.4), sd ^ 0xA34);
+        if (tg < 0.46) {
+
+          return fset(tg < 0.16 ? G_HASH : (tg < 0.31 ? G_PCT : G_SLASH),
+                      accentOf(cell, sd), 116 + tg * 116);
+        }
+      }
+    }
 
     var rib = Math.floor(v * 3.4);
     return (rib % 3) ? fset(0, P.shadow, 0)
@@ -1524,7 +1752,9 @@ var CC = (function () {
   CC.Surf = {
     facade: facade, floorTex: floorTex, sky: sky, fog: fog,
     configure: configure, cfg: CFG, beginFrame: beginFrame,
-    FOG_START: FOG_START, FOG_END: FOG_END
+    FOG_START: FOG_START, FOG_END: FOG_END,
+
+    SHOP_OPEN: SHOP_OPEN
   };
 })(CC);
 
@@ -1609,7 +1839,8 @@ var CC = (function () {
       swapLatch = want;
       if (want) { swapFloor = 1; cx = cC; hw = cW; }
       else { cx = aC; hw = aW; }
-      hw = hw - 1.4; if (hw < 1.6) hw = 1.6;
+
+      hw = hw - CC.PAVE; if (hw < 1.7) hw = 1.7;
     }
 
     CFGARG.grid = 8.0; CFGARG.streetX = cx; CFGARG.streetPeriod = 0; CFGARG.half = hw;
@@ -1631,8 +1862,8 @@ var CC = (function () {
     for (i = k0 - 1; i <= k0 + 6 && n < 8; i++) {
       cf.xc[n] = (swapFloor ? city.aveX(i) : city.crossZ(i)) + 0.5;
 
-      var w = (swapFloor ? city.aveW(i) : city.crossW(i)) + 0.5 - 1.4;
-      cf.xw[n] = w < 1.6 ? 1.6 : w;
+      var w = (swapFloor ? city.aveW(i) : city.crossW(i)) + 0.5 - CC.PAVE;
+      cf.xw[n] = w < 1.7 ? 1.7 : w;
       if (n === 0) cf.xz0 = cf.xc[0];
       n++;
     }
@@ -2253,6 +2484,490 @@ var CC = (function () {
 
 })(CC);
 
+/* src/elements/ads.js */
+(function (CC) {
+  'use strict';
+
+  var P = CC.P, g = CC.g, put = CC.put, hash2 = CC.hash2, clamp = CC.clamp, smooth = CC.smooth;
+
+  var G_8 = g('8'), G_HASH = g('#'), G_M = g('M'), G_W = g('W'), G_X = g('X'),
+      G_0 = g('0'), G_AT = g('@'), G_N = g('N'), G_Q = g('Q'), G_O = g('O');
+  var G_EQ = g('='), G_DASH = g('-'), G_COLON = g(':'), G_STAR = g('*'),
+      G_PLUS = g('+'), G_SEMI = g(';'), G_o = g('o'), G_PCT = g('%');
+  var MASS_G = [G_8, G_HASH, G_M, G_W, G_X, G_0, G_AT, G_N, G_Q, G_O], MASS_N = 10;
+  var TEXT_G = [G_EQ, G_DASH, G_COLON, G_STAR, G_PLUS, G_SEMI, G_o, G_PCT], TEXT_N = 8;
+
+  var PEAK = [196, 95, 220, 150, 255, 205, 150, 255, 200, 180, 150, 9];
+
+  var PANEL_LUM = 9;
+
+  var SWEEP_AMP = 0.30;
+  var SWEEP_RATE = 0.22;
+  var CUT_MIN = 15.0, CUT_VAR = 5.0;
+
+  var DISSOLVE = 2.6;
+  var CELL_FADE = 0.36;
+  var CELL_CF = 2 * CELL_FADE / DISSOLVE;
+
+  var FADE_H = CELL_CF * 0.5, FADE_SPAN = 1 - CELL_CF;
+
+  var NEAR = 7.0, FAR = 52.0, DISS_W = 10.0;
+
+  var AREA_MAX = 620;
+
+  var FONT = [
+    0x0E,0x11,0x11,0x1F,0x11,0x11,0x11,
+    0x0E,0x11,0x10,0x10,0x10,0x11,0x0E,
+    0x1F,0x10,0x10,0x1E,0x10,0x10,0x1F,
+    0x11,0x12,0x14,0x18,0x14,0x12,0x11,
+    0x11,0x19,0x19,0x15,0x13,0x13,0x11,
+    0x0E,0x11,0x11,0x11,0x11,0x11,0x0E,
+    0x1E,0x11,0x11,0x1E,0x14,0x12,0x11,
+    0x0F,0x10,0x10,0x0E,0x01,0x01,0x1E,
+    0x1F,0x04,0x04,0x04,0x04,0x04,0x04,
+    0x11,0x11,0x0A,0x04,0x0A,0x11,0x11,
+    0x11,0x11,0x0A,0x04,0x04,0x04,0x04,
+    0x1F,0x01,0x02,0x04,0x08,0x10,0x1F
+  ];
+
+  var WORDS = [ 4,5,9,  1,0,8,  7,0,11,  2,3,5,  6,2,9,  8,5,3,  0,11,4,  5,6,1 ], WORD_N = 8;
+
+  function rel(k) { return CC.Weather ? CC.Weather.rel(k) : 1; }
+  var AT = { dim: 1, far: FAR };
+  function airPrep() {
+    var f = rel('fog');
+    AT.dim = clamp(1 - 0.13 * (f - 1), 0.72, 1.06);
+    AT.far = clamp(FAR * (1 - 0.22 * (f - 1)), 28, 54);
+  }
+
+  var CO = { cols: 0, rows: 0, horizon: 0, hp: 0, scale: 1, eyeY: 1.7,
+             ox: 0, oz: 0, fwx: 0, fwz: 1, rgx: 1, rgz: 0 };
+  function setCam(frame, cam) {
+    CO.cols = frame.cols; CO.rows = frame.rows;
+    CO.horizon = cam.horizon !== undefined ? cam.horizon : frame.rows * 0.56;
+    CO.hp = Math.tan((cam.fov || 1.25) * 0.5);
+    CO.scale = cam.scaleY !== undefined ? cam.scaleY
+             : (frame.cols * (cam.cellAspect || 0.5625)) / (2 * CO.hp);
+    CO.eyeY = cam.eyeY !== undefined ? cam.eyeY : 1.7;
+    CO.ox = cam.x; CO.oz = cam.z;
+    var yaw = cam.yaw || 0;
+    CO.fwx = Math.sin(yaw); CO.fwz = Math.cos(yaw);
+    CO.rgx = Math.cos(yaw); CO.rgz = -Math.sin(yaw);
+  }
+  var VA = { x: 0, w: 0 }, VB = { x: 0, w: 0 };
+  function projInto(px, py, pz, O) {
+    var rx = px - CO.ox, rz = pz - CO.oz;
+    var w = rx * CO.fwx + rz * CO.fwz;
+    if (w < 1.2) return false;
+    var sp = (rx * CO.rgx + rz * CO.rgz) / w;
+    O.x = (sp / CO.hp + 1) * 0.5 * CO.cols - 0.5;
+    O.w = w;
+    return true;
+  }
+
+  var HKX = [0, 104729, 611953, 1999993, 3391993, 4796027, 7919, 2750159, 4256233, 1299709];
+  var HKZ = [0, 4256233, 1299709, 4796027, 611953, 2750159, 3391993, 104729, 7919, 1999993];
+  function hk(a, b, salt, i) { return hash2(a + HKX[i], b + HKZ[i], salt); }
+
+  function crest(d, hold, soft) {
+    d -= Math.floor(d);
+    if (d > 0.5) d = 1 - d;
+    return smooth(clamp((hold + soft - d) / soft, 0, 1));
+  }
+
+  var FACE = { nx: 0, nz: 0, fx: 0, fz: 0 };
+  function faceOf(city, gx, gz, rx, rz) {
+    var xFirst = (rx < 0 ? -rx : rx) > (rz < 0 ? -rz : rz);
+    var i, nx, nz;
+    for (i = 0; i < 2; i++) {
+      if ((i === 0) === xFirst) { nx = rx > 0 ? -1 : 1; nz = 0; }
+      else                      { nx = 0; nz = rz > 0 ? -1 : 1; }
+      if (city.height(gx + nx, gz + nz) <= 0) {
+        FACE.nx = nx; FACE.nz = nz;
+        FACE.fx = gx + 0.5 + nx * 0.5; FACE.fz = gz + 0.5 + nz * 0.5;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  var AD = {
+    ax: 0, az: 0, bx: 0, bz: 0,
+    v0: 0, H: 0,
+    NC: 0, NR: 0,
+    hue: 0, hue2: 0, acc: 0,
+    sd: 0, ph: 0,
+    modeA: 0, modeB: 0, mix: 0,
+    w0: 0, w1: 0, w2: 0,
+    lamp: 0,
+    sweep: 0
+  };
+
+  var MODE_FIGURE = 0, MODE_WORD = 1, MODE_PRODUCT = 2;
+
+  function setup(city, gx, gz, t) {
+    var bh = city.height(gx, gz);
+    if (bh < 15) return 0;
+
+    var rx = gx + 0.5 - CO.ox, rz = gz + 0.5 - CO.oz;
+    if (!faceOf(city, gx, gz, rx, rz)) return 0;
+    var nx = FACE.nx, nz = FACE.nz;
+
+    var rlen = Math.sqrt(rx * rx + rz * rz);
+    if (rlen < 1e-3) return 0;
+    var facing = -(nx * rx + nz * rz) / rlen;
+    if (facing < 0.18) return 0;
+
+    var tx = nz, tz = -nx;
+    var minH = bh, i, hx, hz, hA, hB;
+    for (i = 1; i <= 5; i++) {
+      hx = gx + tx * i; hz = gz + tz * i;
+      hA = city.height(hx, hz);
+      if (hA < 13 || city.height(hx + nx, hz + nz) > 0) break;
+      hx = gx - tx * i; hz = gz - tz * i;
+      hB = city.height(hx, hz);
+      if (hB < 13 || city.height(hx + nx, hz + nz) > 0) break;
+      if (hA < minH) minH = hA;
+      if (hB < minH) minH = hB;
+    }
+    var half = i - 1;
+    if (half < 2) return 0;
+
+    var r1 = hk(gx, gz, SALT, 1), r2 = hk(gx, gz, SALT, 2), r3 = hk(gx, gz, SALT, 3);
+    var r4 = hk(gx, gz, SALT, 4), r5 = hk(gx, gz, SALT, 5), r6 = hk(gx, gz, SALT, 6);
+    var r7 = hk(gx, gz, SALT, 7), r8 = hk(gx, gz, SALT, 8), r9 = hk(gx, gz, SALT, 9);
+
+    var W = 2 * (half + 0.35);
+
+    var wWant = 7.2 + r3 * 3.8;
+    if (W > wWant) W = wWant;
+
+    var H = r2 < 0.62 ? W * (0.42 + 0.22 * r4) : W * (0.95 + 0.55 * r4);
+
+    if (H > 7.0) H = 7.0;
+    if (H > minH - 7.3) H = minH - 7.3;
+    if (H < 4.2) return 0;
+
+    var v0hi = minH - H - 2.5;
+    var tv = 12.0 - H;
+    if (tv < v0hi) v0hi = tv;
+    if (v0hi < 4.6) return 0;
+    var v0 = 4.6 + r9 * (v0hi - 4.6);
+
+    var cx = FACE.fx + nx * 0.34, cz = FACE.fz + nz * 0.34;
+    AD.ax = cx - tx * W * 0.5; AD.az = cz - tz * W * 0.5;
+    AD.bx = cx + tx * W * 0.5; AD.bz = cz + tz * W * 0.5;
+    AD.v0 = v0; AD.H = H;
+
+    AD.NC = Math.round(W / 0.55); if (AD.NC < 8) AD.NC = 8; else if (AD.NC > 20) AD.NC = 20;
+    AD.NR = Math.round(H / 0.55); if (AD.NR < 8) AD.NR = 8; else if (AD.NR > 18) AD.NR = 18;
+
+    AD.hue = r1 < 0.48 ? P.amber : r1 < 0.86 ? P.azure : P.ember;
+
+    AD.hue2 = r5 < 0.55 ? (AD.hue === P.azure ? P.amber : P.azure) : AD.hue;
+    AD.acc = r6 < 0.26 ? P.violet : (AD.hue === P.amber ? P.azure : P.amber);
+
+    AD.sd = 1 + ((hk(gx + 13, gz + 17, SALT, 2) * 29989) | 0);
+    AD.ph = r7;
+    AD.lamp = r8 < 0.55 ? 3 : 0;
+
+    var wi = ((hk(gx + 9, gz - 7, SALT, 8) * WORD_N) | 0) * 3;
+    AD.w0 = WORDS[wi]; AD.w1 = WORDS[wi + 1]; AD.w2 = WORDS[wi + 2];
+
+    var period = CUT_MIN + AD.ph * CUT_VAR;
+    var tt = t / period + AD.ph * 7.0;
+    var cut = Math.floor(tt);
+    var frac = (tt - cut) * period;
+    var stride = 1 + ((r3 * 2) | 0);
+    AD.modeA = (((cut * stride) % 3) + 3) % 3;
+    AD.modeB = (AD.modeA + stride) % 3;
+    AD.mix = clamp(frac / DISSOLVE, 0, 1);
+    AD.sweep = (AD.ph + t * SWEEP_RATE) % 1;
+    if (CC.reducedMotion) {
+
+      AD.modeA = ((AD.ph * 3) | 0) % 3; AD.modeB = AD.modeA; AD.mix = 0;
+      AD.sweep = AD.ph;
+    }
+    return 1;
+  }
+
+  function copyAt(cu, cv) {
+    return ((cv & 1) === 0 && hash2(cu, cv, AD.sd + 7) < 0.66) ? 2 : 0;
+  }
+  function inkAt(mode, cu, cv, iu, iv) {
+    var dx, dy, ex, hw, d, nL, fu, li, fx, bx, by, m, ltr;
+    if (mode === MODE_WORD) {
+      if (iv > 0.84) return copyAt(cu, cv);
+      if (iv > 0.71 && iv < 0.78 && iu > 0.05 && iu < 0.95) return 3;
+      if (iv < 0.05 || iv > 0.67) return 0;
+      nL = AD.NC >= 15 ? 3 : 2;
+      fu = iu * nL; li = fu | 0; if (li >= nL) li = nL - 1;
+      fx = fu - li;
+      if (fx > 0.84) return 0;
+      bx = (fx / 0.84 * 5) | 0; if (bx > 4) bx = 4;
+      by = ((iv - 0.05) / 0.62 * 7) | 0; if (by > 6) by = 6;
+      ltr = li === 0 ? AD.w0 : (li === 1 ? AD.w1 : AD.w2);
+      m = FONT[ltr * 7 + by];
+      return ((m >> (4 - bx)) & 1) ? 1 : 0;
+    }
+    if (mode === MODE_PRODUCT) {
+      if (iv > 0.82) return copyAt(cu, cv);
+
+      if (iu < 0.20 || iu > 0.80) return (iv > 0.22 && iv < 0.76) ? copyAt(cu, cv) : 0;
+      if (iv < 0.06) hw = 0;
+      else if (iv < 0.13) hw = 0.055;
+      else if (iv < 0.24) hw = 0.045;
+      else if (iv < 0.34) hw = 0.045 + (iv - 0.24) * 1.80;
+      else if (iv < 0.80) hw = 0.225;
+      else hw = 0;
+      d = iu - 0.5; if (d < 0) d = -d;
+      if (d > hw) return 0;
+      if (iv > 0.46 && iv < 0.60) return 0;
+
+      if (iv > 0.34 && iu < 0.5 && d > hw * 0.55) return 3;
+      return 1;
+    }
+
+    if (iv > 0.80) return copyAt(cu, cv);
+
+    dx = (iu - 0.50) / 0.38; dy = (iv - 0.40) / 0.42;
+    d = dx * dx + dy * dy;
+    if (d > 1) return 0;
+    ex = iu < 0.5 ? 0.355 : 0.645;
+    if ((iu > ex - 0.085 && iu < ex + 0.085) && iv > 0.270 && iv < 0.400) return 0;
+    if (iu > 0.35 && iu < 0.65 && iv > 0.545 && iv < 0.635) return 0;
+    if (d > 0.74 && iv < 0.52) return 3;
+    return 1;
+  }
+
+  var M = { xL: 0, xR: 0, wL: 0, wR: 0, span: 0, hRows: 0, cy: 0, dist: 0 };
+  function measure(cam) {
+    if (!projInto(AD.ax, AD.v0, AD.az, VA)) return 0;
+    if (!projInto(AD.bx, AD.v0, AD.bz, VB)) return 0;
+    if (VA.x <= VB.x) { M.xL = VA.x; M.wL = VA.w; M.xR = VB.x; M.wR = VB.w; }
+    else              { M.xL = VB.x; M.wL = VB.w; M.xR = VA.x; M.wR = VA.w; }
+    M.span = M.xR - M.xL;
+    if (M.span < 1) return 0;
+    if (M.xR < 0 || M.xL > CO.cols - 1) return 0;
+    var wMid = 2 / (1 / M.wL + 1 / M.wR);
+    M.hRows = AD.H * CO.scale / wMid;
+    M.cy = CO.horizon - (AD.v0 + AD.H * 0.5 - CO.eyeY) * CO.scale / wMid;
+    var spC = (2 * ((M.xL + M.xR) * 0.5 + 0.5) / CO.cols - 1) * CO.hp;
+    M.dist = wMid * Math.sqrt(1 + spC * spC);
+    return 1;
+  }
+
+  function visibleFrac(frame) {
+    var q, s, x, y, i, n = 0, seen = 0, fr, iw, lim, sp;
+    for (q = 0; q < 4; q++) {
+      y = Math.round(M.cy + (q - 1.5) * M.hRows * 0.26);
+
+      if (y < 0 || y > CO.rows - 1) continue;
+      for (s = 0; s < 4; s++) {
+        fr = 0.10 + 0.2667 * s;
+        x = Math.round(M.xL + M.span * fr);
+        if (x < 0 || x > CO.cols - 1) continue;
+        n++;
+
+        iw = (1 - fr) / M.wL + fr / M.wR;
+        sp = (2 * (x + 0.5) / CO.cols - 1) * CO.hp;
+        lim = 0.90 * Math.sqrt(1 + sp * sp) / iw;
+        i = y * CO.cols + x;
+        if (!(frame.dist[i] < lim)) seen++;
+      }
+    }
+
+    return n === 0 ? 1 : seen / n;
+  }
+
+  function clipFrac(cy, hRows, rows) {
+    var vy0 = cy - hRows * 0.5, vy1 = cy + hRows * 0.5;
+    if (vy0 < 0) vy0 = 0;
+    if (vy1 > rows - 1) vy1 = rows - 1;
+    if (hRows < 1) hRows = 1;
+    return clamp(((vy1 - vy0) / hRows - 0.55) / 0.15, 0, 1);
+  }
+
+  function drawAd(frame) {
+    var cols = CO.cols, rows = CO.rows;
+    var xL = M.xL, xR = M.xR, wL = M.wL, wR = M.wR, span = M.span;
+    var xa = Math.floor(xL), xb = Math.ceil(xR);
+    if (xa < 0) xa = 0; if (xb > cols - 1) xb = cols - 1;
+    if (xb < xa) return;
+
+    var d0 = AT.far - DISS_W; if (d0 < 14) d0 = 14;
+    var dens = 1 - clamp((M.dist - d0) / (AT.far - d0), 0, 1);
+
+    dens *= clipFrac(M.cy, M.hRows, rows);
+    if (dens < 0.06) return;
+    var area = span * (M.hRows < 1 ? 1 : M.hRows);
+    var idens = area > AREA_MAX ? AREA_MAX / area : 1;
+    if (idens > dens) idens = dens;
+
+    var NCW = AD.NC, NRW = AD.NR, mix = AD.mix, sd = AD.sd;
+    var NC = Math.round(span); if (NC < 6) NC = 6; if (NC > NCW) NC = NCW;
+    var NR = Math.round(M.hRows); if (NR < 6) NR = 6; if (NR > NRW) NR = NRW;
+    var x, r, s, iw, w, u, sp, dist, yBot, yTop, vspan, vv, cu, cv, iu, iv, r0, r1, lp;
+    var code, colr, glyph, k, lum, boost, atten, wu, wv, fade, fp, cA, cB;
+    for (x = xa; x <= xb; x++) {
+      s = (x + 0.5 - xL) / span;
+      if (s < 0) s = 0; else if (s > 1) s = 1;
+      iw = (1 - s) / wL + s / wR;
+      w = 1 / iw;
+      u = (s / wR) / iw;
+      sp = (2 * (x + 0.5) / cols - 1) * CO.hp;
+
+      dist = w * Math.sqrt(1 + sp * sp) * 0.996;
+      yBot = CO.horizon - (AD.v0 - CO.eyeY) * CO.scale / w;
+      yTop = yBot - AD.H * CO.scale / w;
+      vspan = yBot - yTop;
+      if (vspan < 0.5) vspan = 0.5;
+
+      boost = 1 + SWEEP_AMP * crest(u - AD.sweep, 0.06, 0.18);
+
+      atten = AT.dim * (1 - 0.12 * clamp((dist - 20) / 30, 0, 1));
+
+      r0 = Math.ceil(yTop); r1 = Math.floor(yBot);
+      if (r0 < 0) r0 = 0; if (r1 > rows - 1) r1 = rows - 1;
+      for (r = r0; r <= r1; r++) {
+        vv = ((r + 0.5) - yTop) / vspan;
+        if (vv < 0) vv = 0; else if (vv > 1) vv = 1;
+        cu = (u * NC) | 0; if (cu > NC - 1) cu = NC - 1;
+        cv = (vv * NR) | 0; if (cv > NR - 1) cv = NR - 1;
+        wu = (u * NCW) | 0; if (wu > NCW - 1) wu = NCW - 1;
+        wv = (vv * NRW) | 0; if (wv > NRW - 1) wv = NRW - 1;
+
+        if (dens < 1 && hash2(wu + 5, wv + 3, sd + 19) > dens) continue;
+
+        fade = 1;
+        if (cu === 0 || cu === NC - 1 || cv === 0 || cv === NR - 1) {
+
+          code = 0;
+          if (AD.lamp && cv === NR - 1) {
+            lp = ((cu * 4) / NC) | 0;
+            if (lp >= 1 && lp <= 3 && ((cu * 4) % NC) < 4) { code = 3; }
+          }
+        } else {
+          iu = (cu - 0.5) / (NC - 2); if (iu < 0) iu = 0; else if (iu > 1) iu = 1;
+          iv = (cv - 0.5) / (NR - 2); if (iv < 0) iv = 0; else if (iv > 1) iv = 1;
+
+          if (mix <= 0) { code = inkAt(AD.modeA, wu, wv, iu, iv); }
+          else if (mix >= 1) { code = inkAt(AD.modeB, wu, wv, iu, iv); }
+          else {
+            fp = (mix - (FADE_H + hash2(wu + 61, wv + 29, sd + 5) * FADE_SPAN)) / FADE_H;
+            if (fp <= -1) { code = inkAt(AD.modeA, wu, wv, iu, iv); }
+            else if (fp >= 1) { code = inkAt(AD.modeB, wu, wv, iu, iv); }
+            else {
+              cA = inkAt(AD.modeA, wu, wv, iu, iv);
+              cB = inkAt(AD.modeB, wu, wv, iu, iv);
+              if (cA === cB) { code = cA; }
+              else if (fp < 0) { code = cA; fade = -fp; }
+              else { code = cB; fade = fp; }
+            }
+          }
+
+          if (code !== 0 && idens < 1 && hash2(wu + 23, wv + 41, sd + 29) > idens) code = 0;
+        }
+
+        if (code === 0) {
+
+          put(frame, x, r, ((wu + wv) & 1) ? G_HASH : G_8, P.shadow, PANEL_LUM, dist);
+          continue;
+        }
+        if (code === 2) { colr = AD.hue2; glyph = TEXT_G[(hash2(wu, wv, sd + 11) * TEXT_N) | 0]; k = 1.0; }
+        else if (code === 3) { colr = AD.acc; glyph = MASS_G[(hash2(wu, wv, sd + 13) * MASS_N) | 0]; k = 1.06; }
+        else { colr = AD.hue; glyph = MASS_G[(hash2(wu, wv, sd + 17) * MASS_N) | 0]; k = 1.0; }
+        lum = PEAK[colr] * atten * boost * k * fade;
+        if (lum > 255) lum = 255;
+
+        if (lum <= PANEL_LUM) {
+          put(frame, x, r, ((wu + wv) & 1) ? G_HASH : G_8, P.shadow, PANEL_LUM, dist);
+          continue;
+        }
+        put(frame, x, r, glyph, colr, lum, dist);
+      }
+    }
+  }
+
+  var SEL = { n: 0, ax: 0, az: 0, as: 0, bx: 0, bz: 0, bs: 0 };
+  var SALT = 0;
+
+  CC.ELEMENTS.push({
+    name: 'ads',
+    layer: 34,
+
+    init: function (city, rng) {
+      this.city = city;
+      SALT = (rng() * 2147483647) | 0;
+    },
+
+    update: function () {},
+
+    draw: function (frame, cam, t) {
+      var city = this.city;
+      if (!city) return;
+      setCam(frame, cam);
+      airPrep();
+
+      var R = AT.far;
+      var gx0 = Math.floor(CO.ox - R), gx1 = Math.ceil(CO.ox + R);
+      var gz0 = Math.floor(CO.oz - R), gz1 = Math.ceil(CO.oz + R);
+      var gx, gz, rx, rz, w, side, lim, vy0, vy1, vx0, vx1, visR, visC, score, cf;
+      var rows = frame.rows, cols = frame.cols;
+      SEL.n = 0; SEL.as = 0; SEL.bs = 0;
+
+      for (gz = gz0; gz <= gz1; gz++) {
+        for (gx = gx0; gx <= gx1; gx++) {
+          rx = gx + 0.5 - CO.ox; rz = gz + 0.5 - CO.oz;
+          w = rx * CO.fwx + rz * CO.fwz;
+          if (w < NEAR || w > R) continue;
+          side = rx * CO.rgx + rz * CO.rgz; lim = w * CO.hp + 4;
+          if (side > lim || side < -lim) continue;
+
+          if (city.height(gx, gz) < 15) continue;
+          if (!setup(city, gx, gz, t)) continue;
+          if (!measure(cam)) continue;
+
+          if (M.span < 10 || M.hRows < 5) continue;
+
+          if (M.wR > M.wL * 1.8 || M.wL > M.wR * 1.8) continue;
+
+          vy0 = M.cy - M.hRows * 0.5; vy1 = M.cy + M.hRows * 0.5;
+          if (vy0 < 0) vy0 = 0; if (vy1 > rows - 1) vy1 = rows - 1;
+          vx0 = M.xL; vx1 = M.xR;
+          if (vx0 < 0) vx0 = 0; if (vx1 > cols - 1) vx1 = cols - 1;
+          visR = vy1 - vy0; visC = vx1 - vx0;
+          if (visR < 8 || visC < 8) continue;
+
+          cf = clipFrac(M.cy, M.hRows, rows);
+          if (cf <= 0) continue;
+
+          if (visibleFrac(frame) < 0.45) continue;
+
+          score = visR * visC * cf;
+          if (score > SEL.as) {
+
+            if (SEL.n > 0 && Math.abs(gx - SEL.ax) <= 8 && Math.abs(gz - SEL.az) <= 8) {
+              SEL.ax = gx; SEL.az = gz; SEL.as = score;
+            } else {
+              if (SEL.n > 0) { SEL.bx = SEL.ax; SEL.bz = SEL.az; SEL.bs = SEL.as; SEL.n = 2; }
+              else SEL.n = 1;
+              SEL.ax = gx; SEL.az = gz; SEL.as = score;
+            }
+          } else if (score > SEL.bs &&
+                     (SEL.n === 0 || Math.abs(gx - SEL.ax) > 8 || Math.abs(gz - SEL.az) > 8)) {
+            SEL.bx = gx; SEL.bz = gz; SEL.bs = score; SEL.n = 2;
+          }
+        }
+      }
+
+      if (SEL.n >= 1 && setup(city, SEL.ax, SEL.az, t) && measure(cam)) drawAd(frame);
+      if (SEL.n >= 2 && setup(city, SEL.bx, SEL.bz, t) && measure(cam)) drawAd(frame);
+    }
+  });
+
+})(CC);
+
 /* src/elements/hud.js */
 (function (CC) {
   'use strict';
@@ -2458,6 +3173,461 @@ var CC = (function () {
   };
 
   CC.ELEMENTS.push(hud);
+
+})(CC);
+
+/* src/elements/market.js */
+(function (CC) {
+  'use strict';
+
+  var P = CC.P, hash2 = CC.hash2, put = CC.put, vnoise = CC.vnoise;
+
+  var G_DASH = CC.g('-'), G_EQ = CC.g('='),
+      G_8 = CC.g('8'), G_0 = CC.g('0'), G_HASH = CC.g('#'), G_X = CC.g('X'),
+      G_M = CC.g('M'), G_W = CC.g('W'), G_o = CC.g('o'),
+      G_COLON = CC.g(':'), G_COMMA = CC.g(','), G_DOT = CC.g('.'), G_QUOTE = CC.g("'"),
+      G_TICK = CC.g('`');
+
+  var FILL = [G_8, G_0, G_HASH, G_M, G_W, G_X], FILL_N = 6;
+
+  var CITY = null, BASE = 0, Surf = null;
+  function boot(city) {
+    CITY = city && city.aveX ? city : null;
+    BASE = CITY ? ((Math.imul(CITY.seed | 0, 40503) >>> 8) & 0x3fffff) : 0;
+  }
+
+  var V = {
+    ox: 0, oz: 0, eyeY: 1.7, fwx: 0, fwz: 1, rgx: 1, rgz: 0,
+    hp: 0.7265, colK: 0, colMid: 0, scale: 77, horizon: 33, cols: 0, rows: 0, far: 125,
+    t: 0, tt: 0
+  };
+
+  var W_WET = 1;
+
+  function view(f, cam, t) {
+    if (!Surf) Surf = CC.Surf;
+    var fov = cam.fov || 1.25, hp = Math.tan(fov * 0.5);
+    var cellA = cam.cellAspect || 0.5625;
+    V.cols = f.cols; V.rows = f.rows; V.hp = hp;
+    V.colK = f.cols * 0.5 / hp; V.colMid = f.cols * 0.5;
+    V.scale = cam.scaleY !== undefined ? cam.scaleY : (f.cols * cellA) / (2 * hp);
+    V.horizon = cam.horizon !== undefined ? cam.horizon : f.rows * 0.56;
+    V.eyeY = cam.eyeY !== undefined ? cam.eyeY : 1.7;
+    var yaw = cam.yaw || 0;
+    V.fwx = Math.sin(yaw); V.fwz = Math.cos(yaw);
+    V.rgx = Math.cos(yaw); V.rgz = -Math.sin(yaw);
+    V.ox = cam.x; V.oz = cam.z;
+    V.far = Surf ? Surf.FOG_END : 125;
+    V.t = t;
+
+    V.tt = CC.reducedMotion ? 11.7 : t;
+    W_WET = CC.Weather ? CC.Weather.rel('wet') : 1;
+  }
+
+  var PJ = { x: 0, y: 0, d: 0 };
+  function project(px, py, pz) {
+    var rx = px - V.ox, rz = pz - V.oz;
+    var w = rx * V.fwx + rz * V.fwz;
+    if (w < 0.4) return false;
+    var sp = (rx * V.rgx + rz * V.rgz) / w;
+    PJ.d = w * Math.sqrt(1 + sp * sp);
+    PJ.x = sp * V.colK + V.colMid;
+    PJ.y = V.horizon - (py - V.eyeY) * V.scale / w;
+    return PJ.d < V.far;
+  }
+
+  function emit(f, x, y, ch, col, lum, d) {
+    if (x < 0 || y < 0 || x >= V.cols || y >= V.rows) return;
+    if (lum > 0 && Surf) { lum = Surf.fog(lum, d); if (lum <= 0) ch = 0; }
+    put(f, x, y, ch, col, lum, d, 3);
+  }
+
+  var SPAN = { c0: 0, c1: 0, mid: 0, w: 0 };
+  function streetSpan(axis, idx) {
+    var c, h;
+    if (axis) { c = CITY.crossZ(idx); h = CITY.crossW(idx); }
+    else      { c = CITY.aveX(idx);   h = CITY.aveW(idx); }
+    SPAN.c0 = c - h; SPAN.c1 = c + h + 1;
+    SPAN.mid = c + 0.5; SPAN.w = SPAN.c1 - SPAN.c0;
+  }
+  function wx(axis, along, cross) { return axis ? along : cross; }
+  function wz(axis, along, cross) { return axis ? cross : along; }
+
+  function paveOf(spanW) {
+    var p = CC.PAVE, avail = spanW * 0.5 - 1.7;
+    return avail < p ? avail : p;
+  }
+
+  var KERB_LIP = 0.34;
+
+  function frontage(axis, along, len, cross) {
+    var i, a;
+    for (i = 0; i <= 3; i++) {
+      a = along + len * (i / 3);
+      if (CITY.height(wx(axis, a, cross), wz(axis, a, cross)) < 3) return 0;
+    }
+    return 1;
+  }
+
+  function objVisible(axis, along, cross, near) {
+    var px = wx(axis, along, cross), pz = wz(axis, along, cross);
+    var rx = px - V.ox, rz = pz - V.oz;
+    var w = rx * V.fwx + rz * V.fwz;
+    if (w < near || w > V.far) return 0;
+    var s = rx * V.rgx + rz * V.rgz, lim = w * V.hp + 16;
+    if (s < -lim || s > lim) return 0;
+    return w;
+  }
+
+  var REACH = 44;
+  function idxLo(axis) {
+    return Math.round((axis ? V.oz : V.ox) / (axis ? CITY.CROSS : CITY.AVE)) - (axis ? 3 : 2);
+  }
+  function idxHi(axis) {
+    return Math.round((axis ? V.oz : V.ox) / (axis ? CITY.CROSS : CITY.AVE)) + (axis ? 3 : 2);
+  }
+  function alongLo(axis, pitch) { return Math.floor(((axis ? V.ox : V.oz) - REACH) / pitch); }
+  function alongHi(axis, pitch) { return Math.floor(((axis ? V.ox : V.oz) + REACH) / pitch); }
+
+  var CLIP = { u0: 0, u1: 1 };
+  function clipNear(axis, a0, a1, cross) {
+    var rx = wx(axis, a0, cross) - V.ox, rz = wz(axis, a0, cross) - V.oz;
+    var g0 = rx * V.fwx + rz * V.fwz - 0.42;
+    rx = wx(axis, a1, cross) - V.ox; rz = wz(axis, a1, cross) - V.oz;
+    var g1 = rx * V.fwx + rz * V.fwz - 0.42;
+    if (g0 < 0 && g1 < 0) return false;
+    CLIP.u0 = 0; CLIP.u1 = 1;
+    if (g0 < 0) CLIP.u0 = g0 / (g0 - g1);
+    else if (g1 < 0) CLIP.u1 = g0 / (g0 - g1);
+    return true;
+  }
+
+  var COV_MAX = 0.05, COV_LIT_GAIN = 2.4;
+  var COV = 1, COV_LIT = 1;
+  function coverOf(axis, a0, a1, cross, H) {
+    var K = 6, i, a, rx, rz, w, x, dx, wm, rws, area = 0, px = 0, pw = 0, have = 0, budget;
+    for (i = 0; i <= K; i++) {
+      a = a0 + (a1 - a0) * (i / K);
+      rx = wx(axis, a, cross) - V.ox; rz = wz(axis, a, cross) - V.oz;
+      w = rx * V.fwx + rz * V.fwz;
+      if (w < 0.6) { have = 0; continue; }
+      x = (rx * V.rgx + rz * V.rgz) / w * V.colK + V.colMid;
+      if (x < 0) x = 0; else if (x > V.cols) x = V.cols;
+      if (have) {
+        dx = x - px; if (dx < 0) dx = -dx;
+        wm = (w + pw) * 0.5;
+        rws = H * V.scale / wm;
+        if (rws > V.rows) rws = V.rows;
+        area += dx * rws;
+      }
+      px = x; pw = w; have = 1;
+    }
+    budget = V.cols * V.rows * COV_MAX;
+    COV = area <= budget ? 1 : budget / area;
+    COV_LIT = COV * COV_LIT_GAIN;
+    if (COV_LIT > 1) COV_LIT = 1;
+    return COV;
+  }
+  function coverClear() { COV = 1; COV_LIT = 1; }
+
+  function panel(f, axis, a0, a1, cross, y0, y1, ch, col, lum, jit, mesh, sd) {
+    if (!clipNear(axis, a0, a1, cross)) return;
+    var b0 = a0 + (a1 - a0) * CLIP.u0, b1 = a0 + (a1 - a0) * CLIP.u1;
+    var rx = wx(axis, b0, cross) - V.ox, rz = wz(axis, b0, cross) - V.oz;
+    var w0 = rx * V.fwx + rz * V.fwz, s0 = rx * V.rgx + rz * V.rgz;
+    rx = wx(axis, b1, cross) - V.ox; rz = wz(axis, b1, cross) - V.oz;
+    var w1 = rx * V.fwx + rz * V.fwz, s1 = rx * V.rgx + rz * V.rgz;
+    var dw = w1 - w0, ds = s1 - s0;
+    var xa = s0 / w0 * V.colK + V.colMid, xb = s1 / w1 * V.colK + V.colMid;
+    var j0 = Math.floor(xa < xb ? xa : xb), j1 = Math.floor(xa < xb ? xb : xa);
+    if (j1 < 0 || j0 >= V.cols) return;
+    if (j0 < 0) j0 = 0;
+    if (j1 > V.cols - 1) j1 = V.cols - 1;
+    var j, sp, den, u, a, rt, rb, r0, r1, row, dd, lat, l, tmp, pat, fade;
+    for (j = j0; j <= j1; j++) {
+      sp = (j + 0.5 - V.colMid) / V.colK;
+      den = sp * dw - ds;
+
+      u = (den > 1e-9 || den < -1e-9) ? (s0 - sp * w0) / den : 0.5;
+      if (u < 0) u = 0; else if (u > 1) u = 1;
+      a = b0 + (b1 - b0) * u;
+      if (!project(wx(axis, a, cross), y1, wz(axis, a, cross))) continue;
+      rt = PJ.y; dd = PJ.d;
+      fade = (dd - 1.2) * 0.5556;
+      if (fade <= 0) continue;
+      if (fade > 1) fade = 1;
+
+      if (lum > 0) { if (COV_LIT < 1) fade *= COV_LIT; }
+      else if (COV < 1) fade *= COV;
+      if (!project(wx(axis, a, cross), y0, wz(axis, a, cross))) continue;
+      rb = PJ.y;
+      r0 = Math.floor(rt); r1 = Math.floor(rb);
+      if (r1 < r0) { tmp = r0; r0 = r1; r1 = tmp; }
+
+      pat = r0;
+      if (r0 < -1) r0 = -1;
+      if (r1 > V.rows) r1 = V.rows;
+      lat = Math.floor(a * 4.7) + (sd & 15);
+      for (row = r0; row <= r1; row++) {
+        if (fade < 1 && hash2(lat, row - pat, sd + 51) > fade) continue;
+        if (mesh && ((lat + row - pat) & 1)) continue;
+        l = lum;
+        if (jit) l += hash2(lat, row - pat, sd + 113) * jit;
+        emit(f, j, row, ch, col, l, dd);
+      }
+    }
+  }
+
+  function pcell(f, axis, a, cross, y, ch, col, lum, bias) {
+    if (!project(wx(axis, a, cross), y, wz(axis, a, cross))) return;
+    emit(f, Math.floor(PJ.x), Math.floor(PJ.y), ch, col, lum, PJ.d * bias);
+  }
+
+  function counterHue(r) {
+    if (r < 0.60) return P.amber;
+    if (r < 0.74) return P.azure;
+    if (r < 0.81) return P.ember;
+    if (r < 0.93) return P.spring;
+    return P.warm;
+  }
+
+  function vendHue(r) {
+    if (r < 0.40) return P.azure;
+    if (r < 0.74) return P.amber;
+    if (r < 0.92) return P.spring;
+    return P.ember;
+  }
+  function litLum(col) {
+    if (col === P.azure) return 96;
+    if (col === P.warm) return 152;
+    if (col === P.spring) return 155;
+    if (col === P.violet) return 228;
+    return 165;
+  }
+
+  var MR_PITCH = 30, MR_P = 0.25, STALL_W = 2.30;
+
+  function rowStalls(sd) { return 3 + ((hash2(1, 0, sd + 101) * 2.99) | 0); }
+
+  function marketRow(f, axis, along, wallC, inw, strip, sd) {
+    var nst = rowStalls(sd);
+    var len = nst * STALL_W;
+    var back = wallC + inw * strip * 0.10;
+    var cnt  = wallC + inw * strip * 0.62;
+    var gds  = wallC + inw * strip * 0.82;
+    var rail = wallC + inw * strip * 0.90;
+    var fas  = wallC + inw * strip * 0.98;
+    var a0 = along, a1 = along + len;
+    var hue = counterHue(hash2(2, 0, sd + 211));
+    var lum = litLum(hue);
+    var i, a, h, hh, chue, clum;
+
+    coverOf(axis, a0 - 0.45, a1 + 0.45, cnt, 2.54);
+
+    panel(f, axis, a0 - 0.45, a1 + 0.45, fas, 2.26, 2.54, 0, P.shadow, 0, 0, 0, sd);
+    panel(f, axis, a0 - 0.45, a1 + 0.45, cnt, 2.30, 2.50, 0, P.shadow, 0, 0, 0, sd);
+
+    panel(f, axis, a0 - 0.30, a1 + 0.30, cnt, 1.92, 2.02, G_EQ, hue, lum * 0.86, 0, 0, sd);
+
+    for (i = 0; i < nst; i++) {
+      a = along + i * STALL_W;
+      h = hash2(i, 3, sd + 307);
+
+      panel(f, axis, a + 0.06, a + STALL_W - 0.06, cnt, 0, 0.94, 0, P.shadow, 0, 0, 0, sd + i);
+      panel(f, axis, a + 0.16, a + STALL_W - 0.16, back, 0, 1.10, 0, P.shadow, 0, 0, 0, sd + i);
+
+      if (hash2(i, 8, sd + 907) < 0.40)
+        panel(f, axis, a + 0.78, a + 1.38, back, 0.90, 1.86, 0, P.shadow, 0, 0, 0, sd + i);
+
+      chue = hash2(i, 10, sd + 1103) < 0.64 ? hue : counterHue(hash2(i, 11, sd + 1201));
+
+      if (chue === P.ember) chue = P.amber;
+      clum = litLum(chue);
+      panel(f, axis, a + 0.10, a + STALL_W - 0.10, cnt, 0.98, 1.15,
+            FILL[(h * FILL_N) | 0], chue, clum * (0.90 + h * 0.14), 26, 0, sd + i);
+
+      if (hash2(i, 9, sd + 1009) < 0.55)
+        panel(f, axis, a + 0.34, a + 0.94, gds, 0, 1.06, 0, P.shadow, 0, 0, 0, sd + i);
+      if (hash2(i, 12, sd + 1307) < 0.48)
+        panel(f, axis, a + 1.32, a + 1.86, gds, 0, 0.86, 0, P.shadow, 0, 0, 0, sd + i);
+
+      panel(f, axis, a + STALL_W - 0.08, a + STALL_W + 0.02, cnt, 0.94, 2.30, 0, P.shadow, 0, 0, 0, sd);
+
+      hh = hash2(i, 4, sd + 401);
+      if (hh < 0.62)
+        panel(f, axis, a + 0.45 + hh * 0.5, a + 0.78 + hh * 0.5, rail, 1.62, 2.04,
+              0, P.shadow, 0, 0, 0, sd + i);
+      hh = hash2(i, 5, sd + 503);
+      if (hh < 0.44)
+        panel(f, axis, a + 1.30 + hh * 0.5, a + 1.55 + hh * 0.5, rail, 1.70, 2.04,
+              0, P.shadow, 0, 0, 0, sd + i);
+    }
+
+    i = (hash2(6, 0, sd + 601) * nst) | 0;
+    a = along + i * STALL_W;
+    panel(f, axis, a + 0.30, a + 1.50, wallC + inw * strip * 0.80, 0.44, 0.52,
+          G_DASH, hue, lum * 0.74, 0, 1, sd);
+    coverClear();
+
+    var wl = 24 + 28 * W_WET;
+    a = along + len * 0.5;
+    pcell(f, axis, a - 1.1, wallC + inw * strip * 0.88, 0.02, G_COMMA, hue, wl, 0.985);
+    pcell(f, axis, a,       wallC + inw * strip * 0.99, 0.02, G_COLON, hue, wl * 1.25, 0.985);
+    pcell(f, axis, a + 1.1, wallC + inw * strip * 0.88, 0.02, G_DOT,   hue, wl, 0.985);
+  }
+
+  var PUFF_N = 3, PUFF_RATE = 0.34;
+  var PUFF_ATK = 0.16, PUFF_ATK_INV = 1 / 0.16;
+
+  function rowSteam(f, axis, along, wallC, inw, strip, sd, dd) {
+    if (dd > 26) return;
+    var cross = wallC + inw * strip * 0.62, j, ph, age, fade, l, drift;
+    for (j = 0; j < PUFF_N; j++) {
+      ph = hash2(j, 7, sd + 701);
+      age = (V.tt * PUFF_RATE + ph) % 1;
+      fade = (1 - age) * (1 - age);
+
+      if (age < PUFF_ATK) fade *= age * PUFF_ATK_INV;
+      l = 44 * fade;
+
+      if (l < 1) continue;
+
+      drift = (vnoise(V.tt * 0.5 + ph * 20, sd + 811) - 0.5) * age * 1.9;
+      pcell(f, axis, along + 1.1 + drift, cross, 2.62 + age * 2.2,
+            age < 0.4 ? G_QUOTE : G_TICK, P.slate, l, 0.99);
+    }
+  }
+
+  var KI_PITCH = 13, KI_P = 0.15;
+
+  function kiosk(f, axis, along, wallC, inw, strip, sd) {
+    var face = wallC + inw * strip * 0.58;
+    var lip  = wallC + inw * strip * 0.74;
+    var roof = wallC + inw * strip * 0.90;
+    var hue = counterHue(hash2(1, 0, sd + 101));
+    var lum = litLum(hue);
+    coverOf(axis, along - 1.00, along + 1.00, face, 2.50);
+
+    panel(f, axis, along - 0.85, along + 0.85, face, 0, 2.28, 0, P.shadow, 0, 0, 0, sd);
+    panel(f, axis, along - 1.00, along + 1.00, roof, 2.28, 2.50, 0, P.shadow, 0, 0, 0, sd);
+    panel(f, axis, along - 1.00, along + 1.00, face, 2.30, 2.48, 0, P.shadow, 0, 0, 0, sd);
+
+    panel(f, axis, along - 0.55, along + 0.55, face, 1.08, 1.40,
+          G_8, hue, lum, 24, 0, sd);
+
+    panel(f, axis, along - 0.66, along + 0.66, lip, 0.94, 1.02, G_DASH, hue, lum * 0.78, 0, 0, sd);
+
+    var sr = hash2(2, 0, sd + 211);
+    var shue = sr < 0.17 ? P.violet : (sr < 0.60 ? P.amber : P.azure);
+    var slum = litLum(shue);
+    pcell(f, axis, along - 0.22, face, 1.74, G_0, shue, slum, 1);
+    pcell(f, axis, along + 0.22, face, 1.74, G_0, shue, slum * 0.9, 1);
+
+    var st = wallC + inw * strip * 0.94, k, sa;
+    for (k = 0; k < 2; k++) {
+      sa = along - 0.42 + k * 0.84;
+      panel(f, axis, sa - 0.10, sa + 0.10, st, 0, 0.56, 0, P.shadow, 0, 0, 0, sd);
+      pcell(f, axis, sa, st, 0.60, G_o, hue, lum * 0.70, 1);
+    }
+    coverClear();
+
+    var wl = 24 + 28 * W_WET;
+    pcell(f, axis, along - 0.4, wallC + inw * strip * 0.86, 0.02, G_COLON, hue, wl * 1.2, 0.985);
+    pcell(f, axis, along + 0.5, wallC + inw * strip * 0.99, 0.02, G_DOT,   hue, wl, 0.985);
+  }
+
+  var VB_PITCH = 19, VB_P = 0.17, VB_W = 0.92;
+
+  function vendBank(f, axis, along, wallC, inw, strip, sd) {
+    var n = 3 + (hash2(1, 0, sd + 101) < 0.45 ? 1 : 0);
+    var face = wallC + inw * 0.40;
+    var len = n * VB_W, i, a, hue, lum;
+    coverOf(axis, along - 0.08, along + len + 0.08, face, 2.02);
+
+    panel(f, axis, along - 0.08, along + len + 0.08, face - inw * 0.04, 0, 2.02,
+          0, P.shadow, 0, 0, 0, sd);
+    for (i = 0; i < n; i++) {
+      a = along + i * VB_W;
+      hue = vendHue(hash2(i, 2, sd + 211));
+      lum = litLum(hue);
+
+      panel(f, axis, a + 0.08, a + VB_W - 0.10, face, 1.72, 1.80, G_DASH, hue, lum, 0, 0, sd + i);
+
+      panel(f, axis, a + 0.14, a + VB_W - 0.16, face, 1.10, 1.42,
+            G_8, hue, lum * 0.86, 30, 1, sd + i);
+
+      pcell(f, axis, a + VB_W * 0.5, face, 0.92, G_DASH, hue, lum * 0.6, 1);
+    }
+    coverClear();
+
+    var wl = 22 + 26 * W_WET;
+    pcell(f, axis, along + VB_W * 0.5, wallC + inw * strip * 0.62, 0.02, G_COLON,
+          vendHue(hash2(0, 2, sd + 211)), wl, 0.985);
+    pcell(f, axis, along + len - VB_W * 0.5, wallC + inw * strip * 0.62, 0.02, G_DOT,
+          vendHue(hash2(n - 1, 2, sd + 211)), wl, 0.985);
+  }
+
+  function drawMarket(f) {
+    if (!CITY) return;
+    var axis, idx, n, side, wallC, inw, pave, strip, along, dd, sd, len;
+    for (axis = 0; axis < 2; axis++) {
+      for (idx = idxLo(axis); idx <= idxHi(axis); idx++) {
+        streetSpan(axis, idx);
+
+        if (SPAN.w < 5) continue;
+        pave = paveOf(SPAN.w);
+        strip = pave - KERB_LIP;
+        if (strip < 1.05) continue;
+        for (side = 0; side < 2; side++) {
+          wallC = side ? SPAN.c1 : SPAN.c0;
+          inw = side ? -1 : 1;
+
+          for (n = alongLo(axis, MR_PITCH); n <= alongHi(axis, MR_PITCH); n++) {
+            if (hash2(idx * 2 + side, n, BASE + 907) > MR_P) continue;
+            along = n * MR_PITCH + hash2(idx * 2 + side, n, BASE + 1013) * 12;
+            sd = BASE + idx * 977 + n * 6151 + side * 37;
+            len = rowStalls(sd) * STALL_W;
+
+            dd = objVisible(axis, along + len * 0.5, wallC + inw, -8);
+            if (!dd || dd > REACH) continue;
+            if (!frontage(axis, along, len, wallC - inw * 0.5)) continue;
+            marketRow(f, axis, along, wallC, inw, strip, sd);
+            rowSteam(f, axis, along, wallC, inw, strip, sd, dd);
+          }
+
+          for (n = alongLo(axis, KI_PITCH); n <= alongHi(axis, KI_PITCH); n++) {
+            if (hash2(idx * 2 + side, n, BASE + 1117) > KI_P) continue;
+            along = n * KI_PITCH + hash2(idx * 2 + side, n, BASE + 1223) * 8;
+            dd = objVisible(axis, along, wallC + inw, -3);
+            if (!dd || dd > REACH) continue;
+            if (!frontage(axis, along - 1, 2, wallC - inw * 0.5)) continue;
+            kiosk(f, axis, along, wallC, inw, strip, BASE + idx * 1301 + n * 4099 + side * 53);
+          }
+
+          for (n = alongLo(axis, VB_PITCH); n <= alongHi(axis, VB_PITCH); n++) {
+            if (hash2(idx * 2 + side, n, BASE + 1327) > VB_P) continue;
+            along = n * VB_PITCH + hash2(idx * 2 + side, n, BASE + 1433) * 9;
+            dd = objVisible(axis, along + 1.4, wallC + inw, -4);
+            if (!dd || dd > REACH) continue;
+            if (!frontage(axis, along, 3.7, wallC - inw * 0.5)) continue;
+            vendBank(f, axis, along, wallC, inw, strip,
+                     BASE + idx * 1523 + n * 3671 + side * 61);
+          }
+        }
+      }
+    }
+  }
+
+  CC.ELEMENTS.push({
+    name: 'market',
+
+    layer: 17,
+    init: function (city) { boot(city); },
+    draw: function (f, cam, t) {
+      view(f, cam, t === undefined ? (cam.t || 0) : t);
+      drawMarket(f);
+    }
+  });
 
 })(CC);
 
@@ -3246,6 +4416,758 @@ var CC = (function () {
 
 })(CC);
 
+/* src/elements/police.js */
+(function (CC) {
+  'use strict';
+
+  var P = CC.P, g = CC.g, hash2 = CC.hash2, put = CC.put;
+
+  var G_QUOTE = g("'"), G_DASH = g('-'), G_EQ = g('='),
+      G_8 = g('8'), G_o = g('o'), G_0 = g('0');
+
+  var W_STILL = { rain: 0.65, wind: 0.55, fog: 0.30, wet: 0.90, storm: 0.12, haze: 0.40,
+                  cloud: 0.75, steam: 0.85 };
+  function wp() { return CC.Weather ? CC.Weather.P : W_STILL; }
+  function wrel(k) { return CC.Weather ? CC.Weather.rel(k) : 1; }
+
+  var CX = 0, CZ = 0, FWX = 0, FWZ = 1, RGX = 1, RGZ = 0, HP = 0.7, EYE = 1.7;
+  var COLS = 0, ROWS = 0, HOR = 0, SCALE = 1, CPM = 1;
+
+  function camBasis(cam) {
+    var yaw = cam.yaw || 0;
+    FWX = Math.sin(yaw); FWZ = Math.cos(yaw);
+    RGX = Math.cos(yaw); RGZ = -Math.sin(yaw);
+    CX = cam.x; CZ = cam.z;
+    HP = Math.tan((cam.fov || 1.25) * 0.5);
+    EYE = cam.eyeY !== undefined ? cam.eyeY : 1.7;
+  }
+
+  function camScreenAt(cam, cols, rows) {
+    camBasis(cam);
+    COLS = cols; ROWS = rows;
+    HOR = cam.horizon !== undefined ? cam.horizon : ROWS * 0.56;
+    SCALE = cam.scaleY !== undefined ? cam.scaleY
+          : (COLS * (cam.cellAspect || 0.5625)) / (2 * HP);
+    CPM = COLS * 0.5 / HP;
+  }
+  function camScreen(frame, cam) { camScreenAt(cam, frame.cols, frame.rows); }
+
+  var PJ = { ok: 0, w: 0, sp: 0, x: 0, dist: 0 };
+
+  function project(px, pz) {
+    var dx = px - CX, dz = pz - CZ;
+    var w = dx * FWX + dz * FWZ;
+    if (w < 0.45) { PJ.ok = 0; return PJ; }
+    var sp = (dx * RGX + dz * RGZ) / w;
+    PJ.ok = 1; PJ.w = w; PJ.sp = sp;
+    PJ.x = (sp / HP + 1) * COLS * 0.5 - 0.5;
+    PJ.dist = w * Math.sqrt(1 + sp * sp);
+    return PJ;
+  }
+  function rowOf(y, w) { return HOR - (y - EYE) * SCALE / w; }
+
+  function roadDist(row, sp) {
+    var den = row + 0.5 - HOR;
+    if (den < 0.5) return 1e6;
+    return (EYE * SCALE / den) * Math.sqrt(1 + sp * sp);
+  }
+  function fg(lum, dist) {
+    var S = CC.Surf;
+    return S ? S.fog(lum, dist) : lum;
+  }
+
+  function near(d) { return d * 0.994; }
+  function nearer(d) { return d * 0.982; }
+
+  var COR = { axis: 0, ctr: 0, half: 3.5, along: 0, dir: 1 };
+  function corridor(city, cam) {
+    if (!city || !city.aveX) {
+      COR.axis = 0; COR.ctr = 0.5; COR.half = 3.5;
+      COR.along = cam.z; COR.dir = FWZ < 0 ? -1 : 1;
+      return COR;
+    }
+    var k = Math.round(cam.x / city.AVE), m = Math.round(cam.z / city.CROSS);
+    var aC = 0, aW = 0, cC = 0, cW = 0, bA = 1e18, bC = 1e18, i, c, d;
+    for (i = k - 1; i <= k + 1; i++) {
+      c = city.aveX(i) + 0.5; d = cam.x - c; if (d < 0) d = -d;
+      if (d < bA) { bA = d; aC = c; aW = city.aveW(i) + 0.5; }
+    }
+    for (i = m - 1; i <= m + 1; i++) {
+      c = city.crossZ(i) + 0.5; d = cam.z - c; if (d < 0) d = -d;
+      if (d < bC) { bC = d; cC = c; cW = city.crossW(i) + 0.5; }
+    }
+    var afz = FWZ < 0 ? -FWZ : FWZ, afx = FWX < 0 ? -FWX : FWX;
+    if (bC <= cW && (bA > aW || afx > afz)) {
+      COR.axis = 1; COR.ctr = cC; COR.half = cW; COR.along = cam.x; COR.dir = FWX < 0 ? -1 : 1;
+    } else {
+      COR.axis = 0; COR.ctr = aC; COR.half = aW; COR.along = cam.z; COR.dir = FWZ < 0 ? -1 : 1;
+    }
+    return COR;
+  }
+
+  function wX(axis, ctr, a, l) { return axis ? a : ctr + l; }
+  function wZ(axis, ctr, a, l) { return axis ? ctr + l : a; }
+
+  function carriage() {
+    var p = COR.half - CC.PAVE;
+    if (p < 1.7) p = 1.7;
+    if (p > COR.half * 0.86) p = COR.half * 0.86;
+    return p;
+  }
+
+  var BAR_ALT_HZ = 2.2;
+  var BAR_FLOOR = 0.20;
+
+  var BAR_PEAK_RED = 174, BAR_PEAK_AZURE = 150;
+  var TAU = 6.283185307179586;
+
+  function barEnv(t, ph) {
+
+    if (CC.reducedMotion) return 0.5;
+    var u = t * (BAR_ALT_HZ * 0.5) + ph;
+    return 0.5 - 0.5 * Math.cos(u * TAU);
+  }
+
+  function barLum(peak, fade, e) { return peak * fade * (BAR_FLOOR + (1 - BAR_FLOOR) * e); }
+
+  var cars = null, CAR_N = 2, PARKED = 0, CRUISER = 1;
+
+  var BAR_COLS_MAX = 15;
+
+  var CAR_FADE_AT = 0.020, CAR_HIDE_AT = 0.048;
+
+  var BX0 = 0, BR0 = 0, BD0 = 0, BX1 = 0, BR1 = 0, BD1 = 0, BDN = 0, BOK = 0;
+
+  var CROSS_NEAR = 14, CROSS_FAR = 40;
+  function crossAhead(city, pick) {
+    if (!city || !city.aveX) return NaN;
+    var period = COR.axis ? city.AVE : city.CROSS;
+    var i0 = Math.round(COR.along / period), i, c, dd, cnt = 0, want;
+    for (i = i0 - 4; i <= i0 + 4; i++) {
+      c = (COR.axis ? city.aveX(i) : city.crossZ(i)) + 0.5;
+      dd = (c - COR.along) * COR.dir;
+      if (dd >= CROSS_NEAR && dd <= CROSS_FAR) cnt++;
+    }
+    if (!cnt) return NaN;
+    want = (pick * cnt) | 0; if (want >= cnt) want = cnt - 1;
+    for (i = i0 - 4; i <= i0 + 4; i++) {
+      c = (COR.axis ? city.aveX(i) : city.crossZ(i)) + 0.5;
+      dd = (c - COR.along) * COR.dir;
+      if (dd >= CROSS_NEAR && dd <= CROSS_FAR) { if (want === 0) return c; want--; }
+    }
+    return NaN;
+  }
+  function crossHalf(city, c) {
+    if (!city || !city.aveX) return 2.0;
+    var period = COR.axis ? city.AVE : city.CROSS;
+    var i = Math.round((c - 0.5) / period);
+    return (COR.axis ? city.aveW(i) : city.crossW(i)) + 0.5;
+  }
+
+  function carCover(c) {
+    var hx = c.hx, hz = c.hz, lx = -hz, lz = hx;
+    var hw = c.wid * 0.5, hl = c.len * 0.5;
+    var x0 = 1e9, x1 = -1e9, wmin = 1e9, k, sx, sz, pr;
+    for (k = 0; k < 4; k++) {
+      sx = c.x + hx * (k < 2 ? hl : -hl) + lx * ((k & 1) ? hw : -hw);
+      sz = c.z + hz * (k < 2 ? hl : -hl) + lz * ((k & 1) ? hw : -hw);
+      pr = project(sx, sz);
+      if (!pr.ok) return 1;
+      if (pr.x < x0) x0 = pr.x;
+      if (pr.x > x1) x1 = pr.x;
+      if (pr.w < wmin) wmin = pr.w;
+    }
+    if (x0 < 0) x0 = 0;
+    if (x1 > COLS - 1) x1 = COLS - 1;
+    if (x1 <= x0) return 0;
+    var rr = (c.tall + 0.35) * SCALE / wmin;
+    if (rr > ROWS) rr = ROWS;
+    return (x1 - x0) * rr / (COLS * ROWS);
+  }
+
+  var CAR_SLICES_MIN = 6, CAR_SLICES_MAX = 72;
+
+  var ROOF_READ_D = 26;
+  function carBody(f, c, fade, S) {
+    var hx = c.hx, hz = c.hz, lx = -hz, lz = hx;
+    var hw = c.wid * 0.5, hl = c.len * 0.5, i, j, r;
+    var pn0 = project(c.x + hx * hl, c.z + hz * hl);
+    var sp0 = pn0.ok ? pn0.x : 0, ok0 = pn0.ok;
+    var pn1 = project(c.x - hx * hl, c.z - hz * hl);
+    var lspan = (ok0 && pn1.ok) ? (pn1.x - sp0) : 0;
+    if (lspan < 0) lspan = -lspan;
+    var NS = (lspan + 2) | 0;
+    if (NS < CAR_SLICES_MIN) NS = CAR_SLICES_MIN;
+    if (NS > CAR_SLICES_MAX) NS = CAR_SLICES_MAX;
+    for (i = 0; i < NS; i++) {
+      var s = ((i + 0.5) / NS - 0.5) * c.len;
+      var mx = c.x + hx * s, mz = c.z + hz * s;
+      var pa = project(mx + lx * hw, mz + lz * hw); if (!pa.ok) continue;
+      var xa = pa.x;
+      var pb = project(mx - lx * hw, mz - lz * hw); if (!pb.ok) continue;
+      var xb = pb.x;
+      var pc = project(mx, mz); if (!pc.ok) continue;
+      var w = pc.w, d = near(pc.dist), dd = pc.dist;
+
+      var cab = s > -c.cab && s < c.cab;
+      var rT = rowOf(cab ? c.tall + 0.30 : c.tall, w), rB = rowOf(0.04, w);
+      var x0 = Math.round(xa < xb ? xa : xb), x1 = Math.round(xa < xb ? xb : xa);
+      if (x1 < 0 || x0 > COLS - 1) continue;
+      var span = xb - xa;
+      if (x0 < 0) x0 = 0;
+      if (x1 > COLS - 1) x1 = COLS - 1;
+      var r0 = Math.round(rT), r1 = Math.round(rB);
+      if (r1 < r0) r1 = r0;
+      if (r0 < 0) r0 = 0;
+      if (r1 > ROWS - 1) r1 = ROWS - 1;
+
+      var si = (((s / c.len) + 0.5) * 16) | 0;
+      for (j = x0; j <= x1; j++) {
+        var q = fade < 1 ? (((j - xa) / (span === 0 ? 1 : span) * 12) | 0) : 0;
+        for (r = r0; r <= r1; r++) {
+          if (fade < 1 && hash2(si * 16 + q, r - r0, S + 1601) > fade) continue;
+          put(f, j, r, 0, P.shadow, 0, d);
+        }
+      }
+
+      if (dd <= ROOF_READ_D) {
+        var rl = fg(cab ? 172 : 148, dd);
+        if (rl >= 5)
+          for (j = x0; j <= x1; j++) {
+            var rq = fade < 1 ? (((j - xa) / (span === 0 ? 1 : span) * 12) | 0) : 0;
+            if (fade < 1 && hash2(si * 16 + rq, 0, S + 1601) > fade) continue;
+            put(f, j, r0, G_DASH, P.amber, rl, nearer(dd));
+          }
+      }
+    }
+  }
+
+  function barEnds(c) {
+    var hx = c.hx, hz = c.hz, lx = -hz, lz = hx;
+    var hw = c.wid * 0.5 * 0.86, hl = c.len * 0.13;
+    var y = c.tall + 0.22;
+    BOK = 0;
+    var pa = project(c.x + lx * hw, c.z + lz * hw); if (!pa.ok) return;
+    var ax1 = pa.x, aw1 = pa.w, ad1 = pa.dist;
+    var pb = project(c.x - lx * hw, c.z - lz * hw); if (!pb.ok) return;
+    var bx1 = pb.x, bw1 = pb.w, bd1 = pb.dist;
+    var pc = project(c.x + hx * hl, c.z + hz * hl); if (!pc.ok) return;
+    var ax2 = pc.x, aw2 = pc.w, ad2 = pc.dist;
+    var pd = project(c.x - hx * hl, c.z - hz * hl); if (!pd.ok) return;
+    var bx2 = pd.x, bw2 = pd.w, bd2 = pd.dist;
+
+    var hl2 = c.len * 0.5, k, dn = 1e9, pe;
+    for (k = 0; k < 4; k++) {
+      pe = project(c.x + hx * (k < 2 ? hl2 : -hl2) + lx * ((k & 1) ? hw : -hw),
+                   c.z + hz * (k < 2 ? hl2 : -hl2) + lz * ((k & 1) ? hw : -hw));
+      if (pe.ok && pe.dist < dn) dn = pe.dist;
+    }
+    BDN = dn < 1e8 ? dn : ad1;
+    var s1 = ax1 - bx1; if (s1 < 0) s1 = -s1;
+    var s2 = ax2 - bx2; if (s2 < 0) s2 = -s2;
+    if (s1 >= s2) {
+      BX0 = ax1; BR0 = rowOf(y, aw1); BD0 = ad1;
+      BX1 = bx1; BR1 = rowOf(y, bw1); BD1 = bd1;
+    } else {
+      BX0 = ax2; BR0 = rowOf(y, aw2); BD0 = ad2;
+      BX1 = bx2; BR1 = rowOf(y, bw2); BD1 = bd2;
+    }
+    BOK = 1;
+  }
+
+  function lightbar(f, c, fade, t) {
+    barEnds(c);
+    if (!BOK) return;
+    var e = barEnv(t, c.ph);
+    var lo = BX0 < BX1 ? BX0 : BX1, hi = BX0 < BX1 ? BX1 : BX0;
+    var ctr = (lo + hi) * 0.5;
+
+    if (hi - lo > BAR_COLS_MAX) { lo = ctr - BAR_COLS_MAX * 0.5; hi = ctr + BAR_COLS_MAX * 0.5; }
+    var j0 = Math.round(lo), j1 = Math.round(hi);
+    if (j1 < 0 || j0 > COLS - 1) return;
+    if (j0 < 0) j0 = 0;
+    if (j1 > COLS - 1) j1 = COLS - 1;
+    var dx = BX1 - BX0, j;
+    for (j = j0; j <= j1; j++) {
+      var u = dx === 0 ? 0.5 : (j - BX0) / dx;
+      if (u < 0) u = 0; else if (u > 1) u = 1;
+      var row = Math.round(BR0 + (BR1 - BR0) * u);
+      var dd = BD0 + (BD1 - BD0) * u;
+      var red = u < 0.5;
+
+      var lum = fg(barLum(red ? BAR_PEAK_RED : BAR_PEAK_AZURE, fade, red ? e : 1 - e), dd);
+      if (lum < 5) continue;
+
+      put(f, j, row, G_8, red ? P.red : P.azure, lum, nearer(BDN));
+    }
+  }
+
+  var WASH_ROWS = 2, WASH_COLS_MAX = 11, WASH_REACH = 3.4, WASH_D_MAX = 26;
+  function washRoad(f, c, fade, t, wetR) {
+    var e = barEnv(t, c.ph);
+    var hx = c.hx, hz = c.hz, lx = -hz, lz = hx;
+
+    var out = c.out;
+    var pc = project(c.x, c.z); if (!pc.ok) return;
+    var baseRow = Math.round(rowOf(0, pc.w));
+
+    var pn = project(c.x + lx * out * (c.wid * 0.5 + 0.3), c.z + lz * out * (c.wid * 0.5 + 0.3));
+    if (!pn.ok) return;
+    var xc = pn.x;
+    var pf = project(c.x + lx * out * WASH_REACH, c.z + lz * out * WASH_REACH); if (!pf.ok) return;
+    var xf = pf.x;
+
+    if (xf > xc + WASH_COLS_MAX) xf = xc + WASH_COLS_MAX;
+    else if (xf < xc - WASH_COLS_MAX) xf = xc - WASH_COLS_MAX;
+    var lo = xc < xf ? xc : xf, hi = xc < xf ? xf : xc;
+    var j0 = Math.round(lo), j1 = Math.round(hi), j, r;
+    if (j1 < 0 || j0 > COLS - 1) return;
+    if (j0 < 0) j0 = 0;
+    if (j1 > COLS - 1) j1 = COLS - 1;
+    var halfC = COLS * 0.5;
+    for (r = 0; r < WASH_ROWS; r++) {
+      var row = baseRow + r;
+      if (row < 0 || row > ROWS - 1) continue;
+
+      var den = row + 0.5 - HOR;
+      if (den < 0.5) continue;
+      var w = EYE * SCALE / den;
+      for (j = j0; j <= j1; j++) {
+
+        var sp = ((j + 0.5) / halfC - 1) * HP;
+        var pxw = CX + (FWX + sp * RGX) * w, pzw = CZ + (FWZ + sp * RGZ) * w;
+        var ddx = pxw - c.x, ddz = pzw - c.z;
+        var dd2 = Math.sqrt(ddx * ddx + ddz * ddz);
+        if (dd2 > WASH_REACH) continue;
+        var fall = 1 - dd2 * 0.05;
+        var key = (Math.floor(pxw * 1.15) + Math.floor(pzw * 1.15)) % 3;
+        if (key < 0) key += 3;
+        var red = key === 0;
+        var rd = w * Math.sqrt(1 + sp * sp);
+
+        var lum = fg((red ? 150 : 112) * fall * (0.62 + 0.38 * wetR) * fade *
+                     (0.66 + 0.34 * (red ? e : 1 - e)), rd);
+        if (lum < 5) continue;
+        put(f, j, row, r === 0 ? G_EQ : G_DASH, red ? P.red : P.azure, lum, near(rd));
+      }
+    }
+  }
+
+  function carLamps(f, c, wetR) {
+    var hx = c.hx, hz = c.hz;
+    var hl = c.len * 0.5;
+    var pn = project(c.x + hx * hl, c.z + hz * hl); if (!pn.ok) return;
+    var xn = pn.x, wn = pn.w, dn = pn.dist;
+    var pt = project(c.x - hx * hl, c.z - hz * hl); if (!pt.ok) return;
+    var xt = pt.x, wt = pt.w, dtl = pt.dist, spt = pt.sp;
+    var back = xn > xt ? -1 : 1;
+    var hl2 = fg(236, dn), tl = fg(188, dtl);
+    var rHl = Math.round(rowOf(0.62, wn)), rTl = Math.round(rowOf(0.78, wt));
+    if (hl2 >= 5) {
+      put(f, Math.round(xn), rHl, G_0, P.ice, hl2, nearer(dn));
+      put(f, Math.round(xn) + back, rHl, G_o, P.ice, hl2 * 0.46, nearer(dn));
+    }
+    if (tl >= 5) {
+      put(f, Math.round(xt), rTl, G_o, P.red, tl, nearer(dtl));
+
+      put(f, Math.round(xt) + back, rTl, G_o, P.red, tl * 0.44, nearer(dtl));
+
+      var rr0 = Math.round(rowOf(0, wt)) + 1;
+      var rd = roadDist(rr0, spt);
+      var rl = fg(66 * (0.55 + 0.45 * wetR), rd);
+      if (rl >= 5) put(f, Math.round(xt), rr0, G_QUOTE, P.red, rl, near(rd));
+    }
+  }
+
+  var offs = null, OFF_N = 3;
+  var OFF_COVER_MAX = 0.030;
+
+  function offCover(o, pr) {
+    var shw = offShoulder(pr.w);
+    var xw = shw * 1.34;
+    var x0 = pr.x - xw, x1 = pr.x + xw;
+    if (x0 < 0) x0 = 0;
+    if (x1 > COLS - 1) x1 = COLS - 1;
+    if (x1 <= x0) return 0;
+    var rr = o.tall * SCALE / pr.w;
+    if (rr > ROWS) rr = ROWS;
+    return (x1 - x0) * rr / (COLS * ROWS);
+  }
+
+  function offShoulder(w) {
+    var shw = 0.29 * CPM / w;
+    return shw < 0.5 ? 0.5 : shw;
+  }
+
+  function offSpawn(o, i, S, fresh, city, car) {
+    o.n++;
+    var n = o.n;
+
+    var h1 = hash2(i, n, S + 101), h2 = hash2(i, n, S + 211), h3 = hash2(i, n, S + 307),
+        h4 = hash2(i, n, S + 401), h5 = hash2(i, n, S + 503), h6 = hash2(i, n, S + 601),
+        h7 = hash2(i, n, S + 701), h8 = hash2(i, n, S + 809), h9 = hash2(i, n, S + 907);
+
+    var cw = carriage();
+    var a, l, side;
+    o.chk = 0;
+    var atCar = car && car.live && car.chk && h1 < 0.78;
+    if (atCar) {
+
+      a = (car.axis ? car.x : car.z) + (h2 - 0.5) * 5.6;
+      l = car.lat - (car.lat < 0 ? -1 : 1) * (0.9 + h3 * 1.5);
+      side = car.lat < 0 ? -1 : 1;
+      o.vx = 0; o.vz = 0;
+      o.chk = 1;
+      o.axis = car.axis; o.ctr = car.ctr;
+    } else {
+
+      if (i === 2) { o.live = 0; o.wait = 6 + h4 * 14; return; }
+
+      var band = COR.half - cw - 0.7;
+      if (band < 0.2) band = 0.2;
+      side = h2 < 0.5 ? -1 : 1;
+      a = COR.along + COR.dir * (fresh ? 9 + h3 * 22 : 30 + h3 * 12);
+      l = side * (cw + 0.35 + h4 * band);
+
+      if (h5 < 0.66) {
+        var sp = (1.02 + h6 * 0.26) * (1 - 0.14 * wp().rain);
+        var go = (h7 < 0.55 ? -1 : 1) * COR.dir;
+        o.vx = COR.axis ? go * sp : 0;
+        o.vz = COR.axis ? 0 : go * sp;
+      } else { o.vx = 0; o.vz = 0; }
+      o.axis = COR.axis; o.ctr = COR.ctr;
+    }
+    o.x = wX(o.axis, o.ctr, a, l); o.z = wZ(o.axis, o.ctr, a, l);
+    o.lat = l;
+    o.tall = 1.74 + h8 * 0.12;
+    o.walked = 0;
+
+    o.phase = hash2(i, n, S + 1013) * TAU;
+    o.side = h9 < 0.5 ? -1 : 1;
+
+    o.rim = hash2(i, n, S + 1117) < 0.74 ? P.amber : P.azure;
+
+    var h12 = hash2(i, n, S + 1301);
+    o.acc = h12 < 0.42 ? 0 : (h12 < 0.74 ? 1 : 2);
+    o.live = 1;
+  }
+
+  function offGone(o) {
+    var pro = project(o.x, o.z);
+    if (!pro.ok || pro.w > 70 || pro.sp > HP * 1.8 || pro.sp < -HP * 1.8) return 1;
+
+    return offCover(o, pro) > OFF_COVER_MAX ? 1 : 0;
+  }
+
+  function offSettle(o, i, S, city, park) {
+    var tries = 0;
+    do {
+
+      offSpawn(o, i, S, 1, city, park);
+      tries++;
+    } while (o.live && offGone(o) && tries < 8);
+    if (o.live && offGone(o)) o.live = 0;
+  }
+
+  var OFF_DRAW_D = 26;
+
+  function drawOfficer(f, o, i, S, bareLit) {
+    var pr = project(o.x, o.z);
+    if (!pr.ok || pr.dist > OFF_DRAW_D) return;
+    var w = pr.w, dist = pr.dist, d = near(dist), cx = pr.x;
+    var rFeet = rowOf(0, w), rHead = rowOf(o.tall, w);
+    var tallRows = rFeet - rHead;
+    if (tallRows < 2.2) return;
+    if (offCover(o, pr) > OFF_COVER_MAX * 2) return;
+    var shw = offShoulder(w);
+    var x0 = Math.round(cx - shw * 1.34), x1 = Math.round(cx + shw * 1.34);
+    if (x1 < 0 || x0 > COLS - 1) return;
+    if (x0 < 0) x0 = 0;
+    if (x1 > COLS - 1) x1 = COLS - 1;
+
+    var st = CC.reducedMotion ? 0 : Math.sin(o.walked * 3.4 + o.phase);
+
+    var rim = fg(148 + hash2(i, o.n, S + 5) * 22, dist);
+
+    if (bareLit >= 0) rim *= 0.88 + 0.12 * bareLit;
+    var x, v0, v1, q;
+    for (x = x0; x <= x1; x++) {
+      var u = (x - cx) / shw, au = u < 0 ? -u : u;
+      v0 = 9; v1 = -9;
+      if (au <= 1.0) {
+
+        v0 = au > 0.44 ? 0.145 : 0;
+        v1 = au > 0.66 ? 0.60 : 1;
+
+        if (au < 0.36 && tallRows > 6) {
+          var lg = (u < 0 ? -1 : 1) * st;
+          if (lg > 0.30) v1 = 0.95;
+          else if (lg < -0.30) v1 = 0.87;
+        }
+      }
+
+      if (au > 0.44 && au <= 1.34) {
+        if (0.055 < v0) v0 = 0.055;
+        if (0.115 > v1) v1 = 0.115;
+      }
+      if (v1 < v0) continue;
+      var rt = rHead + v0 * tallRows, rb = rHead + v1 * tallRows;
+      var r0 = Math.round(rt), r1 = Math.round(rb);
+      if (r1 < r0) r1 = r0;
+      if (r0 < 0) r0 = 0;
+      if (r1 > ROWS - 1) r1 = ROWS - 1;
+      for (q = r0; q <= r1; q++) put(f, x, q, 0, P.shadow, 0, d);
+      if (rim >= 5) {
+
+        var rl = au < 0.44 ? 1 : (au <= 1.0 ? 0.90 : 0.95);
+        put(f, x, r0, au < 0.44 ? G_o : G_DASH, o.rim, rim * rl, nearer(dist));
+      }
+    }
+    if (rim < 5) return;
+
+    if (tallRows > 8) {
+      var rx = Math.round(cx + o.side * shw);
+      for (q = 1; q <= 2; q++)
+        put(f, rx, Math.round(rHead + q + 1), G_QUOTE, o.rim, rim * (q === 1 ? 0.96 : 0.88),
+            nearer(dist));
+    }
+
+    if (tallRows > 4) {
+      if (o.acc === 0) {
+
+        var a1 = fg(168, dist);
+        if (a1 >= 5) {
+          var by = Math.round(rHead + tallRows * 0.30);
+          put(f, Math.round(cx - shw * 0.5), by, G_DASH, P.spring, a1, nearer(dist));
+
+          put(f, Math.round(cx + shw * 0.5), by, G_DASH, P.spring, a1 * 0.90, nearer(dist));
+        }
+      } else if (o.acc === 1) {
+
+        var a2 = fg(112, dist);
+        if (a2 >= 5)
+          put(f, Math.round(cx), Math.round(rHead + tallRows * 0.075), G_DASH, P.azure, a2,
+              nearer(dist));
+      } else {
+
+        var a3 = fg(150, dist);
+        if (a3 >= 5)
+          put(f, Math.round(cx + o.side * shw * 0.9), Math.round(rHead + tallRows * 0.17),
+              G_o, P.ice, a3, nearer(dist));
+      }
+    }
+
+  }
+
+  CC.ELEMENTS.push({
+    name: 'police',
+    layer: 25,
+    init: function (city, rng, dims) {
+      this.city = city;
+
+      this.seed = (rng() * 30011) | 0;
+      this.boot = 0;
+      this.settled = 0;
+      this.warm = 0;
+
+      this.cols = dims && dims.cols ? dims.cols : 200;
+      this.rows = dims && dims.rows ? dims.rows : 60;
+      var i;
+      cars = new Array(CAR_N);
+      for (i = 0; i < CAR_N; i++)
+        cars[i] = { x: 0, z: 0, hx: 0, hz: 1, vx: 0, vz: 0, live: 0, wait: 4 + i * 9, n: i * 67,
+                    len: 4.4, wid: 1.85, tall: 1.42, cab: 1.0, ph: i * 0.37, chk: 0,
+                    lat: 0, wl: 0, out: 1, go: 1, chalf: 2, axis: 0, ctr: 0, fade: 1 };
+      offs = new Array(OFF_N);
+      for (i = 0; i < OFF_N; i++)
+        offs[i] = { x: 0, z: 0, vx: 0, vz: 0, live: 0, wait: 2 + i * 5, n: i * 83,
+                    tall: 1.78, walked: 0, phase: 0, side: 1, rim: P.amber, acc: 0, chk: 0,
+                    lat: 0, axis: 0, ctr: 0 };
+    },
+
+    update: function (dt, t, cam) {
+
+      camScreenAt(cam, this.cols, this.rows);
+      var city = this.city;
+      corridor(city, cam);
+      var S = this.seed, i;
+
+      var k = CC.reducedMotion ? 0 : 1;
+
+      if (!this.boot) {
+
+        this.boot = 1;
+        for (i = 0; i < OFF_N; i++) offs[i].wait = 1.5 + i * 4.5;
+      }
+
+      for (i = 0; i < CAR_N; i++) {
+        var c = cars[i];
+
+        var now = 0;
+        if (c.live) {
+          c.x += c.vx * dt * k; c.z += c.vz * dt * k;
+          var cov = carCover(c);
+          var pr = project(c.x, c.z);
+          var gone = 0;
+          if (!pr.ok || pr.w > 78) gone = 1;
+          if (i === PARKED) {
+
+            if (cov > CAR_HIDE_AT) gone = 1;
+            if (pr.sp > HP * 2.4 || pr.sp < -HP * 2.4) gone = 1;
+            c.fade = cov <= CAR_FADE_AT ? 1
+                   : (CAR_HIDE_AT - cov) / (CAR_HIDE_AT - CAR_FADE_AT);
+            if (c.fade < 0) c.fade = 0;
+          } else {
+
+            var l = (c.axis ? c.z - c.ctr : c.x - c.ctr);
+            if (l * c.go > c.chalf + 11) gone = 1;
+            if (cov > CAR_HIDE_AT * 1.6) gone = 1;
+            c.fade = 1;
+          }
+          if (gone) {
+            c.live = 0;
+
+            c.wait = i === PARKED ? 9 + hash2(i, c.n, S + 1409) * 17
+                                  : (14 + hash2(i, c.n, S + 1511) * 26);
+            if (CC.reducedMotion && i === PARKED) now = 1;
+          }
+          if (!now) continue;
+        } else if (CC.reducedMotion) {
+
+          if (i === PARKED && !this.settled) now = 1;
+          if (!now) continue;
+        } else {
+          c.wait -= dt * (i === PARKED ? 1 : k);
+          if (c.wait > 0) continue;
+        }
+        c.n++;
+        var n = c.n;
+
+        var h1 = hash2(i, n, S + 101), h2 = hash2(i, n, S + 211), h3 = hash2(i, n, S + 307),
+            h4 = hash2(i, n, S + 401), h5 = hash2(i, n, S + 503), h6 = hash2(i, n, S + 701),
+            h7 = hash2(i, n, S + 809);
+        c.ph = hash2(i, n, S + 601);
+        c.axis = COR.axis; c.ctr = COR.ctr;
+        if (i === PARKED) {
+          var cw = carriage();
+          var lane = cw - 1.0; if (lane < 0.85) lane = 0.85;
+          var side = h2 < 0.5 ? -1 : 1;
+
+          var a = COR.along + COR.dir * (30 + h1 * 18);
+          c.lat = side * lane;
+          c.out = -side;
+
+          c.wl = side * COR.half;
+          c.x = wX(c.axis, c.ctr, a, c.lat);
+          c.z = wZ(c.axis, c.ctr, a, c.lat);
+
+          var hd = (h3 < 0.5 ? 1 : -1) * COR.dir;
+          c.hx = COR.axis ? hd : 0; c.hz = COR.axis ? 0 : hd;
+          c.vx = 0; c.vz = 0;
+
+          c.chk = h4 < 0.46 ? 1 : 0;
+          c.len = 4.3 + h5 * 0.5;
+          c.wid = 1.82;
+          c.tall = 1.40 + h6 * 0.10;
+          c.cab = c.len * 0.22;
+          c.fade = 1;
+          c.live = 1;
+        } else {
+          var ca = crossAhead(city, h1);
+          if (ca !== ca) { c.wait = 3.0; continue; }
+
+          var ch = crossHalf(city, ca) - CC.PAVE;
+          if (ch < 1.7) ch = 1.7;
+          c.chalf = ch;
+          c.go = h2 < 0.5 ? -1 : 1;
+          var a2 = ca + (ch > 1.6 ? 0.55 + h3 * (ch - 1.2) : 0) * -c.go;
+          var l0 = -c.go * (COR.half + 10);
+          c.x = wX(c.axis, c.ctr, a2, l0);
+          c.z = wZ(c.axis, c.ctr, a2, l0);
+          c.lat = l0;
+
+          c.out = h6 < 0.5 ? 1 : -1;
+          var sp2 = 9 + h4 * 6;
+          c.vx = COR.axis ? 0 : c.go * sp2;
+          c.vz = COR.axis ? c.go * sp2 : 0;
+          c.hx = c.vx === 0 ? 0 : (c.vx > 0 ? 1 : -1);
+          c.hz = c.vz === 0 ? 0 : (c.vz > 0 ? 1 : -1);
+          c.len = 4.4 + h5 * 0.4;
+          c.wid = 1.85;
+          c.tall = 1.38 + h7 * 0.12;
+          c.cab = c.len * 0.22;
+          c.chk = 0;
+          c.fade = 1;
+          c.live = 1;
+        }
+      }
+
+      var park = cars[PARKED];
+      for (i = 0; i < OFF_N; i++) {
+        var o = offs[i];
+        var onow = 0;
+        if (!o.live) {
+
+          if (CC.reducedMotion) { if (!this.settled) onow = 1; }
+          else o.wait -= dt;
+          if (CC.reducedMotion ? !onow : o.wait > 0) continue;
+          if (CC.reducedMotion) offSettle(o, i, S, city, park);
+          else offSpawn(o, i, S, !this.warm, city, park);
+          continue;
+        }
+        o.x += o.vx * dt * k; o.z += o.vz * dt * k;
+        o.walked += (o.vx === 0 ? (o.vz < 0 ? -o.vz : o.vz) : (o.vx < 0 ? -o.vx : o.vx)) * dt * k;
+
+        if (o.chk && !(park.live && park.chk)) {
+          o.chk = 0;
+          var away = hash2(i, o.n, S + 1607) < 0.5 ? -1 : 1;
+          var wsp = 1.06 * (1 - 0.14 * wp().rain);
+          o.vx = o.axis ? away * wsp : 0;
+          o.vz = o.axis ? 0 : away * wsp;
+        }
+        if (offGone(o)) {
+          o.live = 0; o.wait = 4 + hash2(i, o.n, S + 1223) * 13;
+
+          if (CC.reducedMotion) offSettle(o, i, S, city, park);
+        }
+      }
+      this.warm = 1;
+
+      this.settled = CC.reducedMotion ? 1 : 0;
+    },
+
+    draw: function (frame, cam, t) {
+      camScreen(frame, cam);
+
+      this.cols = frame.cols; this.rows = frame.rows;
+      var S = this.seed, i;
+      var wetR = wrel('wet');
+      for (i = 0; i < CAR_N; i++) {
+        var c = cars[i];
+        if (!c.live || c.fade <= 0) continue;
+        var pc = project(c.x, c.z);
+        if (!pc.ok) continue;
+
+        var cdist = pc.dist;
+        if (cdist > 74) continue;
+        carBody(frame, c, c.fade, S);
+        lightbar(frame, c, c.fade, t);
+
+        if (cdist < WASH_D_MAX) washRoad(frame, c, c.fade, t, wetR);
+        if (i === CRUISER) carLamps(frame, c, wetR);
+      }
+      var park = cars[PARKED];
+      for (i = 0; i < OFF_N; i++) {
+        var o = offs[i];
+        if (!o.live) continue;
+
+        var bl = (o.chk && park.live) ? barEnv(t, park.ph) : -1;
+        drawOfficer(frame, o, i, S, bl);
+      }
+    }
+  });
+})(CC);
+
 /* src/elements/signage.js */
 (function (CC) {
   'use strict';
@@ -3695,7 +5617,8 @@ var CC = (function () {
 
   function shopOpen(rec, u) {
     var sd = (rec.seed * 4294967296) | 0;
-    return hash2(Math.floor(u / 2.55), 0, sd ^ 0x7E31) < 0.40;
+    var th = (CC.Surf && CC.Surf.SHOP_OPEN) || 0.52;
+    return hash2(Math.floor(u / 2.55), 0, sd ^ 0x7E31) < th;
   }
 
   CC.ELEMENTS.push({
@@ -3723,7 +5646,8 @@ var CC = (function () {
 
       for (gz = gz0; gz <= gz1; gz++) {
         for (gx = gx0; gx <= gx1; gx++) {
-          if (drawn > 16) return;
+
+          if (drawn > 22) return;
           var rx = gx + 0.5 - CO.ox, rz = gz + 0.5 - CO.oz;
           var w = rx * CO.fwx + rz * CO.fwz;
           if (w < 1.2 || w > R) continue;
@@ -4940,6 +6864,280 @@ var CC = (function () {
 
 })(CC);
 
+/* src/elements/skylanes.js */
+(function (CC) {
+  'use strict';
+
+  var P = CC.P, g = CC.g, put = CC.put, hash2 = CC.hash2;
+
+  var G_DASH = g('-'), G_EQ = g('='), G_HASH = g('#'), G_o = g('o'), G_UNDER = g('_');
+
+  var NLEV = 3;
+  var ALT = [29.0, 38.0, 49.0];
+  var DIRS = [1, -1, 1];
+
+  var LANE_P = 0.74;
+
+  var NPER = 7, SPAN = 480.0, SLOT = SPAN / NPER;
+
+  var FREIGHT_P = 0.15;
+
+  var CAR_L = 4.8, CAR_W = 3.2, CAR_H = 1.5;
+  var FR_L = 17.0, FR_W = 5.4, FR_H = 3.4;
+
+  var W_MIN = 78.0, W_MAX = 380.0;
+
+  var MAXCELLS = 14;
+
+  var NMIN = 1;
+
+  var KSPAN = 12, MSPAN = 14;
+
+  var LANE_SIDE = 22.0;
+
+  var SKY_NEAR = 126.0, DSLOPE = 0.38;
+
+  var HEAD_AMBER = 152, HEAD_AZURE = 92, TAIL_RED = 118, UNDER_AMBER = 132, BEACON_RED = 138;
+  var MIN_SCALE = 0.66;
+
+  var FADE = 0.00117;
+
+  var HULL_CAR = 15, HULL_FR = 15, HULL_ROOF = 12;
+
+  var BEACON_HZ = 0.42, BEACON_DUTY = 0.24, RM_BEACON = 0.70, BEACON_MIN = 0.45;
+
+  var SALT_JIT = 2003, SALT_SPD = 2111, SALT_FRT = 2221, SALT_LAT = 2333,
+      SALT_ALT = 2441, SALT_HUE = 2551, SALT_LEN = 2663, SALT_BCN = 2777, SALT_LANE = 2887;
+
+  var CX = 0, CZ = 0, FWX = 0, FWZ = 1, RGX = 1, RGZ = 0, HP = 0.7, EYE = 1.7;
+  var COLS = 0, ROWS = 0, HOR = 0, SCALE = 1, CPM = 1;
+
+  function camScreen(frame, cam) {
+    var yaw = cam.yaw || 0;
+    FWX = Math.sin(yaw); FWZ = Math.cos(yaw);
+    RGX = Math.cos(yaw); RGZ = -Math.sin(yaw);
+    CX = cam.x; CZ = cam.z;
+    HP = Math.tan((cam.fov || 1.25) * 0.5);
+    EYE = cam.eyeY !== undefined ? cam.eyeY : 1.7;
+    COLS = frame.cols; ROWS = frame.rows;
+    HOR = cam.horizon !== undefined ? cam.horizon : ROWS * 0.56;
+    SCALE = cam.scaleY !== undefined ? cam.scaleY
+          : (COLS * (cam.cellAspect || 0.5625)) / (2 * HP);
+    CPM = COLS * 0.5 / HP;
+  }
+
+  var PJ = { ok: 0, w: 0, sp: 0, x: 0, dist: 0 };
+  function project(px, pz) {
+    var dx = px - CX, dz = pz - CZ;
+    var w = dx * FWX + dz * FWZ;
+    if (w < 0.45) { PJ.ok = 0; return PJ; }
+    var sp = (dx * RGX + dz * RGZ) / w;
+    PJ.ok = 1; PJ.w = w; PJ.sp = sp;
+    PJ.x = (sp / HP + 1) * COLS * 0.5 - 0.5;
+    PJ.dist = w * Math.sqrt(1 + sp * sp);
+    return PJ;
+  }
+  function rowOf(y, w) { return HOR - (y - EYE) * SCALE / w; }
+
+  function plot(f, x, y, ch, col, lum, dist) {
+    if (lum < 3) return;
+    x = Math.round(x); y = Math.round(y);
+    if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return;
+    if (y > HOR) return;
+    put(f, x, y, ch, col, lum, dist);
+  }
+
+  var W_FOG = 0.30, W_HAZE = 0.40;
+  function bindWeather() {
+    var p = CC.Weather ? CC.Weather.P : null;
+    W_FOG = p ? p.fog : 0.30;
+    W_HAZE = p ? p.haze : 0.40;
+  }
+
+  var CITY = null, S = 0, AVE = 30, CROSS = 26;
+  var FRAME = null, TT = 0, VIS = 1;
+
+  function lane(ax, idx, c, hw) {
+
+    var p = ax === 0 ? c - CX : c - CZ;
+    var fp = ax === 0 ? FWX : FWZ;
+    var ap = p < 0 ? -p : p;
+    var wp = p * fp;
+    if (ap > LANE_SIDE && (wp < W_MIN * 0.5 || wp > W_MAX)) return;
+
+    var lanew = hw * 1.1; if (lanew > 4.0) lanew = 4.0; if (lanew < 1.2) lanew = 1.2;
+
+    var camAlong = ax === 0 ? CZ : CX;
+    var lv, j, ky;
+    for (lv = 0; lv < NLEV; lv++) {
+      if (hash2(idx, lv * 97 + ax * 13, S + SALT_LANE) > LANE_P) continue;
+      var dir = DIRS[lv];
+      var alt0 = ALT[lv];
+      for (j = 0; j < NPER; j++) {
+
+        ky = j + lv * 32 + ax * 256;
+
+        var jit = hash2(idx, ky, S + SALT_JIT);
+        var sp0 = hash2(idx, ky, S + SALT_SPD);
+        var freight = hash2(idx, ky, S + SALT_FRT) < FREIGHT_P;
+
+        var base = (j + jit * 0.62) * SLOT;
+
+        var spd = freight ? (0.96 + sp0 * 0.66) : (2.55 + sp0 * 2.25);
+
+        var a = base + dir * spd * TT - camAlong;
+        a -= SPAN * Math.floor(a / SPAN + 0.5);
+        a += camAlong;
+
+        var lat = (hash2(idx, ky, S + SALT_LAT) - 0.5) * lanew;
+        var px, pz, dirx, dirz;
+        if (ax === 0) { px = c + lat; pz = a; dirx = 0; dirz = dir; }
+        else          { px = a; pz = c + lat; dirx = dir; dirz = 0; }
+
+        project(px, pz);
+        if (!PJ.ok) continue;
+        var w = PJ.w;
+        if (w < W_MIN || w > W_MAX) continue;
+        var sp = PJ.sp;
+        if (sp > HP * 1.15 || sp < -HP * 1.15) continue;
+        var sx = PJ.x, dTrue = PJ.dist;
+
+        var ay = alt0 + (hash2(idx, ky, S + SALT_ALT) - 0.5) * 2.2;
+        var row = rowOf(ay, w);
+        if (row < -1 || row > HOR) continue;
+
+        var L = CAR_L, WD = CAR_W, HT = CAR_H;
+        if (freight) {
+
+          L = FR_L * (0.82 + hash2(idx, ky, S + SALT_LEN) * 0.42); WD = FR_W; HT = FR_H;
+        }
+        var dR = dirx * RGX + dirz * RGZ; if (dR < 0) dR = -dR;
+        var pR = -dirz * RGX + dirx * RGZ; if (pR < 0) pR = -pR;
+        var hx = 0.5 * (L * dR + WD * pR) * CPM / w;
+        var hy = 0.5 * HT * SCALE / w;
+
+        var nxT = Math.round(hx);
+        var nmax = freight ? 4 : 2;
+
+        var two = (freight && hy >= 0.62 && (2 * nxT + 1) * 2 <= MAXCELLS) ? 1 : 0;
+        if ((2 * nxT + 1) * (two ? 2 : 1) > MAXCELLS) continue;
+
+        var nx = nxT > nmax ? nmax : (nxT < NMIN ? NMIN : nxT);
+
+        var scale = VIS * (1 - (w - 90) * FADE);
+        if (scale > 1) scale = 1;
+        if (scale < MIN_SCALE) continue;
+
+        var dh = SKY_NEAR + dTrue * DSLOPE;
+        var dl = dh * 0.996;
+        var r0 = Math.round(row);
+        var q;
+        if (r0 < 0 || r0 >= ROWS) continue;
+
+        var xi = Math.round(sx), xx, lx = 0, rx = 0, rowBase = r0 * COLS;
+        if (!(xi >= 0 && xi < COLS && FRAME.dist[rowBase + xi] >= SKY_NEAR)) continue;
+        for (q = -1; q >= -nx; q--) {
+          xx = xi + q;
+          if (!(xx >= 0 && xx < COLS && FRAME.dist[rowBase + xx] >= SKY_NEAR)) break;
+          lx = q;
+        }
+        for (q = 1; q <= nx; q++) {
+          xx = xi + q;
+          if (!(xx >= 0 && xx < COLS && FRAME.dist[rowBase + xx] >= SKY_NEAR)) break;
+          rx = q;
+        }
+        if (rx - lx + 1 < 3) continue;
+
+        var rr = dirx * RGX + dirz * RGZ;
+        var sgn = rr > 0 ? 1 : -1;
+
+        var hlum = freight ? HULL_FR : HULL_CAR;
+        var hg = freight ? G_HASH : G_EQ;
+        for (q = lx; q <= rx; q++) plot(FRAME, sx + q, r0, hg, P.shadow, hlum, dh);
+        if (two) {
+          for (q = lx + 1; q <= rx - 1; q++)
+            plot(FRAME, sx + q, r0 - 1, G_DASH, P.shadow, HULL_ROOF, dh);
+
+          plot(FRAME, sx + (sgn > 0 ? rx - 1 : lx + 1), r0 - 1, G_o, P.amber,
+               UNDER_AMBER * 0.86 * scale, dl);
+        }
+
+        var dot = dirx * FWX + dirz * FWZ;
+        var hue = hash2(idx, ky, S + SALT_HUE);
+        var headC = hue < 0.52 ? P.amber : P.azure;
+        var headL = (hue < 0.52 ? HEAD_AMBER : HEAD_AZURE) * scale;
+
+        if (dot > 0.55) {
+
+          plot(FRAME, sx + lx, r0, G_o, P.red, TAIL_RED * scale, dl);
+          plot(FRAME, sx + rx, r0, G_o, P.red, TAIL_RED * scale, dl);
+        } else if (dot < -0.55) {
+
+          plot(FRAME, sx + lx, r0, G_o, headC, headL, dl);
+          plot(FRAME, sx + rx, r0, G_o, headC, headL * 0.80, dl);
+        } else {
+
+          plot(FRAME, sx + (sgn > 0 ? rx : lx), r0, G_o, headC, headL, dl);
+          plot(FRAME, sx + (sgn > 0 ? lx : rx), r0, G_o, P.red, TAIL_RED * 0.82 * scale, dl);
+
+          plot(FRAME, sx, r0 + 1, G_UNDER, P.amber, UNDER_AMBER * scale, dl);
+        }
+
+        if (freight) {
+          if (CC.reducedMotion) {
+
+            plot(FRAME, sx, r0 - two - 1, G_o, P.red, BEACON_RED * RM_BEACON * scale, dl);
+          } else {
+            var ph = TT * BEACON_HZ + hash2(idx, ky, S + SALT_BCN);
+            ph -= Math.floor(ph);
+            if (ph < BEACON_DUTY) {
+              var e = Math.sin(ph * Math.PI / BEACON_DUTY);
+              e *= e;
+
+              if (e >= BEACON_MIN) plot(FRAME, sx, r0 - two - 1, G_o, P.red, BEACON_RED * e * scale, dl);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  CC.ELEMENTS.push({
+    name: 'skylanes',
+    layer: 16,
+
+    init: function (city) {
+      CITY = city || null;
+      S = city && city.seed !== undefined ? (city.seed | 0) : 0;
+      AVE = city && city.AVE ? city.AVE : 30;
+      CROSS = city && city.CROSS ? city.CROSS : 26;
+    },
+
+    draw: function (frame, cam, t) {
+      var city = CITY;
+      if (!city || !city.aveX) return;
+      camScreen(frame, cam);
+      bindWeather();
+
+      VIS = 1 - (W_FOG > 0.34 ? (W_FOG - 0.34) * 1.70 : 0) - W_HAZE * 0.10;
+      if (VIS <= MIN_SCALE) return;
+      if (VIS > 1) VIS = 1;
+
+      TT = CC.reducedMotion ? 0 : t;
+      FRAME = frame;
+
+      var kc = Math.round(cam.x / AVE), mc = Math.round(cam.z / CROSS), i;
+      for (i = kc - KSPAN; i <= kc + KSPAN; i++)
+        lane(0, i, city.aveX(i) + 0.5, city.aveW(i) + 0.5);
+      for (i = mc - MSPAN; i <= mc + MSPAN; i++)
+        lane(1, i, city.crossZ(i) + 0.5, city.crossW(i) + 0.5);
+
+      FRAME = null;
+    }
+  });
+
+})(CC);
+
 /* src/elements/street.js */
 (function (CC) {
   'use strict';
@@ -4949,7 +7147,7 @@ var CC = (function () {
   var G_DOT = g('.'), G_COMMA = g(','), G_COLON = g(':'), G_SEMI = g(';'), G_QUOTE = g("'"),
       G_TICK = g('`'), G_DASH = g('-'), G_UNDER = g('_'), G_EQ = g('='), G_PIPE = g('|'),
       G_HASH = g('#'), G_8 = g('8'), G_0 = g('0'), G_X = g('X'), G_o = g('o'), G_M = g('M'),
-      G_W = g('W'), G_CARET = g('^'), G_STAR = g('*');
+      G_W = g('W'), G_CARET = g('^'), G_STAR = g('*'), G_SLASH = g('/'), G_BSLASH = g('\\');
 
   var FILL = [G_8, G_0, G_HASH, G_M, G_W, G_X], FILL_N = FILL.length;
   var PAPER = [G_QUOTE, G_TICK, G_COMMA, G_DOT, G_DASH, G_UNDER, G_COLON, G_SEMI],
@@ -4961,6 +7159,17 @@ var CC = (function () {
   function wrel(k) { return CC.Weather ? CC.Weather.rel(k) : 1; }
 
   function ctrlBlend() { return CC.Control ? CC.Control.blend : 0; }
+
+  function windRight() {
+    var W = CC.Wind;
+
+    if (!W) return 1.3;
+    if (CC.reducedMotion) {
+      var m = W.mult > 0.05 ? W.mult : 1;
+      return (W.x * RGX + W.z * RGZ) / m;
+    }
+    return W.x * RGX + W.z * RGZ;
+  }
 
   var CX = 0, CZ = 0, FWX = 0, FWZ = 1, RGX = 1, RGZ = 0, HP = 0.7, EYE = 1.7;
   var COLS = 0, ROWS = 0, HOR = 0, SCALE = 1, CPM = 1;
@@ -5044,8 +7253,11 @@ var CC = (function () {
   function worldZ(a, l) { return COR.axis ? COR.ctr + l : a; }
 
   function kerbL() {
-    var p = COR.half - 1.4;
-    return p < COR.half * 0.5 ? COR.half * 0.5 : p;
+    var p = COR.half - CC.PAVE;
+    if (p < 1.7) p = 1.7;
+
+    if (p > COR.half * 0.72) p = COR.half * 0.72;
+    return p;
   }
 
   function bar(f, x, rTop, rBot, ch, col, lum, dist) {
@@ -5056,7 +7268,7 @@ var CC = (function () {
     for (var r = r0; r <= r1; r++) put(f, x, r, ch, col, lum, dist);
   }
 
-  var stalls = null, STALL_N = 4, PUFF_N = 5;
+  var stalls = null, STALL_N = 3, PUFF_N = 5;
 
   CC.ELEMENTS.push({
     name: 'foodstalls',
@@ -5064,6 +7276,8 @@ var CC = (function () {
     init: function (city, rng) {
       this.city = city;
       this.seed = (rng() * 2147483647) | 0;
+
+      this.boot = 0;
       stalls = new Array(STALL_N);
       for (var i = 0; i < STALL_N; i++)
         stalls[i] = { x: 0, z: 0, side: 1, n: i * 37 + 1, live: 0, hue: P.amber,
@@ -5074,6 +7288,8 @@ var CC = (function () {
       camBasis(cam);
       corridor(this.city, cam);
       var S = this.seed, kl = kerbL(), i;
+      var fresh = !this.boot;
+      this.boot = 1;
       for (i = 0; i < STALL_N; i++) {
         var s = stalls[i];
         if (s.live) {
@@ -5086,16 +7302,18 @@ var CC = (function () {
           s.live = 0;
         }
         s.n++;
-        var h1 = hash2(i, s.n, S), h2 = hash2(i, s.n, S ^ 0x5A1), h3 = hash2(i, s.n, S ^ 0x9B);
 
-        var a = COR.along + COR.dir * (66 + h1 * 24);
+        var h1 = hash2(i, s.n, S), h2 = hash2(i, s.n, S ^ 0x5A1), h3 = hash2(i, s.n, S ^ 0x9B),
+            h4 = hash2(i, s.n, S + 101), h5 = hash2(i, s.n, S + 211), h6 = hash2(i, s.n, S + 307);
+
+        var a = COR.along + COR.dir * (fresh ? 8 + i * 25 + h1 * 14 : 66 + h1 * 24);
         s.side = h2 < 0.5 ? -1 : 1;
         var l = s.side * (kl + 0.25 + h3 * 0.55);
         s.x = worldX(a, l); s.z = worldZ(a, l);
-        s.w = 1.5 + h1 * 1.3;
-        s.tall = 2.05 + h2 * 0.45;
+        s.w = 1.5 + h4 * 1.3;
+        s.tall = 2.05 + h5 * 0.45;
 
-        s.hue = h3 < 0.55 ? P.amber : P.warm;
+        s.hue = h6 < 0.55 ? P.amber : P.warm;
         s.live = 1;
       }
     },
@@ -5153,13 +7371,14 @@ var CC = (function () {
           }
         }
 
-        var rate = CC.reducedMotion ? 0.05 : 0.42;
+        var tt = CC.reducedMotion ? t * (0.05 / 0.42) : t;
         for (j = 0; j < PUFF_N; j++) {
           var ph = hash2(j, s.n, S ^ 0xC0FE);
-          var age = (t * rate + ph) % 1;
+          var age = (tt * 0.42 + ph) % 1;
 
-          var drift = (vnoise(t * 0.5 + ph * 20, S ^ 0x1D) - 0.5) * age * 2.6;
-          var fade = (1 - age) * (1 - age);
+          var drift = (vnoise(tt * 0.5 + ph * 20, S ^ 0x1D) - 0.5) * age * 2.6;
+
+          var fade = (1 - age) * (1 - age) * (age < 0.14 ? age / 0.14 : 1);
           var sl2 = fg(50 * fade, dist);
           if (sl2 < 6) continue;
 
@@ -5172,32 +7391,77 @@ var CC = (function () {
   });
 
   var ARCH = [
-    { name: 'plain',   w: 0.17, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
-      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, tallB: 0.00,
-      stride: 1.00, bob: 0.035, spd: 1.00, accP: 0.06, acc: 3 },
-    { name: 'coat',    w: 0.17, hem: 0.70, hemTop: 0.46, hemBot: 0.97, legTop: 1.00, legW: 0.30,
-      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, tallB: 0.00,
-      stride: 0.86, bob: 0.028, spd: 0.96, accP: 0.10, acc: 3 },
-    { name: 'hood',    w: 0.15, hem: 0.26, hemTop: 0.58, hemBot: 0.92, legTop: 1.00, legW: 0.30,
-      brim: 0.00, pack: 0.00, bag: 0.00, hood: 1, umb: 0, tallB: 0.00,
-      stride: 0.96, bob: 0.024, spd: 1.08, accP: 0.14, acc: 1 },
-    { name: 'skirt',   w: 0.12, hem: 0.34, hemTop: 0.50, hemBot: 0.76, legTop: 0.76, legW: 0.19,
-      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, tallB: 0.00,
-      stride: 1.24, bob: 0.052, spd: 1.02, accP: 0.10, acc: 4 },
-    { name: 'courier', w: 0.10, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
-      brim: 0.00, pack: 0.55, bag: 0.00, hood: 0, umb: 0, tallB: 0.00,
-      stride: 1.14, bob: 0.030, spd: 1.30, accP: 0.34, acc: 2 },
+    { name: 'plain',   w: 0.13, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, wide: 1.00, crest: 0.00, cane: 0,
+      tallB: 0.00, stride: 1.00, bob: 0.035, spd: 1.00, accP: 0.06, acc: 3,
+      visP: 0.10, scarf: 0, hair: 0.00 },
+    { name: 'coat',    w: 0.14, hem: 0.70, hemTop: 0.46, hemBot: 0.97, legTop: 1.00, legW: 0.30,
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, wide: 1.00, crest: 0.00, cane: 0,
+      tallB: 0.00, stride: 0.86, bob: 0.028, spd: 0.96, accP: 0.10, acc: 3,
+      visP: 0.08, scarf: 1, hair: 0.00 },
+    { name: 'hood',    w: 0.12, hem: 0.26, hemTop: 0.58, hemBot: 0.92, legTop: 1.00, legW: 0.30,
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 1, umb: 0, wide: 1.02, crest: 0.00, cane: 0,
+      tallB: 0.00, stride: 0.96, bob: 0.024, spd: 1.08, accP: 0.14, acc: 1,
+      visP: 0.22, scarf: 0, hair: 0.00 },
+    { name: 'skirt',   w: 0.10, hem: 0.34, hemTop: 0.50, hemBot: 0.76, legTop: 0.76, legW: 0.19,
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, wide: 0.92, crest: 0.00, cane: 0,
+      tallB: 0.00, stride: 1.24, bob: 0.052, spd: 1.02, accP: 0.10, acc: 4,
+      visP: 0.08, scarf: 1, hair: 0.00 },
+    { name: 'courier', w: 0.09, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
+      brim: 0.00, pack: 0.55, bag: 0.00, hood: 0, umb: 0, wide: 1.00, crest: 0.00, cane: 0,
+      tallB: 0.00, stride: 1.14, bob: 0.030, spd: 1.30, accP: 0.34, acc: 2,
+      visP: 0.34, scarf: 0, hair: 0.00 },
 
     { name: 'shell',   w: 0.06, hem: 0.16, hemTop: 0.55, hemBot: 0.95, legTop: 1.00, legW: 0.30,
-      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 0, tallB: 0.14,
-      stride: 0.98, bob: 0.032, spd: 1.04, accP: 0.78, acc: 1 },
-    { name: 'hat',     w: 0.09, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
-      brim: 0.55, pack: 0.00, bag: 0.00, hood: 0, umb: 1, tallB: 0.00,
-      stride: 0.92, bob: 0.026, spd: 0.94, accP: 0.06, acc: 3 },
-    { name: 'bagger',  w: 0.14, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
-      brim: 0.00, pack: 0.00, bag: 0.60, hood: 0, umb: 1, tallB: 0.00,
-      stride: 1.00, bob: 0.034, spd: 0.97, accP: 0.18, acc: 4 }
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 0, wide: 1.00, crest: 0.00, cane: 0,
+      tallB: 0.14, stride: 0.98, bob: 0.032, spd: 1.04, accP: 0.78, acc: 1,
+      visP: 0.40, scarf: 0, hair: 0.00 },
+    { name: 'hat',     w: 0.07, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
+      brim: 0.55, pack: 0.00, bag: 0.00, hood: 0, umb: 1, wide: 1.00, crest: 0.00, cane: 0,
+      tallB: 0.00, stride: 0.92, bob: 0.026, spd: 0.94, accP: 0.06, acc: 3,
+      visP: 0.04, scarf: 0, hair: 0.00 },
+    { name: 'bagger',  w: 0.11, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
+      brim: 0.00, pack: 0.00, bag: 0.60, hood: 0, umb: 1, wide: 1.00, crest: 0.00, cane: 0,
+      tallB: 0.00, stride: 1.00, bob: 0.034, spd: 0.97, accP: 0.18, acc: 4,
+      visP: 0.08, scarf: 0, hair: 0.00 },
+
+    { name: 'suit',    w: 0.08, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.26,
+      brim: 0.00, pack: 0.00, bag: 0.34, hood: 0, umb: 1, wide: 0.90, crest: 0.00, cane: 0,
+      tallB: 0.04, stride: 1.06, bob: 0.022, spd: 1.12, accP: 0.05, acc: 4,
+      visP: 0.06, scarf: 1, hair: 0.00 },
+
+    { name: 'heavy',   w: 0.06, hem: 0.10, hemTop: 0.62, hemBot: 0.94, legTop: 1.00, legW: 0.34,
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 0, wide: 1.46, crest: 0.00, cane: 0,
+      tallB: -0.06, stride: 0.78, bob: 0.030, spd: 0.82, accP: 0.12, acc: 3,
+      visP: 0.10, scarf: 0, hair: 0.00 },
+
+    { name: 'crest',   w: 0.05, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.28,
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 0, wide: 0.94, crest: 0.16, cane: 0,
+      tallB: 0.02, stride: 1.10, bob: 0.040, spd: 1.14, accP: 0.46, acc: 1,
+      visP: 0.44, scarf: 0, hair: 0.00 },
+
+    { name: 'elder',   w: 0.05, hem: 0.30, hemTop: 0.48, hemBot: 0.90, legTop: 1.00, legW: 0.28,
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, wide: 0.96, crest: 0.00, cane: 1,
+      tallB: -0.11, stride: 0.70, bob: 0.016, spd: 0.66, accP: 0.08, acc: 4,
+      visP: 0.02, scarf: 1, hair: 0.00 },
+
+    { name: 'cloak',   w: 0.055, hem: 0.95, hemTop: 0.42, hemBot: 0.74, legTop: 1.00, legW: 0.30,
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 1, umb: 0, wide: 0.94, crest: 0.00, cane: 0,
+      tallB: 0.00, stride: 0.82, bob: 0.022, spd: 0.90, accP: 0.16, acc: 1,
+      visP: 0.16, scarf: 0, hair: 0.00 },
+
+    { name: 'mane',    w: 0.05, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.26,
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, wide: 0.96, crest: 0.00, cane: 0,
+      tallB: 0.00, stride: 1.08, bob: 0.046, spd: 1.06, accP: 0.20, acc: 4,
+      visP: 0.12, scarf: 1, hair: 0.30 },
+
+    { name: 'rigger',  w: 0.070, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 0.66, legW: 0.50,
+      brim: 0.00, pack: 0.30, bag: 0.00, hood: 0, umb: 0, wide: 1.12, crest: 0.00, cane: 0,
+      tallB: -0.02, stride: 0.84, bob: 0.026, spd: 0.88, accP: 0.75, acc: 5,
+      visP: 0.30, scarf: 0, hair: 0.00 }
   ];
+
+  var ARM_EXT = 0.20;
   var ARCH_TOT = 0;
   (function () {
 
@@ -5206,6 +7470,8 @@ var CC = (function () {
       if (A.brim > e) e = A.brim;
       if (A.pack > e) e = A.pack;
       if (A.bag > e) e = A.bag;
+
+      if (ARM_EXT > e) e = ARM_EXT;
       A.ext = e;
       ARCH_TOT += A.w; A.acc0 = ARCH_TOT;
     }
@@ -5216,7 +7482,7 @@ var CC = (function () {
     return ARCH[ARCH.length - 1];
   }
 
-  var peds = null, PED_MAX = 52, PED_AT_REF = 20, REF_CELLS = 200 * 60;
+  var peds = null, PED_MAX = 70, PED_AT_REF = 26, REF_CELLS = 200 * 60;
 
   function pedWant(cells) {
     var n = PED_AT_REF * Math.sqrt(cells / REF_CELLS);
@@ -5226,12 +7492,12 @@ var CC = (function () {
     return n > PED_MAX ? PED_MAX : (n < 4 ? 4 : n);
   }
 
-  function pedShoulder(w) {
-    var shw = 0.24 * CPM / w;
+  function pedShoulder(w, A) {
+    var shw = 0.24 * (A ? A.wide : 1) * CPM / w;
     return shw < 0.45 ? 0.45 : shw;
   }
   function pedCover(p, pr) {
-    var xw = pedShoulder(pr.w) * (1 + p.A.ext);
+    var xw = pedShoulder(pr.w, p.A) * (1 + p.A.ext);
 
     var x0 = pr.x - xw, x1 = pr.x + xw;
     if (x0 < 0) x0 = 0;
@@ -5264,7 +7530,9 @@ var CC = (function () {
         h4 = hash2(i, n, S + 401), h5 = hash2(i, n, S + 503), h6 = hash2(i, n, S + 601),
         h7 = hash2(i, n, S + 701), h8 = hash2(i, n, S + 809), h9 = hash2(i, n, S + 907),
         h10 = hash2(i, n, S + 1013), h11 = hash2(i, n, S + 1117), h12 = hash2(i, n, S + 1223),
-        h13 = hash2(i, n, S + 1301), h14 = hash2(i, n, S + 1409);
+        h13 = hash2(i, n, S + 1301), h14 = hash2(i, n, S + 1409),
+        h15 = hash2(i, n, S + 1511), h16 = hash2(i, n, S + 1607),
+        h17 = hash2(i, n, S + 1709);
     var rain = wp().rain;
     var kl = kerbL(), band = COR.half - kl - 0.6;
     if (band < 0.2) band = 0.2;
@@ -5312,7 +7580,8 @@ var CC = (function () {
         var sa = COR.axis ? sst.x : sst.z;
         var sl = (COR.axis ? sst.z : sst.x) - COR.ctr;
         a = sa + (h1 - 0.5) * 3.6;
-        l = sl + (sl < 0 ? 0.95 : -0.95);
+
+        l = sl + (sl < 0 ? 1 : -1) * (sst.w * 0.5 + 0.62);
         side = sl < 0 ? -1 : 1;
       }
     } else {
@@ -5322,6 +7591,19 @@ var CC = (function () {
       var go = (h5 < 0.62 ? -1 : 1) * COR.dir;
       p.vx = COR.axis ? go * sp : 0;
       p.vz = COR.axis ? 0 : go * sp;
+
+      var q = i > 0 ? peds[i - 1] : null;
+      if (q && q.live && !q.cross && !q.shelter && h13 < 0.26) {
+        var qa = COR.axis ? q.x : q.z, ql = (COR.axis ? q.z : q.x) - COR.ctr;
+
+        var gl = ql + (ql < 0 ? 1 : -1) * (0.62 + h15 * 0.34);
+        if (gl > kl + 0.15) gl = kl + 0.15;
+        if (gl < -kl - 0.15) gl = -kl - 0.15;
+        a = qa + (h16 - 0.5) * 1.1;
+        l = gl;
+        side = gl < 0 ? -1 : 1;
+        p.vx = q.vx; p.vz = q.vz;
+      }
     }
     p.x = worldX(a, l); p.z = worldZ(a, l);
     p.dodge = 0; p.dx = 0; p.dz = 0;
@@ -5350,8 +7632,16 @@ var CC = (function () {
       p.accHue = A.acc === 1 ? (qa < 0.34 ? P.spring : P.violet)
                : A.acc === 2 ? P.ice
                : A.acc === 3 ? P.ember
+               : A.acc === 5 ? P.amber
                : (qa < 0.60 ? P.warm : P.amber);
     } else { p.acc = 0; p.accHue = P.amber; }
+
+    if (h17 < A.visP) {
+      var qv = h17 / A.visP;
+      p.vis = 1;
+      p.visHue = qv < 0.46 ? P.azure : (qv < 0.74 ? P.ember : (qv < 0.87 ? P.ice
+               : (qv < 0.93 ? P.violet : P.red)));
+    } else { p.vis = 0; p.visHue = P.azure; }
     p.live = 1;
   }
 
@@ -5370,7 +7660,7 @@ var CC = (function () {
       for (var i = 0; i < PED_MAX; i++)
         peds[i] = { x: 0, z: 0, vx: 0, vz: 0, dx: 0, dz: 0, dodge: 0, n: i * 91, tall: 1.7,
                     phase: 0, cross: 0, goSide: 1, shelter: 0, side: 1, rim: P.amber, phone: -1,
-                    acc: 0, accHue: P.amber, walked: 0, live: 0, wait: 0,
+                    acc: 0, accHue: P.amber, vis: 0, visHue: P.azure, walked: 0, live: 0, wait: 0,
                     umbOwn: 0, umb: 0, uRate: 0.3, hunch: 0, A: ARCH[0] };
     },
     update: function (dt, t, cam) {
@@ -5456,7 +7746,7 @@ var CC = (function () {
         var rHead = rowOf((p.tall + A.tallB) * (1 - hunch * 0.055) + st * bobA, w);
         var tallRows = rFeet - rHead;
         if (tallRows < 1.4) continue;
-        var shw = pedShoulder(w);
+        var shw = pedShoulder(w, A);
         var xw = shw * (1 + A.ext);
         var x0 = Math.round(cx - xw), x1 = Math.round(cx + xw);
         if (x1 < 0 || x0 > COLS - 1) continue;
@@ -5468,23 +7758,48 @@ var CC = (function () {
 
         var rim = fg(70 + hash2(i, p.n, S + 5) * 44, dist);
         var sTop = 0.13 + hunch * 0.06;
+
+        var headHW = 0.34 + A.hair;
+        var legHW = A.legW > 0.34 ? A.legW : 0.34;
+
+        var hemSlope = A.hem > 0 ? (A.hemBot - A.hemTop) * tallRows / (A.hem * shw) : 0;
         for (x = x0; x <= x1; x++) {
           var u = (x - cx) / shw, au = u < 0 ? -u : u;
           var onAcc = (u < 0 ? -1 : 1) === p.side;
 
-          var v0 = 9, v1 = -9;
+          var v0 = 9, v1 = -9, diag = 0;
           if (au <= 1.0) {
             v0 = au > 0.62 ? 0.20 + hunch * 0.05 : (au > 0.34 ? sTop : 0);
 
             if (A.hood && au <= 0.34) v0 = au * 0.30;
+
+            if (A.crest > 0 && au <= 0.30) v0 = -A.crest * (1 - au / 0.30);
             v1 = au > 0.62 ? 0.66 : (au > A.legW ? A.legTop : 1);
 
-            if (au < 0.28 && tallRows > 5 && st > 0.42) v1 = 0.90;
+            if (au < legHW && tallRows > 5) {
+              var lg = (u < 0 ? -1 : 1) * st;
+              if (lg > 0.30) v1 = 0.94;
+              else if (lg < -0.30) v1 = 0.86;
+            }
+          }
+
+          if (tallRows > 7 && au > 1) {
+            var sw = (u < 0 ? -1 : 1) * st;
+            if (sw > 0.22 && au <= 1 + ARM_EXT * sw) {
+              if (0.24 < v0) v0 = 0.24;
+              if (0.30 + 0.22 * sw > v1) v1 = 0.30 + 0.22 * sw;
+            }
+          }
+
+          if (A.hair > 0 && au > 0.34 && au <= headHW) {
+            q = 0.02 + 0.040 * (au - 0.34) / A.hair;
+            if (q < v0) v0 = q;
           }
           if (A.hem > 0 && au > 1 && au <= 1 + A.hem) {
 
             q = A.hemTop + (A.hemBot - A.hemTop) * (au - 1) / A.hem;
-            if (q < v0) v0 = q;
+
+            if (q < v0) { v0 = q; diag = 1; }
             if (A.hemBot > v1) v1 = A.hemBot;
           }
           if (A.brim > 0 && au <= 1 + A.brim) {
@@ -5508,7 +7823,8 @@ var CC = (function () {
             var rl = au < 0.34 ? (A.hood ? 0.60 : 1) : (au <= 1.0 ? 0.72 : 0.88);
 
             put(frame, x, Math.round(rt),
-                au < 0.34 ? (A.hood ? G_CARET : G_o) : G_DASH,
+                (diag && hemSlope > 1.3 && A.hem * shw >= 2) ? (u < 0 ? G_SLASH : G_BSLASH)
+                : au < headHW ? ((A.hood || (A.crest > 0 && au < 0.30)) ? G_CARET : G_o) : G_DASH,
                 p.rim, rim * rl, nearer(dist));
           }
         }
@@ -5521,6 +7837,52 @@ var CC = (function () {
           for (q = 1; q <= qn; q++)
             put(frame, rx, Math.round(rHead + q), G_QUOTE, p.rim,
                 rim * (0.62 - 0.44 * q / qn), nearer(dist));
+        }
+
+        if (A.scarf && tallRows > 9) {
+          var wr = windRight(), wa = wr < 0 ? -wr : wr;
+          var wf = wa / 3.4; if (wf > 1) wf = 1;
+          var sdir = wr < 0 ? -1 : 1;
+          var sn = Math.round(shw * (0.55 + 1.30 * wf));
+          if (sn > 5) sn = 5;
+          if (sn >= 1) {
+
+            var sr0 = rHead + tallRows * (0.18 + 0.025 * st);
+            for (q = 1; q <= sn; q++) {
+              var sf = q / sn;
+
+              put(frame, Math.round(cx + sdir * (shw * 0.85 + q)),
+                  Math.round(sr0 - sf * tallRows * 0.15 * wf),
+
+                  G_DASH, p.rim, rim * (0.78 - 0.36 * sf), nearer(dist));
+            }
+          }
+        }
+
+        if (p.vis && tallRows > 3.2) {
+          var vl = fg(146 + hash2(i, p.n, S + 29) * 40, dist);
+          if (vl >= 5) {
+            var vy = Math.round(rHead + tallRows * 0.045);
+            var vx = Math.round(cx), hcol = shw * headHW;
+            var vd = dist * 0.970;
+            put(frame, vx, vy, hcol >= 1.3 ? G_EQ : G_DASH, p.visHue, vl, vd);
+            if (hcol >= 1.3) {
+
+              put(frame, vx - 1, vy, G_DASH, p.visHue, vl * 0.55, vd);
+              put(frame, vx + 1, vy, G_DASH, p.visHue, vl * 0.55, vd);
+            }
+          }
+        }
+
+        if (A.cane && tallRows > 9) {
+          var cnx = cx - p.side * shw * (0.95 + st * 0.30);
+          var cn0 = Math.round(rHead + tallRows * 0.52), cn1 = Math.round(rFeet);
+          for (q = cn0; q <= cn1; q++) {
+
+            var cf = (q - cn0) / (cn1 - cn0 + 0.001);
+            put(frame, Math.round(cnx - p.side * shw * 0.42 * cf), q,
+                cf > 0.88 ? G_DOT : G_PIPE, p.rim, rim * (0.30 + 0.22 * cf), nearer(dist));
+          }
         }
 
         if (p.acc && tallRows > 4) {
@@ -5552,6 +7914,21 @@ var CC = (function () {
             if (al3 >= 5)
               put(frame, Math.round(cx + p.side * shw * 0.55),
                   Math.round(rHead + tallRows * 0.10), G_DOT, P.ember, al3, nearer(dist));
+          } else if (p.acc === 5) {
+
+            var al5 = fg(225, dist);
+            if (al5 >= 5) {
+              var lx5 = Math.round(cx + p.side * shw * 0.86);
+              var ly5 = Math.round(rHead + tallRows * 0.13);
+
+              var ld5 = dist * 0.970;
+              put(frame, lx5, ly5, G_o, p.accHue, al5, ld5);
+
+              if (tallRows > 9)
+                for (q = 1; q <= 3; q++)
+                  put(frame, lx5 + p.side * q, ly5 + q, G_DASH, p.accHue,
+                      fg(50 - q * 12, dist), ld5);
+            }
           } else {
 
             var al4 = fg(128, dist);
@@ -5728,7 +8105,9 @@ var CC = (function () {
         var h1 = hash2(i, c.n, S), h2 = hash2(i, c.n, S ^ 0x21), h3 = hash2(i, c.n, S ^ 0x8F);
         var ca = crossAhead(city, h1);
         if (ca !== ca) { c.wait = 2.5; continue; }
-        var ch = crossHalf(city, ca);
+
+        var ch = crossHalf(city, ca) - CC.PAVE;
+        if (ch < 1.7) ch = 1.7;
         c.go = h2 < 0.5 ? -1 : 1;
 
         var a = ca + (ch > 1.6 ? 0.55 + h3 * (ch - 1.2) : 0) * -c.go;
@@ -6653,7 +9032,7 @@ var CC = (function () {
 
     var i, j, c, aa, l, hue = hash2(9, 0, sd) < 0.7 ? P.warm : P.spring;
 
-    for (i = 0; i < 5; i++) {
+    for (i = 0; i < 6; i++) {
       c = wp + inw * (0.22 + i * 0.30);
       l = 118 - i * 19;
       for (j = 0; j < 5; j++) {
@@ -6699,7 +9078,8 @@ var CC = (function () {
         for (n = alongLo(axis, 6); n <= alongHi(axis, 6); n++) {
           for (side = 0; side < 2; side++) {
             r = hash2(idx * 2 + side, n, BASE ^ 0x9701);
-            if (r > 0.50) continue;
+
+            if (r > 0.72) continue;
             along = n * 6 + hash2(idx * 2 + side, n, BASE ^ 0x9702) * 4.6;
             wallC = side ? SPAN.c1 : SPAN.c0;
             inw = side ? -1 : 1;

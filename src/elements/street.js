@@ -12,6 +12,20 @@
  *
  * Everything is world-anchored. Agents hold world (x,z) and a world velocity, so turning a corner
  * leaves them behind on the street they belong to instead of dragging them round with the view.
+ *
+ * WHAT THIS FILE COSTS THE PRINT, measured rather than asserted, because "costs almost nothing"
+ * above is a claim and the curve is the hardest constraint in the project. Canonical fixture,
+ * seeds 3001+137k for k=0..11 at frames 600 and 1800, 213x67, with the whole src/ tree snapshotted
+ * so that the other files being worked on could not move underneath the comparison:
+ *
+ *     with this file      muddy(9-119) 26.7%   hot(v>170) 4.18%   amber 47.6 / azure 30.0
+ *     file moved aside    muddy        27.6%   hot        4.30%   amber 46.3 / azure 31.0
+ *
+ * So the street NETS OUT NEGATIVE on both budgets: -0.9 points of muddy and -0.12 of hot. That is
+ * the subtractive design paying for itself and not a rounding error — a black cut-out at its true
+ * depth REPLACES a mid-grey facade or wet-road cell with an honest black one, which is the one
+ * thing this frame is short of. It is also why the answer to any future "this element is over
+ * budget" is to look at what it is standing in FRONT of, not only at what it is drawing.
  */
 (function (CC) {
   'use strict';
@@ -22,7 +36,7 @@
   var G_DOT = g('.'), G_COMMA = g(','), G_COLON = g(':'), G_SEMI = g(';'), G_QUOTE = g("'"),
       G_TICK = g('`'), G_DASH = g('-'), G_UNDER = g('_'), G_EQ = g('='), G_PIPE = g('|'),
       G_HASH = g('#'), G_8 = g('8'), G_0 = g('0'), G_X = g('X'), G_o = g('o'), G_M = g('M'),
-      G_W = g('W'), G_CARET = g('^'), G_STAR = g('*');
+      G_W = g('W'), G_CARET = g('^'), G_STAR = g('*'), G_SLASH = g('/'), G_BSLASH = g('\\');
 
   /* Blocky only. Anything with holes in it dithers instead of massing at this cell size. */
   var FILL = [G_8, G_0, G_HASH, G_M, G_W, G_X], FILL_N = FILL.length;
@@ -49,6 +63,35 @@
   function wrel(k) { return CC.Weather ? CC.Weather.rel(k) : 1; }
   /* 0 on autopilot, easing to 1 while a human drives. Read, never written. */
   function ctrlBlend() { return CC.Control ? CC.Control.blend : 0; }
+
+  /* ---- how hard the wind is blowing ACROSS THE VIEW, in metres per second -------------------
+   * For anything that streams sideways on screen: a scarf, a coat tail. The city's own wind vector
+   * projected onto the camera's RIGHT axis, which is the same projection weather.js uses to lean
+   * its rain curtain (`WIND.x * vRgx + WIND.z * vRgz`), so a scarf and the rain behind it lean the
+   * same way at the same moment. That is the whole reason CC.Wind is exported rather than rolled
+   * per element, and a private noise here would have been visibly out of phase with the sky.
+   *
+   * MUST be called after camBasis(), because RGX/RGZ are the camera's.
+   *
+   * Reduced motion drops the GUST and keeps the mean — WIND.speed is base*mult, so dividing it
+   * back out leaves the steady lean and removes the thing that varies. Damping the lean to zero
+   * instead would delete the scarf rather than calm it, and freezing it at whatever gust happened
+   * to be live at the moment the preference was read is worse than either.
+   *
+   * NOT a flicker source at any setting: WIND.mult moves on weather.js's gust envelope, which is
+   * a fraction of a hertz, and it drives a POSITION here rather than a brightness. */
+  function windRight() {
+    var W = CC.Wind;
+    /* No weather module: the harness's still-air fallback, leaning gently one way so the scarves
+     * are visible in tools/peds.cjs at all. 1.3 m/s is W_STILL.wind 0.55 times weather.js's
+     * WBASE mean of 2.4. */
+    if (!W) return 1.3;
+    if (CC.reducedMotion) {
+      var m = W.mult > 0.05 ? W.mult : 1;
+      return (W.x * RGX + W.z * RGZ) / m;
+    }
+    return W.x * RGX + W.z * RGZ;
+  }
 
   /* ---- camera basis ---------------------------------------------------------------------------
    * Duplicated from raycast.js rather than reached for, because elements are handed `cam` and
@@ -162,11 +205,20 @@
   function worldX(a, l) { return COR.axis ? a : COR.ctr + l; }
   function worldZ(a, l) { return COR.axis ? COR.ctr + l : a; }
 
-  /* The kerb sits 1.4 m in off the building line (raycast.configureFor), so the pavement is that
-   * 1.4 m strip. A 3 m alley has no such strip, hence the floor at half the corridor width. */
+  /* The kerb sits CC.PAVE in off the building line (raycast.configureFor), so the pavement is that
+   * strip. Reading the shared constant rather than repeating the number is the point: this is
+   * where the crowd is laid out, and a pavement the walkers use that is not the pavement that is
+   * drawn puts every one of them in the gutter or inside the wall. A 3 m alley has no such strip,
+   * hence the floor at half the corridor width. */
   function kerbL() {
-    var p = COR.half - 1.4;
-    return p < COR.half * 0.5 ? COR.half * 0.5 : p;
+    var p = COR.half - CC.PAVE;
+    if (p < 1.7) p = 1.7;                        // raycast.configureFor's floor, to the centimetre
+    /* ...and then a guard raycast does not need, because raycast is drawing a road and this is
+     * placing PEOPLE. On a 3 m alley the floor above puts the kerb outside the building line, and
+     * a walker laid out beyond it stands inside the wall. Nothing else in the frame notices; the
+     * crowd does. */
+    if (p > COR.half * 0.72) p = COR.half * 0.72;
+    return p;
   }
 
   /* Vertical run of one shape in one column. rTop/rBot are float screen rows, top first. */
@@ -184,14 +236,39 @@
    * lit surface: ONE massed horizontal slab (the counter) with dark above and below it, never a
    * scatter of bright dots. Steam is the only part that moves.
    * ============================================================================================ */
-  /* Four slots, not two. A stall now spawns at 66–90 m instead of 16–58 (see update), so it spends
-   * the first half-minute of its life as a smudge in the fog and only the last twenty seconds as
-   * the massed slab it exists to be — and a route that jogs onto a parallel avenue kills it on the
-   * way in. With two slots the street went minutes at a time with no lit counter anywhere near it:
-   * measured over 50 s of walk, stall energy fell to a twentieth. Four put it back to 0.9x the old
-   * average on a straight run, and they are staggered far enough apart that the street is still a
-   * street that happens to have a stall on it rather than one lined with them. */
-  var stalls = null, STALL_N = 4, PUFF_N = 5;
+  /* THREE SLOTS, AND THE FIRST FILL IS SPREAD DOWN THE STREET. That pair is one change and it has
+   * to be read as one, because the spread is what paid for dropping the fourth slot.
+   *
+   * A stall RESPAWNS at 66–90 m (see update), so it spends the first half minute of its life as a
+   * smudge in the fog and only the last twenty seconds as the massed slab it exists to be — and a
+   * route that jogs onto a parallel avenue kills it on the way in. Every slot used to take that
+   * same 66–90 m range on the FIRST update too, so all four stalls left the gate inside one 24 m
+   * band and then walked in together, retired together and respawned together. Four phase-locked
+   * slots are not four stalls, they are one stall with three shadows.
+   *
+   * Instrumented over a 90 s walk at 213x67 — the `dist` this element hands CC.put, bucketed, and
+   * the nearest-stall distance sampled every 5 s. BEFORE: seed 3275 had no stall closer than 42 m
+   * for the first 35 seconds and again for 15 seconds in the middle, and only 40.3% of frames had
+   * one inside 20 m; 3001 was 30.3%; 3686 was 68.8%. A stall at 50 m is three columns wide and
+   * ONE row of counter — that is the fog smudge the design wants a stall to arrive FROM, not a
+   * stall. AFTER, at three slots spread over 8–72 m: 55.4 / 54.2 / 99.0% for the same three seeds
+   * in the same order (3275 / 3001 / 3686).
+   *
+   * Three, not four, and that is the trim. With the slots de-phased, the fourth bought almost
+   * nothing: four slots spread the same way (over 8–77 m) read 58.1 / 56.6 / 100% on those seeds,
+   * i.e. under three points on two of them and a seed that already never lacked one. Once the
+   * slots are out of phase a fourth is not a fourth stall, it is a second one standing near at the
+   * same time — which is the "street lined with them" this pool has always been sized against, and
+   * that is the argument for three rather than a budget number. What it did cost was area, and
+   * a stall is the largest lit object at street level. The remaining gaps on 3275 and 3001 are not
+   * a slot shortage at all — they are the corner turns retiring a stall that was on its way in,
+   * which no number of slots can fix.
+   *
+   * Nothing about the RESPAWN moved, so a stall is still never seen arriving; only the state the
+   * walk starts in did, which is exactly what the pedestrians' own `fresh` flag does two hundred
+   * lines down and for exactly this reason. A stall standing at 12 m on frame 0 is an initial
+   * condition, not a pop — there is no previous frame for it to appear against. */
+  var stalls = null, STALL_N = 3, PUFF_N = 5;
 
   CC.ELEMENTS.push({
     name: 'foodstalls',
@@ -199,6 +276,9 @@
     init: function (city, rng) {
       this.city = city;
       this.seed = (rng() * 2147483647) | 0;
+      /* Deferred to the first update, because init() has no camera and therefore no corridor —
+       * the same shape pedestrians and litter already use. */
+      this.boot = 0;
       stalls = new Array(STALL_N);
       for (var i = 0; i < STALL_N; i++)
         stalls[i] = { x: 0, z: 0, side: 1, n: i * 37 + 1, live: 0, hue: P.amber,
@@ -209,6 +289,8 @@
       camBasis(cam);
       corridor(this.city, cam);
       var S = this.seed, kl = kerbL(), i;
+      var fresh = !this.boot;
+      this.boot = 1;
       for (i = 0; i < STALL_N; i++) {
         var s = stalls[i];
         if (s.live) {
@@ -220,28 +302,48 @@
           if (sl < 0) sl = -sl;
           /* Retired the moment the walk jogs onto a parallel avenue: the stall is then out in the
            * middle of somebody else's block and can never come back into view, but the projection
-           * test alone keeps it alive for another twenty seconds while its slot — one of only four
-           * — sits dead. Freeing it immediately is what keeps a stall in the pipeline on a route
-           * that turns often. */
+           * test alone keeps it alive for another twenty seconds while its slot — one of only
+           * three — sits dead. Freeing it immediately is what keeps a stall in the pipeline on a
+           * route that turns often, and the turns are the whole of what still empties it: see the
+           * measurement above the pool, where the two seeds with gaps are the two that turn. */
           if (p.ok && p.w < 96 && p.sp < HP * 2.4 && p.sp > -HP * 2.4 && sl < COR.half + 3) continue;
           s.live = 0;
         }
         s.n++;
-        var h1 = hash2(i, s.n, S), h2 = hash2(i, s.n, S ^ 0x5A1), h3 = hash2(i, s.n, S ^ 0x9B);
-        /* Spawned at 66–90 m, which is BEYOND the far end of the draw below, so a stall is never
-         * seen arriving. It used to spawn at 16–58 m: at 16 m a lit amber counter is thirteen
+        /* ONE INDEPENDENT DRAW PER DECISION, and the six below used to be three. h1 set the spawn
+         * distance AND the width, so the stall born furthest away was always the widest one; h2
+         * set the side AND the height, so every stall on the left of the street was shorter than
+         * every stall on the right; and h3 set the lateral inset AND the hue, so an amber counter
+         * was always the one nearer the kerb and a warm one always the one further in. That is
+         * the exact failure this repo has been caught by three times (a crossing draw reused for
+         * a rim colour made every crosser amber). Splitting them costs three hash2 calls in a
+         * function that runs a few times a minute and does not touch the shared rng stream, so no
+         * other element's randomness moves. Salts are spread additively per the house rule; the
+         * three original XOR salts are kept for h1/h2/h3 only because they are what the shipped
+         * frames were rolled from, and they measure independent (|r| < 0.04 over 1596 draws). */
+        var h1 = hash2(i, s.n, S), h2 = hash2(i, s.n, S ^ 0x5A1), h3 = hash2(i, s.n, S ^ 0x9B),
+            h4 = hash2(i, s.n, S + 101), h5 = hash2(i, s.n, S + 211), h6 = hash2(i, s.n, S + 307);
+        /* RESPAWNED at 66–90 m, which is BEYOND the far end of the draw below, so a stall is never
+         * seen arriving. It used to respawn at 16–58 m: at 16 m a lit amber counter is thirteen
          * columns of lum 186 and it simply materialised in the middle of the frame. Now the fog
          * hands it over — 34 lum and a column and a half at 90 m — and the walk takes half a
-         * minute to bring it up to the massed slab it exists to be. */
-        var a = COR.along + COR.dir * (66 + h1 * 24);
+         * minute to bring it up to the massed slab it exists to be.
+         *
+         * THE FIRST FILL IS THE EXCEPTION and it is spread over 8–72 m, one slot per 25 m band,
+         * so the street starts as a street that has been standing there rather than as one whose
+         * stalls all arrive at once forty seconds in. The bands are wide enough to overlap
+         * nothing and narrow enough that the near one is genuinely near: 8–22, 33–47, 58–72.
+         * See the note above the pool for the measurement and for why this is what let the
+         * fourth slot go. */
+        var a = COR.along + COR.dir * (fresh ? 8 + i * 25 + h1 * 14 : 66 + h1 * 24);
         s.side = h2 < 0.5 ? -1 : 1;
         var l = s.side * (kl + 0.25 + h3 * 0.55);
         s.x = worldX(a, l); s.z = worldZ(a, l);
-        s.w = 1.5 + h1 * 1.3;
-        s.tall = 2.05 + h2 * 0.45;
+        s.w = 1.5 + h4 * 1.3;
+        s.tall = 2.05 + h5 * 0.45;
         /* Amber strip light or a warm fry counter, and nothing else — a stall in an accent colour
          * reads as signage rather than as food. */
-        s.hue = h3 < 0.55 ? P.amber : P.warm;
+        s.hue = h6 < 0.55 ? P.amber : P.warm;
         s.live = 1;
       }
     },
@@ -314,15 +416,43 @@
         }
 
         /* Steam. Derived from t and a fixed per-puff phase rather than integrated, so scrubbing
-         * time lands on the same frame every time and there is no state to drift. */
-        var rate = CC.reducedMotion ? 0.05 : 0.42;
+         * time lands on the same frame every time and there is no state to drift. One puff
+         * completes 0.42 of a cycle per second — 0.42 Hz, far under the 2.6 Hz ceiling — and it
+         * moves a POSITION and a smooth envelope, not a switch.
+         *
+         * ONE CLOCK FOR THE WHOLE PUFF, and that is the reduced-motion fix. The rate used to be
+         * damped (0.42 -> 0.05) while the lateral drift carrier below still read the RAW t. That
+         * is the "a timer damped while the thing it feeds is not" failure inverted: with the age
+         * crawling through a 20 s cycle the puff sat on screen at a large `age` — which is exactly
+         * where the drift term is biggest, because drift scales with age — while its column swung
+         * left and right on an undamped 0.5 Hz noise. One cell wobbling at 0.5 Hz with everything
+         * else in the frame frozen is worse than the motion it was meant to replace.
+         *
+         * Damping the CLOCK rather than the rate damps everything downstream of it by
+         * construction, which is the only way this cannot be got wrong again as the puff grows
+         * terms. 0.05/0.42 is precisely the factor the rate used to carry, so a normal-motion
+         * frame is unchanged to the bit and a reduced-motion one crawls at 12% speed in BOTH
+         * axes: 0.05 Hz of age and 0.06 Hz of drift. market.js:504 solves the same problem the
+         * other way, by stopping its clock dead; a crawl is kept here because the plume is the
+         * only thing on a stall that moves at all. */
+        var tt = CC.reducedMotion ? t * (0.05 / 0.42) : t;
         for (j = 0; j < PUFF_N; j++) {
           var ph = hash2(j, s.n, S ^ 0xC0FE);
-          var age = (t * rate + ph) % 1;
+          var age = (tt * 0.42 + ph) % 1;
           /* Wind pushes the plume sideways as it rises, keyed on the stall's own seed so two
            * stalls never breathe in step. */
-          var drift = (vnoise(t * 0.5 + ph * 20, S ^ 0x1D) - 0.5) * age * 2.6;
-          var fade = (1 - age) * (1 - age);
+          var drift = (vnoise(tt * 0.5 + ph * 20, S ^ 0x1D) - 0.5) * age * 2.6;
+          /* THE ONSET IS A RAMP, NOT AN EDGE. `(1-age)^2` alone is 1.0 on the frame age wraps to
+           * zero, so a puff went from invisible (the l<6 cut retires it at age 0.65) to lum 50 in
+           * one 16 ms frame — through slate, which tops out at v=74, that is a v 0 -> 40 step in
+           * that cell. It is not a rate violation (0.42 Hz, and the envelope is built then scaled,
+           * never a floor subtracted from a scaled value) but it is an edge where this project's
+           * house style is a ramp — the same argument signage.js makes at its crest and ads.js at
+           * crest(). The first 14% of the life fades in, which at 0.42 Hz is a third of a second,
+           * about twenty frames; above age 0.14 the envelope is EXACTLY the shipped one, so the
+           * only part of the puff that moves is the part that was the edge. Measured: the largest
+           * one-frame step in that cell falls from lum 50 to lum 6, i.e. from v 40 to v 5. */
+          var fade = (1 - age) * (1 - age) * (age < 0.14 ? age / 0.14 : 1);
           var sl2 = fg(50 * fade, dist);
           if (sl2 < 6) continue;
           /* ONE cell per puff. A dense plume is a grey veil, which is the single failure this
@@ -344,15 +474,52 @@
    * crowd stands between six and twenty rows tall, where a coat's COLOUR is one cell and a coat's
    * HEM is four. So a long coat widens toward the ankle, a hood peaks where a face would be, a
    * courier's pack breaks one shoulder square, a brim runs wider than the head, a skirt narrows to
-   * two legs, and an umbrella puts an arc over the lot. Each archetype also carries its own stride
-   * frequency, bob and pace — a costume without its own walk is a sticker, and fourteen identical
-   * gaits was exactly the tell.
+   * two legs, a cloak is one wedge from the shoulder down, a mane makes the head half again as
+   * wide, boots plant a broad base on the pavement, and an umbrella puts an arc over the lot. Each
+   * archetype also carries its own stride frequency, bob and pace — a costume without its own walk
+   * is a sticker, and fourteen identical gaits was exactly the tell.
+   *
+   * One thing on a figure is NOT driven by the walk, and it is deliberate: the scarf streams on
+   * CC.Wind. Everything else here — bob, stride, arms, cane, the carried lamp — is keyed on
+   * distance walked, so a figure standing still under a canopy had nothing moving on it at all.
+   * A shape that answers the weather instead of the legs is a different kind of life and the
+   * crowd had none of it.
    *
    * The body stays NEAR-BLACK. The lit cells on a figure are the rim (sodium off the lamp
-   * standards, azure where the frontage behind them is screenlight), the phone, and AT MOST ONE
-   * accent — LED piping down a technical shell, a courier's reflective strip, a cigarette, a lit
-   * takeaway bag. Roughly one figure in six carries an accent at all. Two coloured things on one
-   * silhouette and it stops being a person in the dark.
+   * standards, azure where the frontage behind them is screenlight), the phone, and the accents
+   * below.
+   *
+   * ---- THE ONE-ACCENT RULE, AND WHERE IT NOW BENDS -------------------------------------------
+   * The rule was: at most one coloured thing per figure, because two of them on one silhouette
+   * and it stops being a person in the dark. That is still the rule for anything on the BODY —
+   * piping, a strip, a cigarette, a carried lamp are still mutually exclusive and still land on
+   * about one figure in five (21.0% of the crowd, computed off the weight table below).
+   *
+   * The VISOR is the one exception, and it is granted on evidence rather than on taste. A visor
+   * lands exactly where the crown rim already is, so it does not add a second PLACE to look — it
+   * RECOLOURS the place the eye is already going, and on most of the crowd it is literally the
+   * same cell. Every other accent sits somewhere else on the body, and two marks in two places is
+   * what made a figure read as jewellery rather than as a person.
+   *
+   * The shares, computed off the weight table below (fifteen archetypes, total weight 1.235):
+   * 15.7% of the crowd wears a visor, 21.0% carries a body accent, and 5.4% carries BOTH. Those
+   * two rolls are independent PER FIGURE but not across the table — the technical archetypes
+   * (shell, crest, courier, rigger) are high on both on purpose, which is why 5.4% is above the
+   * 3.3% independence alone would give. It is still a clear minority and it is concentrated on
+   * the four costumes that are ABOUT being kitted out.
+   *
+   * The rate was set by looking, not by the arithmetic. At visP 0.45 across the whole table —
+   * rendered at 213x67 on seed 3275 frame 600, and as a bare crowd at 260x60, both looked at —
+   * the near pavement carried three or four bright head bars at once and started to read as a row
+   * of indicator lights rather than as people, which is precisely the failure the one-accent rule
+   * was written against. At the shipped rate a full frame carries one, occasionally two, and it
+   * reads as somebody wearing something. 15.7% is where it stayed.
+   *
+   * AND AN HONEST LIMIT, because it is the thing most likely to be over-claimed: on the middle of
+   * this crowd — six to twelve rows — a visor is ONE cell. It reads there because it is brighter
+   * (raw 146-186 against the rim's 70-114) and a different hue, not because it is a bar. The
+   * three-cell bar with a bright centre only appears once the head is at least 1.3 columns of
+   * half-width, which is a figure inside about fifteen metres.
    * ============================================================================================ */
 
   /* The costume table. Built once at load and held BY REFERENCE on each walker, so an archetype
@@ -371,40 +538,176 @@
    *   bag     a shoulder bag or a case, one side, at hip height
    *   hood    the crown reads as a peak and carries no face
    *   umb     may own an umbrella — a pack or a hood is already this figure's answer to rain
+   *   wide    shoulder half-width multiplier — the one axis that changes a figure's MASS rather
+   *           than its trim, and the reason a docker and a clerk are different people at twelve
+   *           rows tall, where a coat's hem is already sub-cell. It feeds pedShoulder(), so it
+   *           feeds the screen-area budget too: a broad figure is retired sooner, which is right,
+   *           because it blacks out more picture at the same distance
+   *   crest   a centre peak ABOVE the crown, in body fractions — a cropped crest, a top-knot, a
+   *           high collar turned up. The one silhouette feature that reads at six rows
+   *   cane    carries a stick, planted on the leading foot's beat
    *   tallB   metres of extra height
    *   stride  stride frequency multiplier
    *   bob     head bob amplitude, metres
    *   spd     walking pace multiplier
    *   accP    chance this archetype carries its accent at all
    *   acc     1 LED piping   2 reflective strip   3 cigarette   4 something carried and lit
+   *           5 a shoulder lamp — the only accent that throws light onto anything else
+   *   visP    chance this archetype wears a VISOR: a bright bar across the head at eye height.
+   *           It is the second accent a figure may carry — see the one-accent note above — and
+   *           it is the single highest-value addition in the table, because it is the only lit
+   *           mark that still reads at EIGHT rows, where the head is one cell and every other
+   *           costume feature has already collapsed
+   *   scarf   owns a trailing scarf. It streams with CC.Wind rather than with the walk, which is
+   *           the one kind of motion this crowd had none of: everything else on a figure is
+   *           driven by distance walked, so a still figure was a still figure all the way down
+   *   hair    half-widths of MASS the hair adds to each side of the head outline. Distinct from
+   *           `crest`, which is a peak ABOVE the crown: hair makes the head WIDER, which is the
+   *           other of the two things a head can do at this size
    */
   var ARCH = [
-    { name: 'plain',   w: 0.17, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
-      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, tallB: 0.00,
-      stride: 1.00, bob: 0.035, spd: 1.00, accP: 0.06, acc: 3 },
-    { name: 'coat',    w: 0.17, hem: 0.70, hemTop: 0.46, hemBot: 0.97, legTop: 1.00, legW: 0.30,
-      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, tallB: 0.00,
-      stride: 0.86, bob: 0.028, spd: 0.96, accP: 0.10, acc: 3 },
-    { name: 'hood',    w: 0.15, hem: 0.26, hemTop: 0.58, hemBot: 0.92, legTop: 1.00, legW: 0.30,
-      brim: 0.00, pack: 0.00, bag: 0.00, hood: 1, umb: 0, tallB: 0.00,
-      stride: 0.96, bob: 0.024, spd: 1.08, accP: 0.14, acc: 1 },
-    { name: 'skirt',   w: 0.12, hem: 0.34, hemTop: 0.50, hemBot: 0.76, legTop: 0.76, legW: 0.19,
-      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, tallB: 0.00,
-      stride: 1.24, bob: 0.052, spd: 1.02, accP: 0.10, acc: 4 },
-    { name: 'courier', w: 0.10, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
-      brim: 0.00, pack: 0.55, bag: 0.00, hood: 0, umb: 0, tallB: 0.00,
-      stride: 1.14, bob: 0.030, spd: 1.30, accP: 0.34, acc: 2 },
-    /* The one figure allowed a narrow accent down its own seam, and it is 6% of the crowd. */
+    { name: 'plain',   w: 0.13, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, wide: 1.00, crest: 0.00, cane: 0,
+      tallB: 0.00, stride: 1.00, bob: 0.035, spd: 1.00, accP: 0.06, acc: 3,
+      visP: 0.10, scarf: 0, hair: 0.00 },
+    { name: 'coat',    w: 0.14, hem: 0.70, hemTop: 0.46, hemBot: 0.97, legTop: 1.00, legW: 0.30,
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, wide: 1.00, crest: 0.00, cane: 0,
+      tallB: 0.00, stride: 0.86, bob: 0.028, spd: 0.96, accP: 0.10, acc: 3,
+      visP: 0.08, scarf: 1, hair: 0.00 },
+    { name: 'hood',    w: 0.12, hem: 0.26, hemTop: 0.58, hemBot: 0.92, legTop: 1.00, legW: 0.30,
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 1, umb: 0, wide: 1.02, crest: 0.00, cane: 0,
+      tallB: 0.00, stride: 0.96, bob: 0.024, spd: 1.08, accP: 0.14, acc: 1,
+      visP: 0.22, scarf: 0, hair: 0.00 },
+    { name: 'skirt',   w: 0.10, hem: 0.34, hemTop: 0.50, hemBot: 0.76, legTop: 0.76, legW: 0.19,
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, wide: 0.92, crest: 0.00, cane: 0,
+      tallB: 0.00, stride: 1.24, bob: 0.052, spd: 1.02, accP: 0.10, acc: 4,
+      visP: 0.08, scarf: 1, hair: 0.00 },
+    { name: 'courier', w: 0.09, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
+      brim: 0.00, pack: 0.55, bag: 0.00, hood: 0, umb: 0, wide: 1.00, crest: 0.00, cane: 0,
+      tallB: 0.00, stride: 1.14, bob: 0.030, spd: 1.30, accP: 0.34, acc: 2,
+      visP: 0.34, scarf: 0, hair: 0.00 },
+    /* The one figure allowed a narrow accent down its own seam, and it is 5% of the crowd. */
     { name: 'shell',   w: 0.06, hem: 0.16, hemTop: 0.55, hemBot: 0.95, legTop: 1.00, legW: 0.30,
-      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 0, tallB: 0.14,
-      stride: 0.98, bob: 0.032, spd: 1.04, accP: 0.78, acc: 1 },
-    { name: 'hat',     w: 0.09, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
-      brim: 0.55, pack: 0.00, bag: 0.00, hood: 0, umb: 1, tallB: 0.00,
-      stride: 0.92, bob: 0.026, spd: 0.94, accP: 0.06, acc: 3 },
-    { name: 'bagger',  w: 0.14, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
-      brim: 0.00, pack: 0.00, bag: 0.60, hood: 0, umb: 1, tallB: 0.00,
-      stride: 1.00, bob: 0.034, spd: 0.97, accP: 0.18, acc: 4 }
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 0, wide: 1.00, crest: 0.00, cane: 0,
+      tallB: 0.14, stride: 0.98, bob: 0.032, spd: 1.04, accP: 0.78, acc: 1,
+      visP: 0.40, scarf: 0, hair: 0.00 },
+    { name: 'hat',     w: 0.07, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
+      brim: 0.55, pack: 0.00, bag: 0.00, hood: 0, umb: 1, wide: 1.00, crest: 0.00, cane: 0,
+      tallB: 0.00, stride: 0.92, bob: 0.026, spd: 0.94, accP: 0.06, acc: 3,
+      visP: 0.04, scarf: 0, hair: 0.00 },
+    { name: 'bagger',  w: 0.11, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
+      brim: 0.00, pack: 0.00, bag: 0.60, hood: 0, umb: 1, wide: 1.00, crest: 0.00, cane: 0,
+      tallB: 0.00, stride: 1.00, bob: 0.034, spd: 0.97, accP: 0.18, acc: 4,
+      visP: 0.08, scarf: 0, hair: 0.00 },
+
+    /* ---- and four more, because eight costumes on a fuller pavement had started to repeat ----
+     * (and three more after those, at the bottom of the table — see the cloak.)
+     * Every one of them is a different SILHOUETTE first and a different walk second. A costume
+     * that differs only in its accent is the same person in a different colour, and at twelve rows
+     * tall the accent is one cell.
+     *
+     * The narrow office figure. Reads by being the only thing on the street with a straight edge
+     * all the way down: no hem, no hood, narrow shoulders, a hard case at the hip, and the
+     * briskest walk in the table that is not a courier's. */
+    { name: 'suit',    w: 0.08, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.26,
+      brim: 0.00, pack: 0.00, bag: 0.34, hood: 0, umb: 1, wide: 0.90, crest: 0.00, cane: 0,
+      tallB: 0.04, stride: 1.06, bob: 0.022, spd: 1.12, accP: 0.05, acc: 4,
+      visP: 0.06, scarf: 1, hair: 0.00 },
+    /* Mass, and the only figure in the table that has it. Half again as broad across the shoulders
+     * as a clerk, short, and it walks slowly because that is what carrying does to a gait — a
+     * docker, somebody in three coats, somebody with a load. `wide` feeds the screen-area budget,
+     * so this one is retired further out than the rest; that is correct rather than a side effect,
+     * because it blacks out half as much frame again at the same distance. */
+    { name: 'heavy',   w: 0.06, hem: 0.10, hemTop: 0.62, hemBot: 0.94, legTop: 1.00, legW: 0.34,
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 0, wide: 1.46, crest: 0.00, cane: 0,
+      tallB: -0.06, stride: 0.78, bob: 0.030, spd: 0.82, accP: 0.12, acc: 3,
+      visP: 0.10, scarf: 0, hair: 0.00 },
+    /* A crest — cropped hair stood up, a top-knot, a collar turned up over the ears. It is the one
+     * costume feature that survives all the way down to six rows, because it changes the OUTLINE
+     * of the head rather than adding anything beside it, and the head is the last thing a figure
+     * has left. Piping, because this is the same person the technical shell exists for. */
+    { name: 'crest',   w: 0.05, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.28,
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 0, wide: 0.94, crest: 0.16, cane: 0,
+      tallB: 0.02, stride: 1.10, bob: 0.040, spd: 1.14, accP: 0.46, acc: 1,
+      visP: 0.44, scarf: 0, hair: 0.00 },
+    /* Slow, stooped, and the only figure whose gait has a third beat in it: the stick lands
+     * between the feet. Its pace is the point — a crowd in which everybody moves at within 30% of
+     * everybody else is a crowd on a conveyor, and this is the low end. */
+    { name: 'elder',   w: 0.05, hem: 0.30, hemTop: 0.48, hemBot: 0.90, legTop: 1.00, legW: 0.28,
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, wide: 0.96, crest: 0.00, cane: 1,
+      tallB: -0.11, stride: 0.70, bob: 0.016, spd: 0.66, accP: 0.08, acc: 4,
+      visP: 0.02, scarf: 1, hair: 0.00 },
+
+    /* ---- and three more, built out of the three features this table did not have ---------------
+     *
+     * THE CLOAK, and it is the strongest silhouette in the set by a distance: a triangle that
+     * starts at the shoulder rather than at the waist, so the whole figure is one wedge instead of
+     * a body with a coat on it. `hem` 0.95 against the long coat's 0.70 is the costume; hemTop
+     * 0.42 / hemBot 0.74 is the tuning, and it was 0.18 / 0.86 first. That version was drawn at
+     * 34 rows and looked at: a wedge that runs from the shoulder all the way to the ankle spreads
+     * its own outline over more than three screen rows per column, so the flare printed as four
+     * ticks with holes between them instead of as an edge. Pulling the flare into the middle
+     * third of the body puts it at about one and a half rows per column, which is where a run of
+     * marks touches — and it leaves the legs visible under the hem, which is a second read: a
+     * wide wedge with two thin legs below it, rather than one solid triangle. The steep-hem slash
+     * in the rim block was the other half of that fix and it now covers the long coat too.
+     * The hood comes with it, because a poncho without one has a head sitting on a triangle and
+     * reads as a traffic cone; with it the wedge comes to a point and the whole outline is one
+     * shape.
+     *
+     * It is deliberately the widest `ext` in the table (0.95 against the coat's 0.70), which means
+     * pedCover() sizes its box 15% wider and the area budget retires it correspondingly further
+     * out. That is not a side effect to be worked around — a cloak blacks out more picture than
+     * anything else on the pavement, and the whole point of retiring on AREA is that the costume
+     * that occludes most goes first. */
+    { name: 'cloak',   w: 0.055, hem: 0.95, hemTop: 0.42, hemBot: 0.74, legTop: 1.00, legW: 0.30,
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 1, umb: 0, wide: 0.94, crest: 0.00, cane: 0,
+      tallB: 0.00, stride: 0.82, bob: 0.022, spd: 0.90, accP: 0.16, acc: 1,
+      visP: 0.16, scarf: 0, hair: 0.00 },
+
+    /* HAIR AS A SILHOUETTE. The head is the last thing a figure has left at six rows, and there
+     * are exactly two things a head can do at that size: come to a POINT (that is `crest`, and it
+     * was already here) or get WIDER. This is the second one, and it is a different read — a
+     * five-cell head against a three-cell one, at the one place on the figure the eye is already
+     * looking because the crown rim is the brightest cell on it.
+     *
+     * 0.30 half-widths a side, so the head runs to 0.64 against the standard 0.34: not quite
+     * double. Both ends were drawn at 34 rows and looked at. At 0.18 the head printed seven cells
+     * against a plain figure's six and was not tellable apart from it. At 0.45 the head came out
+     * nine cells wide against an eleven-cell shoulder line, i.e. a head nearly as wide as the
+     * body, and it stopped reading as hair and started reading as a helmet — which is a different
+     * costume and not the one this is for. The scarf comes with it because the two are the same
+     * silhouette argument —
+     * mass around the head and shoulders — and because a figure whose outline is soft at the top
+     * wants something that moves. */
+    { name: 'mane',    w: 0.05, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.26,
+      brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, wide: 0.96, crest: 0.00, cane: 0,
+      tallB: 0.00, stride: 1.08, bob: 0.046, spd: 1.06, accP: 0.20, acc: 4,
+      visP: 0.12, scarf: 1, hair: 0.30 },
+
+    /* THE WIDE BASE, i.e. boots, and it is spelt with legW/legTop rather than with a new field
+     * ON PURPOSE. The column loop takes the union of every claim as a SINGLE RUN, so a boot that
+     * flares below a narrow ankle would be a hole in the middle of a black shape — and a hole in
+     * a black shape drawn on a black road is exactly as visible as not drawing it. What a boot
+     * CAN change is the width of the run where it meets the pavement, which is the one edge of a
+     * figure that is not the rim and the one the wet-road reflection sits directly under. So:
+     * legW 0.50 (a broad planted column from the knee down, against everyone else's 0.19-0.34)
+     * and legTop 0.66 (the body above it narrows at the hip instead of running straight to the
+     * sole). The leg-stride window widens with legW — see the leg block in the column loop —
+     * or the outer half of the boot would stand still while the inner half walked.
+     * It carries the shoulder lamp, which is the only accent in the table that lights anything
+     * other than itself. accP 0.75 on a 5.7% archetype puts the lamp on 4.2% of the crowd, i.e.
+     * about one figure in twenty-four — the rate the lamp was asked for. It reads as a property of
+     * THIS costume rather than as a lottery every walker enters, which is the same argument the
+     * technical shell makes for its piping. */
+    { name: 'rigger',  w: 0.070, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 0.66, legW: 0.50,
+      brim: 0.00, pack: 0.30, bag: 0.00, hood: 0, umb: 0, wide: 1.12, crest: 0.00, cane: 0,
+      tallB: -0.02, stride: 0.84, bob: 0.026, spd: 0.88, accP: 0.75, acc: 5,
+      visP: 0.30, scarf: 0, hair: 0.00 }
   ];
+  /* How far a swinging arm reaches past the shoulder line, in shoulder half-widths. See the arm
+   * block in the column loop for why the arms are part of the cut-out rather than a lit mark. */
+  var ARM_EXT = 0.20;
   var ARCH_TOT = 0;
   (function () {
     /* `ext` is how far past the shoulder line this costume can possibly reach, so the column loop
@@ -414,6 +717,12 @@
       if (A.brim > e) e = A.brim;
       if (A.pack > e) e = A.pack;
       if (A.bag > e) e = A.bag;
+      /* ARM_EXT is in the floor for EVERY archetype, because everybody has arms and the swinging
+       * one reaches past the shoulder line. Leaving it out is not a cosmetic omission: `ext` is
+       * what the column loop uses to decide where to stop, so an arm outside it is simply never
+       * drawn, and it is also what pedCover() measures, so the screen-area budget would be sizing
+       * a box narrower than the figure it is protecting the frame from. */
+      if (ARM_EXT > e) e = ARM_EXT;
       A.ext = e;
       ARCH_TOT += A.w; A.acc0 = ARCH_TOT;
     }
@@ -432,7 +741,11 @@
    * already a fixed fraction of the frame at any grid size, so scaling linearly would multiply the
    * cut-out area by the same factor as the count and black the picture out. The square root adds
    * people without adding that much occlusion. */
-  var peds = null, PED_MAX = 52, PED_AT_REF = 20, REF_CELLS = 200 * 60;
+  /* 26 at the reference frame, up from 20, and a pool to match. The pavement is what changed: at
+   * CC.PAVE 2.15 the walkable strip is 1.81 m rather than 1.06 m, which is the difference between
+   * a file of people in single line and a pavement two abreast. The square-root scaling below is
+   * untouched — it is about the frame, not about the street. */
+  var peds = null, PED_MAX = 70, PED_AT_REF = 26, REF_CELLS = 200 * 60;
 
   function pedWant(cells) {
     var n = PED_AT_REF * Math.sqrt(cells / REF_CELLS);
@@ -454,12 +767,16 @@
    * A pedestrian is a BLACK CUT-OUT — see the design note at the top — so its area is not a matter
    * of taste, it is the whole-frame luminance it removes. Every other visual property of a figure
    * can be eased; this one cannot, because there is no such thing as a half-drawn hole. */
-  function pedShoulder(w) {
-    var shw = 0.24 * CPM / w;            // half a SHOULDER width, in columns
+  /* The archetype is an ARGUMENT, not an afterthought: `wide` scales the shoulder, and this
+   * function is the single definition both the draw and the area budget go through. Passing it in
+   * one place and not the other is exactly how the two formulas for the same box came apart
+   * before — see PED_COVER_MAX. */
+  function pedShoulder(w, A) {
+    var shw = 0.24 * (A ? A.wide : 1) * CPM / w;    // half a SHOULDER width, in columns
     return shw < 0.45 ? 0.45 : shw;
   }
   function pedCover(p, pr) {
-    var xw = pedShoulder(pr.w) * (1 + p.A.ext);
+    var xw = pedShoulder(pr.w, p.A) * (1 + p.A.ext);
     /* Clipped to the frame, deliberately: a figure that is half off the left edge blacks out half
      * as much picture, and it is the picture that this budget is about. That clip is also what
      * lets somebody walk right past your shoulder — the case that reads best — while stopping
@@ -519,7 +836,9 @@
         h4 = hash2(i, n, S + 401), h5 = hash2(i, n, S + 503), h6 = hash2(i, n, S + 601),
         h7 = hash2(i, n, S + 701), h8 = hash2(i, n, S + 809), h9 = hash2(i, n, S + 907),
         h10 = hash2(i, n, S + 1013), h11 = hash2(i, n, S + 1117), h12 = hash2(i, n, S + 1223),
-        h13 = hash2(i, n, S + 1301), h14 = hash2(i, n, S + 1409);
+        h13 = hash2(i, n, S + 1301), h14 = hash2(i, n, S + 1409),
+        h15 = hash2(i, n, S + 1511), h16 = hash2(i, n, S + 1607),
+        h17 = hash2(i, n, S + 1709);
     var rain = wp().rain;
     var kl = kerbL(), band = COR.half - kl - 0.6;
     if (band < 0.2) band = 0.2;
@@ -595,7 +914,32 @@
         var sa = COR.axis ? sst.x : sst.z;
         var sl = (COR.axis ? sst.z : sst.x) - COR.ctr;
         a = sa + (h1 - 0.5) * 3.6;
-        l = sl + (sl < 0 ? 0.95 : -0.95);
+        /* BESIDE THE COUNTER, NOT IN FRONT OF IT, and that is a measured fix rather than a
+         * preference. The offset was a flat 0.95 m inboard while a stall is 1.5–2.8 m wide, i.e.
+         * a half-width of 0.75–1.4 m — so a shelterer stood INSIDE the counter's own lateral
+         * footprint, and a black cut-out standing on the one lit slab at street level does not
+         * silhouette against it, it deletes it.
+         *
+         * The offset is now the stall's OWN half-width plus a margin, not a constant, and that is
+         * the whole point: the stall's printed half-width and this offset both go as 1/w, so a
+         * shelterer clears the counter's inner edge by the same fraction of a column at 60 m as
+         * at 12 m. A constant cannot — 0.95 m was inside a wide stall at every distance and
+         * inside every stall at the far end. 0.62 m of margin is about a shoulder, which is as
+         * close as somebody stands to a hot counter without being served at it.
+         *
+         * MEASURED, instrumented write-vs-survive at 213x67 over six seeds (3001+137k) at frame
+         * 3600, counting the cells foodstalls writes and how many still own their cell after every
+         * later world element has drawn: with the flat 0.95 m, 542 of 968 cells and 214 of 452
+         * LIT cells survived (56.0% / 47.3%); with the offset below, 623 and 262 (64.4% / 58.0%).
+         * Pedestrians are still the largest single blamer for what is left, but the rest of that
+         * is ordinary occlusion by walkers who happen to be nearer, which is correct and is not
+         * something to fix.
+         *
+         * They are still against the light — the spill and the burner are what they are standing
+         * in — and they are now a silhouette WITH a lit slab beside it rather than a silhouette
+         * ON one, which is the read the stall exists for. It does put them a little off the kerb;
+         * that is right, because a queue at a street counter stands in the gutter. */
+        l = sl + (sl < 0 ? 1 : -1) * (sst.w * 0.5 + 0.62);
         side = sl < 0 ? -1 : 1;
       }
     } else {
@@ -608,6 +952,40 @@
       var go = (h5 < 0.62 ? -1 : 1) * COR.dir;
       p.vx = COR.axis ? go * sp : 0;
       p.vz = COR.axis ? 0 : go * sp;
+
+      /* WALKING TOGETHER. About a quarter of the pavement walkers fall in beside the walker in the
+       * slot before them, if that one is also a pavement walker going the same way. This is the
+       * cheapest detail in the file and close to the most valuable: at twenty rows tall a costume
+       * is what tells you somebody is a person, but at SIX rows — which is most of the crowd, most
+       * of the time — two silhouettes holding a fixed gap and moving at one speed is the only cue
+       * left that reads as people rather than as posts. A crowd of strangers each on their own
+       * speed is a particle system; a crowd with pairs in it is a street.
+       *
+       * The pair copies the velocity outright rather than being nudged toward it. Two people
+       * walking together hold their gap for as long as you can see them, and a spring that keeps
+       * them approximately together drifts them apart over the forty seconds a walker is in
+       * frame — which is exactly the length of time the observation has to survive to be worth
+       * anything. They keep their OWN archetype, height and stride phase: matching those too
+       * would make them twins, and a couple is two different people who happen to be side by side.
+       *
+       * `q` is the slot before this one, and it is the one slot this function is allowed to read.
+       * Reading a random slot would make the spawn order significant — slot 9 pairing with slot 40
+       * gives a different street depending on which of them respawned first — and this file is
+       * scrub-safe by construction everywhere else. */
+      var q = i > 0 ? peds[i - 1] : null;
+      if (q && q.live && !q.cross && !q.shelter && h13 < 0.26) {
+        var qa = COR.axis ? q.x : q.z, ql = (COR.axis ? q.z : q.x) - COR.ctr;
+        /* Beside, and a little behind or ahead — nobody walks in perfect lockstep. The lateral
+         * gap is a shoulder and a half, and it is clamped back onto the pavement afterwards
+         * because the partner may already be against the kerb. */
+        var gl = ql + (ql < 0 ? 1 : -1) * (0.62 + h15 * 0.34);
+        if (gl > kl + 0.15) gl = kl + 0.15;
+        if (gl < -kl - 0.15) gl = -kl - 0.15;
+        a = qa + (h16 - 0.5) * 1.1;
+        l = gl;
+        side = gl < 0 ? -1 : 1;
+        p.vx = q.vx; p.vz = q.vz;
+      }
     }
     p.x = worldX(a, l); p.z = worldZ(a, l);
     p.dodge = 0; p.dx = 0; p.dz = 0;
@@ -636,7 +1014,7 @@
       var q = h12 / 0.18;
       p.phone = q < 0.70 ? P.azure : (q < 0.88 ? P.ice : P.violet);
     } else p.phone = -1;
-    /* THE ONE ACCENT, and only about one figure in six has one. */
+    /* THE ONE BODY ACCENT, and only about one figure in five has one. */
     if (h8 < A.accP) {
       var qa = h8 / A.accP;
       p.acc = A.acc;
@@ -647,8 +1025,29 @@
       p.accHue = A.acc === 1 ? (qa < 0.34 ? P.spring : P.violet)
                : A.acc === 2 ? P.ice
                : A.acc === 3 ? P.ember
+               : A.acc === 5 ? P.amber
                : (qa < 0.60 ? P.warm : P.amber);
     } else { p.acc = 0; p.accHue = P.amber; }
+    /* THE VISOR — its own independent draw, because welding it to the accent roll is the bug this
+     * file has already been caught with three times (a crossing draw reused for a rim colour made
+     * every crosser amber). h17 is a fresh salt; conditional on the gate, h17/A.visP is itself
+     * uniform on 0..1 and independent of it, so the COLOUR needs no further draw — the same trick
+     * the phone and the accent already use.
+     *
+     * The colour ladder is a PRINT decision. A visor is a screen, so it takes the same licence the
+     * phone has: azure first, because azure is a pillar and the swatch a screen actually is;
+     * ember second, because a warm HUD is the other half of the reference; ice as a genuine glint
+     * on a couple of them. Violet and red are last and deliberately tiny — violet is signage-only
+     * garnish and a violet SURFACE would be the cliche, but a violet SCREEN is exactly what the
+     * licence covers, and red is hazard, which is what a targeting overlay is. At 15.9% of the
+     * crowd wearing one, red at 0.07 of those is under 1 figure in 90 and does not move red's
+     * 0.3% share of lit energy measurably. */
+    if (h17 < A.visP) {
+      var qv = h17 / A.visP;
+      p.vis = 1;
+      p.visHue = qv < 0.46 ? P.azure : (qv < 0.74 ? P.ember : (qv < 0.87 ? P.ice
+               : (qv < 0.93 ? P.violet : P.red)));
+    } else { p.vis = 0; p.visHue = P.azure; }
     p.live = 1;
   }
 
@@ -668,7 +1067,7 @@
       for (var i = 0; i < PED_MAX; i++)
         peds[i] = { x: 0, z: 0, vx: 0, vz: 0, dx: 0, dz: 0, dodge: 0, n: i * 91, tall: 1.7,
                     phase: 0, cross: 0, goSide: 1, shelter: 0, side: 1, rim: P.amber, phone: -1,
-                    acc: 0, accHue: P.amber, walked: 0, live: 0, wait: 0,
+                    acc: 0, accHue: P.amber, vis: 0, visHue: P.azure, walked: 0, live: 0, wait: 0,
                     umbOwn: 0, umb: 0, uRate: 0.3, hunch: 0, A: ARCH[0] };
     },
     update: function (dt, t, cam) {
@@ -800,7 +1199,7 @@
         var rHead = rowOf((p.tall + A.tallB) * (1 - hunch * 0.055) + st * bobA, w);
         var tallRows = rFeet - rHead;
         if (tallRows < 1.4) continue;                 // sub-cell: it would only salt the pavement
-        var shw = pedShoulder(w);                     // half a SHOULDER width, in columns
+        var shw = pedShoulder(w, A);                  // half a SHOULDER width, in columns
         var xw = shw * (1 + A.ext);                   // ...and how far the costume reaches past it
         var x0 = Math.round(cx - xw), x1 = Math.round(cx + xw);
         if (x1 < 0 || x0 > COLS - 1) continue;
@@ -825,6 +1224,19 @@
          * a courier's pack all catch the light on their own edge for free. */
         var rim = fg(70 + hash2(i, p.n, S + 5) * 44, dist);
         var sTop = 0.13 + hunch * 0.06;               // shoulder line, rising as the figure hunches
+        /* How wide this figure's HEAD is, hair included, and how wide its LEG BAND is. Hoisted out
+         * of the column loop because both are per-figure constants and the loop runs once per
+         * column of every walker on screen. Both are 0.34 — the old literals — for every archetype
+         * that carries neither feature, so nothing that shipped moves. */
+        var headHW = 0.34 + A.hair;
+        var legHW = A.legW > 0.34 ? A.legW : 0.34;
+        /* How steep the top edge of the hem is, in SCREEN ROWS PER COLUMN, at this figure's
+         * printed size. A hem is the one edge on a walker that is genuinely diagonal, and at more
+         * than about a row and a half per column a run of dashes stops being a line and becomes a
+         * dotted rumour — the exact failure this file already recorded once for the shoulder and
+         * fixed by changing the GLYPH rather than the brightness. Same fix, second edge: a steep
+         * hem takes a slash. See the glyph choice in the rim block. */
+        var hemSlope = A.hem > 0 ? (A.hemBot - A.hemTop) * tallRows / (A.hem * shw) : 0;
         for (x = x0; x <= x1; x++) {
           var u = (x - cx) / shw, au = u < 0 ? -u : u;
           var onAcc = (u < 0 ? -1 : 1) === p.side;    // the side the bag or the pack is slung on
@@ -833,7 +1245,7 @@
            * union is deliberately taken as a single run rather than as separate pieces — at this
            * cell size a gap between a bag and a hip is one cell of black inside a silhouette that
            * is already black, so drawing it twice would cost and show nothing. */
-          var v0 = 9, v1 = -9;
+          var v0 = 9, v1 = -9, diag = 0;
           if (au <= 1.0) {
             v0 = au > 0.62 ? 0.20 + hunch * 0.05 : (au > 0.34 ? sTop : 0);
             /* A hood is a PEAK, and a peak is a shape, not a glyph. Sloping the crown band away
@@ -841,15 +1253,71 @@
              * makes the caret below read as a hood rather than as a row of carets — the first cut
              * left the crown flat and printed ^^^^ across the top of every hooded figure. */
             if (A.hood && au <= 0.34) v0 = au * 0.30;
+            /* A CREST rises ABOVE the crown, so it is the one feature that can push v0 negative.
+             * Tapered the same way the hood's peak is, and for the same reason: flat across the
+             * middle columns it prints as a bar over the head instead of as hair. */
+            if (A.crest > 0 && au <= 0.30) v0 = -A.crest * (1 - au / 0.30);
             v1 = au > 0.62 ? 0.66 : (au > A.legW ? A.legTop : 1);
-            /* The legs parting is the whole walk cycle at this size; anything more is invisible. */
-            if (au < 0.28 && tallRows > 5 && st > 0.42) v1 = 0.90;
+            /* THE LEGS, and they now alternate rather than parting. The shipped version extended
+             * BOTH legs to 0.90 on the half of the cycle where st > 0.42, which is not a walk: it
+             * is a figure that periodically gets taller. Giving each leg the stride signed by
+             * which side of the body it is on makes one leg reach while the other lifts, which is
+             * the actual read — and it costs one multiply, because the phase was already here. */
+            /* The stride window is the LEG BAND, not a constant 0.34, and that is what makes a
+             * wide base walk. Every archetype in the table but the rigger has legW <= 0.34, so
+             * `legHW` is 0.34 for all of them and not one existing costume moves; the rigger's
+             * legW is 0.50, and with the old literal the outer third of its boots stood still
+             * while the inner two thirds alternated — a figure walking inside its own trousers. */
+            if (au < legHW && tallRows > 5) {
+              var lg = (u < 0 ? -1 : 1) * st;
+              if (lg > 0.30) v1 = 0.94;            // planted: this foot is carrying, heel down
+              else if (lg < -0.30) v1 = 0.86;      // trailing: the heel is off the pavement
+            }
+          }
+          /* THE ARMS. Part of the CUT-OUT, not a lit mark on it, and that is the whole reason they
+           * read: a black hole in the shape of an arm swinging past a lit shopfront is visible at
+           * ten rows, and a lit tick floating beside a silhouette at the same size is grit. The
+           * forward arm is the one that leaves the body — the trailing one hangs inside a
+           * silhouette that is already black, so drawing it would cost and show nothing, which is
+           * the same argument the umbrella shaft makes two hundred lines down.
+           *
+           * The rim lands on the arm's top edge for free, because the lighting loop below lights
+           * whatever the topmost occupied row of each column turns out to be. That is also why
+           * this has to happen HERE, inside the span union, rather than as a separate draw. */
+          if (tallRows > 7 && au > 1) {
+            var sw = (u < 0 ? -1 : 1) * st;         // this arm's own phase, signed by its side
+            if (sw > 0.22 && au <= 1 + ARM_EXT * sw) {
+              if (0.24 < v0) v0 = 0.24;
+              if (0.30 + 0.22 * sw > v1) v1 = 0.30 + 0.22 * sw;
+            }
+          }
+          /* HAIR. A mass either side of the head, and it only ever moves the TOP edge of its
+           * columns — which is the whole of what it can do and the whole of what it needs to do.
+           * Below the crown these columns are already inside the torso, so a hair claim on v1
+           * would be black drawn on black; the outline is the picture.
+           *
+           * It slopes from 0.02 at the crown to 0.06 at its outer edge, and BOTH ends of that are
+           * measured rather than chosen. The far end has to stay inside the 0.13 shoulder line or
+           * the outer columns lose to sTop, the top edge goes flat across the shoulders and a wide
+           * head becomes wide shoulders. And the DROP has to stay under about one screen row over
+           * the whole width: at 0.10 — the first cut, drawn at 16 rows and looked at — the hair
+           * columns landed two rows below the crown and the head printed as `oooo` with three
+           * loose `o` scattered under it, which is the speck failure this file has been caught by
+           * twice. At 0.040 the whole head prints as one dome-topped run, seven cells wide against
+           * a plain figure's four, which is the read the costume is for. */
+          if (A.hair > 0 && au > 0.34 && au <= headHW) {
+            q = 0.02 + 0.040 * (au - 0.34) / A.hair;
+            if (q < v0) v0 = q;
           }
           if (A.hem > 0 && au > 1 && au <= 1 + A.hem) {
             /* A coat is a triangle: shoulder-width at the waist, widest at the hem. So a column
              * this far out is covered from the height where the flare has reached it, down. */
             q = A.hemTop + (A.hemBot - A.hemTop) * (au - 1) / A.hem;
-            if (q < v0) v0 = q;
+            /* `diag` records that the TOP of this column is the hem's own sloping edge and not
+             * something flatter that also claimed it (an arm, a brim). Only then may the rim take
+             * a slash — a shoulder that happens to sit inside a coat's flare is still a shoulder
+             * and still wants a dash. */
+            if (q < v0) { v0 = q; diag = 1; }
             if (A.hemBot > v1) v1 = A.hemBot;
           }
           if (A.brim > 0 && au <= 1 + A.brim) {
@@ -900,9 +1368,35 @@
              * width across the cell, so they are dashes. Rendered and looked at: with the ticks the
              * costume was a dotted rumour at any brightness, and the same cells as dashes are a
              * shoulder and a flared hem. The crown keeps its round o, and a hood its caret, because
-             * those two are reading a curve rather than an edge. */
+             * those two are reading a curve rather than an edge. A crest takes the caret too, and
+             * for the third version of the same reason: it is the one head in the table whose
+             * outline comes to a point rather than over a curve, and a round o on top of it undoes
+             * the only thing that costume has. */
+            /* The round `o` runs to headHW rather than to 0.34, so a maned figure prints a
+             * five-cell head against everybody else's three. headHW IS 0.34 for every archetype
+             * without hair, so this is the same glyph it always was for eleven of the fifteen.
+             * The `rl` ladder above is deliberately NOT widened with it: the hair columns take the
+             * 0.72 band, one step under the crown, which is what stops a wide head being a wide
+             * BRIGHT head — the outline grows, the energy does not. */
+            /* AND THE SECOND GLYPH FIX, which is the same argument as the first one a paragraph
+             * up but about the other axis. A hem is a DIAGONAL edge, and a diagonal drawn one
+             * dash per column is a dotted line with a gap in it wherever the edge falls faster
+             * than one row per cell — measured on a long coat at about 27 rows, the flare printed
+             * one dash every THREE rows on each side and read as four unrelated ticks rather than
+             * as a coat. A slash leaned the right way closes it: the same four cells, rendered and
+             * looked at, now read as two clean diagonals. 1.3 rows per column is where a run of dashes
+             * stops touching; below that the dash is still the better mark because it has width
+             * across the cell and a slash does not. On the LEFT of the figure the edge rises
+             * toward the centre, so it takes '/', and on the right '\'.
+             *
+             * AND THE HEM HAS TO BE AT LEAST TWO COLUMNS WIDE, which is the guard that keeps this
+             * from quietly re-tuning nine costumes that were settled. A shell's flare is 0.16
+             * half-widths and a heavy coat's is 0.10, so on the whole middle distance they are a
+             * SINGLE column — and a lone slash is not a diagonal, it is a narrow tick where a
+             * dash used to be an edge. Two columns is the smallest run that has a direction. */
             put(frame, x, Math.round(rt),
-                au < 0.34 ? (A.hood ? G_CARET : G_o) : G_DASH,
+                (diag && hemSlope > 1.3 && A.hem * shw >= 2) ? (u < 0 ? G_SLASH : G_BSLASH)
+                : au < headHW ? ((A.hood || (A.crest > 0 && au < 0.30)) ? G_CARET : G_o) : G_DASH,
                 p.rim, rim * rl, nearer(dist));
           }
         }
@@ -929,7 +1423,109 @@
                 rim * (0.62 - 0.44 * q / qn), nearer(dist));
         }
 
-        /* THE ACCENT — at most one per figure, and only about one figure in six carries one. */
+        /* THE SCARF. The only thing on this crowd that moves with the WEATHER rather than with the
+         * walk, and that is the entire point of it: bob, stride, arms, cane, the carried lamp are
+         * all driven by distance walked, so a figure standing still under a canopy was a figure
+         * with nothing moving on it at all. A scarf streams whether its owner is walking or not.
+         *
+         * Drawn as a RIM, not as part of the cut-out, for the same reason the stick is: a scarf is
+         * a few centimetres thick, so at every size this crowd is drawn at it is an edge catching
+         * the lamp and has no interior to be black. It therefore does not enter `ext` and does not
+         * enter pedCover() either — correctly, because that budget is about how much picture a
+         * black hole removes, and three lit cells beside a shoulder remove none.
+         *
+         * It leans on windRight(), i.e. the city's own wind projected across the view, so it
+         * blows the same way as the rain curtain behind it and reverses when the camera turns a
+         * corner. Length and lift both scale with the cross-wind: on a still night it is a stub at
+         * the nape and in a storm it is streaming nearly a body-width. It cannot flash — the
+         * carrier is weather.js's gust envelope at a fraction of a hertz, and it moves a POSITION.
+         *
+         * Nine rows, not six. At six the whole scarf was one cell adjacent to the shoulder rim,
+         * which reads as a rim two cells wide rather than as anything trailing — the shape needs
+         * at least a second cell to be going somewhere, and that is what nine rows buys. */
+        if (A.scarf && tallRows > 9) {
+          var wr = windRight(), wa = wr < 0 ? -wr : wr;
+          var wf = wa / 3.4; if (wf > 1) wf = 1;
+          var sdir = wr < 0 ? -1 : 1;
+          var sn = Math.round(shw * (0.55 + 1.30 * wf));
+          if (sn > 5) sn = 5;
+          if (sn >= 1) {
+            /* The nape, riding the bob and lagging the stride a little — a scarf answers the body
+             * a beat late, which is why it is st and not the leg phase it is drawn from. */
+            var sr0 = rHead + tallRows * (0.18 + 0.025 * st);
+            for (q = 1; q <= sn; q++) {
+              var sf = q / sn;
+              /* It LIFTS as it streams. A trailing scarf rises behind the shoulder; drawn level it
+               * read as an arm held out sideways, which is the one thing it must not be. */
+              put(frame, Math.round(cx + sdir * (shw * 0.85 + q)),
+                  Math.round(sr0 - sf * tallRows * 0.15 * wf),
+                  /* DASHES ALL THE WAY OUT, including the tip. The first cut tapered the last
+                   * third to a back-tick and it vanished: a tick is a speck in the corner of a
+                   * cell, this file has already been bitten by that twice (the shoulder line and
+                   * the coat hem, both fixed by swapping ticks for dashes), and a scarf is a
+                   * horizontal edge like both of them. The taper is carried by the BRIGHTNESS
+                   * instead, which is what a taper is. */
+                  G_DASH, p.rim, rim * (0.78 - 0.36 * sf), nearer(dist));
+            }
+          }
+        }
+
+        /* THE VISOR — one bright bar across the head at eye height, and the highest-value single
+         * mark in this whole element. It reads at EIGHT rows, where the head is one cell, the hem
+         * is sub-cell and every other costume feature has already collapsed into the silhouette;
+         * and it is the most recognisable figure cue the reference has.
+         *
+         * It is drawn with its own depth bias, NEARER than nearer(), because at short heights the
+         * eye row and the crown row round to the same cell and CC.put wants a strict improvement:
+         * without the extra step the visor tied with the crown rim it is meant to replace and was
+         * silently dropped on exactly the figures it exists for. On a tall figure it lands a row
+         * under the crown instead and the two coexist.
+         *
+         * The bar is one cell until the head is wide enough for three to still be a head — hcol is
+         * the head's half-width in COLUMNS, so the test is on printed size and not on distance,
+         * and it therefore behaves the same at 200x60 and at 400x100. Three cells on a two-column
+         * head is a figure wearing its own face. */
+        if (p.vis && tallRows > 3.2) {
+          var vl = fg(146 + hash2(i, p.n, S + 29) * 40, dist);
+          if (vl >= 5) {
+            var vy = Math.round(rHead + tallRows * 0.045);
+            var vx = Math.round(cx), hcol = shw * headHW;
+            var vd = dist * 0.970;                  // one bias step inside the crown rim's 0.982
+            put(frame, vx, vy, hcol >= 1.3 ? G_EQ : G_DASH, p.visHue, vl, vd);
+            if (hcol >= 1.3) {
+              /* The flanks come down to 0.55, so the bar has a bright centre and falls off — a
+               * visor is a curved surface and the middle of it faces you. Measured on one figure
+               * either way: flat, the three cells print 129/129/129 and the mark has no middle;
+               * at 0.55 they print 98/129/98, which is one visible step and enough to read as a
+               * curve rather than as a slot. The difference is small at three cells, which is
+               * exactly why it is bought with a multiply and not with an extra cell. */
+              put(frame, vx - 1, vy, G_DASH, p.visHue, vl * 0.55, vd);
+              put(frame, vx + 1, vy, G_DASH, p.visHue, vl * 0.55, vd);
+            }
+          }
+        }
+
+        /* THE STICK. A thin diagonal from about hip height down to the pavement, planted a little
+         * ahead of the leading foot and swinging with the stride — which is what makes it a walking
+         * aid rather than a line drawn beside a person. It is drawn as a RIM rather than as part
+         * of the cut-out, unlike the arms above: a stick is a centimetre across, so at any size
+         * this crowd is ever drawn at it has no interior to be black, only an edge to catch the
+         * lamp. Below about nine rows it is one cell and reads as grit, so it stops. */
+        if (A.cane && tallRows > 9) {
+          var cnx = cx - p.side * shw * (0.95 + st * 0.30);
+          var cn0 = Math.round(rHead + tallRows * 0.52), cn1 = Math.round(rFeet);
+          for (q = cn0; q <= cn1; q++) {
+            /* Leaning: the top is against the hip and the tip is out in front, so the column walks
+             * outward as it descends. Rounded per row, so at small sizes it is simply vertical. */
+            var cf = (q - cn0) / (cn1 - cn0 + 0.001);
+            put(frame, Math.round(cnx - p.side * shw * 0.42 * cf), q,
+                cf > 0.88 ? G_DOT : G_PIPE, p.rim, rim * (0.30 + 0.22 * cf), nearer(dist));
+          }
+        }
+
+        /* THE BODY ACCENT — at most one per figure, and about one figure in five carries one.
+         * The visor below is the one mark allowed alongside it; see the one-accent note at the top
+         * of this block for the measured overlap and why this is the exception. */
         if (p.acc && tallRows > 4) {
           if (p.acc === 1) {
             /* LED piping down one seam. This is the ONE place a narrow accent is licensed to
@@ -964,6 +1560,44 @@
             if (al3 >= 5)
               put(frame, Math.round(cx + p.side * shw * 0.55),
                   Math.round(rHead + tallRows * 0.10), G_DOT, P.ember, al3, nearer(dist));
+          } else if (p.acc === 5) {
+            /* A SHOULDER LAMP, and it is the only accent in the table that lights anything other
+             * than itself. One genuinely bright cell on the outboard shoulder — amber, because a
+             * work lamp is tungsten and because amber is a pillar and a new light source has no
+             * business inventing a colour — plus three dim cells falling away from it into the
+             * drizzle, which is the cone. The cone is what makes it a LAMP rather than a bead:
+             * without it this was indistinguishable from the cigarette at any size, looked at in
+             * the 260x60 dump.
+             *
+             * It is deliberately the rarest thing on the pavement: accP 0.42 on a 3.7% archetype
+             * is about one figure in twenty-five, and at 225 raw it is the brightest cell any
+             * walker carries. That pair of numbers is the whole design — one very bright mark on
+             * the street rather than a scatter of medium ones, which is the house rule for
+             * everything down here. */
+            var al5 = fg(225, dist);
+            if (al5 >= 5) {
+              var lx5 = Math.round(cx + p.side * shw * 0.86);
+              var ly5 = Math.round(rHead + tallRows * 0.13);
+              /* THE SAME EXTRA DEPTH STEP THE VISOR TAKES, and for the same reason. A lamp sits on
+               * the shoulder, the shoulder line is where the column loop has already put a rim
+               * cell, and CC.put wants a strict improvement — so at nearer() the lamp TIED with
+               * the rim under it and was silently dropped. Drawn and looked at with the tie in
+               * place: the rigger printed with no lamp at all and there was nothing to see and no
+               * error to read. It is the same failure nearer() itself exists for, one level
+               * further in: a detail that sits on a mark this file has ALREADY stamped at
+               * nearer() needs a step of its own. Confirmed from the other end too — putting the
+               * visor back on nearer() and diffing six forced walkers over five seeds and seven
+               * times dropped one to six visor cells per frame, silently and with no error. */
+              var ld5 = dist * 0.970;
+              put(frame, lx5, ly5, G_o, p.accHue, al5, ld5);
+              /* The cone only exists on a figure big enough for three cells to be a shape rather
+               * than a smear. Below nine rows the lamp is the whole accent, which is correct — at
+               * that size a real one would be a point of light and nothing else. */
+              if (tallRows > 9)
+                for (q = 1; q <= 3; q++)
+                  put(frame, lx5 + p.side * q, ly5 + q, G_DASH, p.accHue,
+                      fg(50 - q * 12, dist), ld5);
+            }
           } else {
             /* Something carried and lit — a takeaway bag, a paper lantern, a lit sign held low.
              * It swings with the arm, which is why it needs the stride and not a clock. */
@@ -1189,7 +1823,14 @@
         var h1 = hash2(i, c.n, S), h2 = hash2(i, c.n, S ^ 0x21), h3 = hash2(i, c.n, S ^ 0x8F);
         var ca = crossAhead(city, h1);
         if (ca !== ca) { c.wait = 2.5; continue; }    // nothing crossing in range; look again soon
-        var ch = crossHalf(city, ca);
+        /* The CARRIAGEWAY half, not the corridor half. crossHalf reports to the building line, and
+         * the lane offset below is a fraction of whatever it is handed — so at the old 1.4 m
+         * pavement a car already ran up to 0.45 m onto the far kerb, and at 2.15 it would have
+         * driven along the pavement for the whole length of the crossing. Insetting here is also
+         * the only place it can be done: raycast paints the junction mouth from the same inset, so
+         * this is what puts the two lanes inside the tarmac that is actually drawn. */
+        var ch = crossHalf(city, ca) - CC.PAVE;
+        if (ch < 1.7) ch = 1.7;
         c.go = h2 < 0.5 ? -1 : 1;
         /* Lane offset opposed to the direction of travel, so the two slots never share a line. */
         var a = ca + (ch > 1.6 ? 0.55 + h3 * (ch - 1.2) : 0) * -c.go;

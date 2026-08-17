@@ -42,6 +42,11 @@
       G_8 = g('8'), G_O = g('O'), G_0 = g('0'), G_X = g('X'), G_Z = g('Z'), G_W = g('W'),
       G_M = g('M'), G_TILDE = g('~'), G_oo = g('o'), G_DQ = g('"'), G_V = g('V');
 
+  /* What share of ground-floor shop units are open, and therefore lit. Exported on CC.Surf because
+   * signage.js's shopSpill re-derives the same test to land its pool under a lit window rather than
+   * under a shutter; see the note where ground() spends it for why it moved from 0.40. */
+  var SHOP_OPEN = 0.52;
+
   /* Blocky fills only. Anything with visual "holes" (& $ ? !) reads as noise at this size. */
   var FILL   = [G_8, G_0, G_O, G_HASH, G_X, G_Z, G_8, G_M, G_W, G_PCT];
   var FILL_N = FILL.length;
@@ -442,9 +447,28 @@
         var stg = hash2(Math.floor(u * 3.1), Math.floor(v * 1.5), sd ^ 0x7C2);
         if (stg < 0.50) return fset(G_PIPE, P.shadow, 24 + stg * 46);
       }
-      if (hash2((u * 3.2) | 0, (v * 3.2) | 0, sd ^ 0xE5) < 0.82) return fset(0, P.shadow, 0);
+      /* THE SPANDREL FIELD, AND ITS BUDGET ARGUMENT HAS EXPIRED. Everything above and in the
+       * structure tier says this mass is held blank and near-black because lifting it would put
+       * the muddy 9-119 band through core.js's <30 target. That was true and it was measured; the
+       * band sat at 31.6-32.5% for the whole of the period those notes were written in.
+       *
+       * It is now 26.6%, and the reason is a repair rather than a taste: three branches in this
+       * file were painting 7.3% of every cell in the frame at lums that could not clear v=9, so
+       * the frame was paying for them and printing black. Deleting them returned 3.4 points of
+       * headroom. Spending part of it HERE is the point of having found it — this is the tier the
+       * file has twice written down as the one it would fund first, because a wall with no mass
+       * between its lit windows reads as scaffolding rather than as a building.
+       *
+       * lum 16-42 on P.shadow prints v 18-31 on the current table: visible, and incapable of
+       * blowing out, because shadow's pigment (40,50,66) saturates at v 60 however hard it is
+       * driven. That is exactly why it is the swatch that can carry area — it costs the muddy band
+       * and it can never cost the hot tail. Coverage 0.18 -> 0.26 of the field for the same reason.
+       * Measured over the 24-frame fixture, this change and the dead-glass one below together:
+       * see the note on the unlit-glass tier, which carries the numbers and is honest that they
+       * are smaller than two eight-point coverage raises would suggest. */
+      if (hash2((u * 3.2) | 0, (v * 3.2) | 0, sd ^ 0xE5) < 0.74) return fset(0, P.shadow, 0);
       return fset(DIMGL[(hash2((u * 3.2) | 0, (v * 3.2) | 0, sd ^ 0xD3) * DIMGL_N) | 0],
-                  P.shadow, 8 + hash2((u * 3.2) | 0, (v * 3.2) | 0, sd ^ 0xC1) * 14);
+                  P.shadow, 16 + hash2((u * 3.2) | 0, (v * 3.2) | 0, sd ^ 0xC1) * 26);
     }
 
     if (!lit) {
@@ -471,9 +495,35 @@
        * structure tier for why the answer is not to multiply the lum back up. The wall keeps its
        * mass, because mass comes from the spandrel and the mullions, and the frame's black budget
        * comes back out at the far end. */
-      return hash2(wu, wv, sd ^ 0x1B) < 0.31
+      /* AND THE SAME EXPIRY APPLIES HERE. The paragraph above is kept because its REASONING is
+       * still correct — it is the arithmetic that has moved. It says the lum 6-14 written below
+       * prints v 2-13 against a visibility threshold of lum 12, i.e. that most of this tier was
+       * paid for and never seen, and that the answer was not to multiply it back up because the
+       * muddy band had no room. The band now has 3.4 points of room, recovered by deleting three
+       * branches that were painting 7.3% of the frame below the print floor.
+       *
+       * So it IS multiplied back up, to the value the old paragraph's own argument implies: lum
+       * 15-31 prints v 16-26, over the floor by a margin rather than straddling it. Coverage 0.31
+       * -> 0.38. The glyphs stay a colon and a quote: this tier is dead glass catching a little
+       * skylight, and it must not acquire an edge, or it stops being glass and becomes a grid.
+       *
+       * MEASURED, 24-frame fixture, this change together with the spandrel one above — and the
+       * headline number is much SMALLER than raising two coverage thresholds by eight points
+       * suggests, because these two tiers are a modest share of facade cells and most of the
+       * frame's remaining blank is not them:
+       *   blank 47.9% -> 47.5%   muddy 26.6% -> 28.0% [target <30]   hot 4.19% -> 4.19%
+       *   facade, in points of the whole frame:
+       *     painted-but-INVISIBLE (v<9)  4.1 -> 3.2      visible mid (v 9-119)  10.2 -> 11.5
+       * So what this bought is not coverage, it is VISIBILITY: about 1.3 points of the frame that
+       * was already being painted and already being printed black is now over the floor, for 1.4
+       * points of muddy. That is close to a one-for-one trade of invisible paint into visible
+       * mass, which is the best rate available anywhere in this file.
+       * The hot tail does not move AT ALL, which is the property that made this the right tier to
+       * spend the headroom on: P.shadow saturates at v 60 and cannot reach the hot band however
+       * hard it is driven. */
+      return hash2(wu, wv, sd ^ 0x1B) < 0.38
         ? fset(hash2(wu, wv, sd ^ 0x2C) < 0.5 ? G_COLON : G_QUOTE,
-               P.shadow, 6 + hash2(wu, wv, sd ^ 0x2C) * 8)
+               P.shadow, 15 + hash2(wu, wv, sd ^ 0x2C) * 16)
         : fset(0, P.shadow, 0);
     }
 
@@ -538,6 +588,346 @@
     return t;
   })();
 
+  /* ---- STORE TYPES --------------------------------------------------------------------------
+   * Every open unit used to be the same shop — fascia, awning, sign band, plinth, mullioned
+   * glazing — with one district colour rolled over the top. Forty identical units in eight
+   * colours is a texture, not a street, and this is the largest surface in the frame, so it is
+   * the one place where "the same thing again" is most visible. A unit now rolls a TYPE once, off
+   * its own hash, and the type decides at least four things: what the glazing draws, which end of
+   * the district roll its light comes from, what its sign band looks like, and whether it has an
+   * awning at all.
+   *
+   * THE BUDGET RULE FOR ALL OF THEM, and it is why none of these is a "dim shop": on core.js's
+   * current curve a cell prints inside the muddy 9-119 band over most of the lum range that FEELS
+   * like dim — amber does not clear v=119 until lum 103 (measured, see the tiers below). An
+   * interior painted at half brightness is a grey veil across a third of the picture. So every
+   * interior below is BRIGHT WHERE IT IS LIT AND BLACK WHERE IT IS NOT, and a type is made dim by
+   * lighting LESS OF ITSELF, never by lighting all of itself less. The bar is the extreme case:
+   * one lit shelf of bottles on a black field, and the black it hands back is what pays for the
+   * convenience store two doors down having its whole window lit.
+   *
+   * WHAT THE EIGHT TYPES COST THE PRINT, with-vs-without over 12 frames (seeds 3001+137k for
+   * k=0..5, frames 600 and 1800 at 213x67, rendered against an identical snapshot of every other
+   * file in the tree so that a neighbouring agent's edit cannot land inside the measurement):
+   *     muddy(9-119)  29.8% -> 27.0%     hot(v>=170)  4.55% -> 4.50%
+   *     blank         36.4% -> 40.9%     black(v<9)   49.7% -> 54.0%
+   * The muddy band comes DOWN by 2.8 points and that is where the whole feature is paid for: what
+   * it replaced was a flood over the entire glazing band at lum 92-230 with a quarter of the cells
+   * knocked to 0.40 of that, and on amber those knocked-down cells printed v 85-110 — dead centre
+   * of the band core.js is trying to hold under 30% — across the largest surface in the picture.
+   * The hot tail is unchanged, so the types are not bought out of the highlights either.
+   *
+   * The 4.5 points of extra blank are the honest cost: this band is emptier than it was, because
+   * an interior that is black between its lit parts is black over more of itself than a flood is.
+   * Both figures stay inside core.js's own bands (blank 40-55%, black 54-60%).
+   *
+   * THE FOUR ABSOLUTE NUMBERS ABOVE ARE THE STATE THE TYPES LANDED IN, NOT THE CURRENT ONE. The
+   * trim that followed — the awning canvas, the three invisible slate tiers, the bulkhead cone —
+   * moved the same 12-frame fixture to muddy 26.1%, hot 4.48%, blank 48.4%, black 54.6%. The
+   * with-vs-without DELTAS are what this paragraph is about and they are unaffected: nothing the
+   * trim touched is inside storeIn().
+   *
+   * NOTHING HERE PULSES. Not one of the eight has a time term — the barber's pole is a STATIC
+   * helix on purpose, because a turning pole is a periodic luminance change on the nearest object
+   * in the frame and this band is up against the camera. Flash rate of this file: 0 Hz. */
+
+  /* Printed-value tiers. `lum` is not brightness and the two pillars are not on the same scale:
+   * measured against core.js's live curve in the near depth bucket (lum swept 0..255, v taken as
+   * max(r,g,b)*lum/255 exactly as tools/metrics.py does it), azure reaches v 150 at lum 79 where
+   * amber needs 157 — a factor of two. Writing one lum for both is how a "lit shelf" comes out as
+   * a hot azure slab in one district and a muddy amber smear in the next, which is precisely the
+   * failure the colour census keeps catching. The interiors below are therefore written in TARGET
+   * PRINTED VALUE and converted here:
+   *   L_LOW  v~128  the dimmest thing allowed to exist — just clear of the muddy band's 119 top
+   *   L_LIT  v~150  the working brightness of a lit interior
+   *   L_HOT  v~175  the few cells per unit that may cross the hot line: signs, lamps, door jambs
+   * There is deliberately NO tier below L_LOW. A cell that wants to be dimmer than v 128 is
+   * written black instead; that is the whole discipline of this band.
+   * slate and shadow are absent from every interior on purpose: their ceilings are v 114 and v 60,
+   * so they CANNOT clear the muddy band at any lum, and the 255s in their slots are unreachable
+   * placeholders that keep these three arrays indexable by palette index rather than sparse. */
+  var L_LOW = [103,  52, 135, 133, 154, 165,  71, 255, 124, 110,  47, 255];
+  var L_LIT = [157,  79, 206, 206, 239, 254, 109, 255, 190, 169,  72, 255];
+  var L_HOT = [240, 120, 255, 255, 255, 255, 165, 255, 255, 255, 109, 255];
+
+  var T_NOODLE = 0, T_CONV = 1, T_LAUNDRY = 2, T_BAR = 3,
+      T_ARCADE = 4, T_HARD = 5, T_PHARM = 6, T_BARBER = 7;
+
+  /* Frontage share, as cumulative thresholds on ONE draw. The noodle counter is the commonest
+   * because it is the strongest read and the most genre-appropriate; the convenience store is
+   * held down because it is the only type that lights its entire window and therefore the only
+   * one whose share is also a brightness budget. */
+  function typeOf(su, sd) {
+    var r = hash2(su, 29, sd ^ 0x9F51);
+    if (r < 0.21) return T_NOODLE;      // 21%
+    if (r < 0.34) return T_CONV;        // 13%
+    if (r < 0.46) return T_LAUNDRY;     // 12%
+    if (r < 0.58) return T_BAR;         // 12%
+    if (r < 0.68) return T_ARCADE;      // 10%
+    if (r < 0.79) return T_HARD;        // 11%
+    if (r < 0.90) return T_PHARM;       // 11%
+    return T_BARBER;                    // 10%
+  }
+
+  /* Which way a type leans its light, and this is the constraint the whole feature is most
+   * likely to break. The district roll (SHOP) already decides what colour a quarter's shopfronts
+   * are, and it is what keeps an amber pocket reading as an amber pocket; a type must not overrule
+   * it or eight biases sum into a shift in the pillars. So the lean never invents a colour — it
+   * only pulls a fitting the district already handed out ONTO THE TYPE'S OWN PILLAR, and it leaves
+   * the district's accent slots (ember, spring) alone entirely.
+   *   +1 warm-lit (sodium, tungsten)   -1 cool-lit (fluorescent, screen)   0 takes the district */
+  var T_LEAN = [1, -1, -1, 1, -1, 0, -1, 0];
+  function lean(ty, lite, su, sd, sel) {
+    var b = T_LEAN[ty];
+    if (b === 0) return lite;
+    var pil = b < 0 ? P.azure : P.amber;
+    if (lite === pil) return lite;
+    /* ONE draw decides this, and that is correct rather than a shared-hash bug: a fitting is
+     * either the other pillar or warm, never both, so the two thresholds below are read in
+     * mutually exclusive branches. `sel` separates the unit's main fitting from its second one so
+     * that a shop does not convert both or neither.
+     *   warm is pulled at 0.30. It is a garnish (11.7% of lit energy over the fixture below, against
+     *     the 11.4% the census documents) and a fluorescent launderette or a sodium noodle counter
+     *     is exactly a place a tungsten domestic lamp does not belong.
+     *   the other PILLAR is pulled at 0.20, i.e. rarely, because that roll is the district talking
+     *     and the district has to survive the type.
+     * WHAT THE PAIR IS WORTH, with-vs-without over 12 frames (seeds 3001+137k for k=0..5, frames
+     * 600 and 1800 at 213x67, every other file in the tree held identical): amber 46.6 -> 47.6 and
+     * azure 30.8 -> 30.1 of lit energy, warm 11.7 -> 10.8. Both pillars inside the +-1.5 the
+     * census allows, and the type lean is paid for out of the garnish rather than out of a pillar.
+     * THE SENSITIVITY IS IN THE WARM PULL, not the pillar one: on a smaller fixture 0.00 -> 0.35
+     * moved amber by five points. Re-measure on twelve frames or more before touching it. */
+    var q = hash2(su, sel, sd ^ 0x9F63);
+    if (lite === P.warm) return q < 0.30 ? pil : lite;
+    if (lite === P.amber || lite === P.azure) return q < 0.20 ? pil : lite;
+    return lite;
+  }
+
+  /* Awnings only where an awning belongs. Canvas over a food counter, a launderette or a parts
+   * shop; never over a convenience store's lit window, an arcade or a clinic. The roll is raised
+   * 0.40 -> 0.46 on the units that may have one; the awning branch in ground() carries the
+   * arithmetic on what that does to the frequency along the parade, and why it is worth it. */
+  var T_AWN = [1, 0, 1, 1, 0, 1, 0, 0];
+
+  /* The sign band, per type: what share of the strip is lit and how long a lit block runs. This
+   * is a thin strip and it stays one — the band is unchanged in height and position, only its
+   * rhythm is type-specific. A menu board is a dense column of small marks; a convenience store
+   * is one long unbroken bar; a bar's sign is a short word in the dark. */
+  var SIGN_FILL  = [0.92, 0.98, 0.80, 0.56, 0.86, 0.92, 0.72, 0.68];
+  var SIGN_PITCH = [0.30, 1.70, 0.64, 0.44, 0.34, 0.92, 0.52, 0.40];
+
+  /* One open unit's interior, in the glazing band only. u is metres along the wall (WORLD, not
+   * unit-local), v is metres up from the pavement, gTop is the underside of the sign band.
+   * Returns the shared FOUT scratch like everything else in this file.
+   *
+   * KEYING. Every hash below resolves to a WORLD position, because a pattern keyed on anything
+   * unit-local is the same pattern in every unit of that type and a pattern keyed on the screen
+   * boils. Two forms are used and the difference matters:
+   *   hash2((u * k) | 0, ...)      a feature on a global grid — the counter, the crates
+   *   hash2(su * K + i, ...)       a feature on the UNIT's own grid, i running 0..K-1 across it
+   * In the second form K must be at least the number of cells that fit across one unit, or unit
+   * su+1 cell 0 collides with unit su cell K and the parade repeats at a fixed interval. Each K
+   * below is written as ceil(2.55 / pitch) for exactly that reason. */
+  function storeIn(ty, u, v, su, sd, lite, lite2, gTop) {
+    var xm = u - su * 2.55;
+    var h, a, b, i, j;
+    switch (ty) {
+
+    case T_NOODLE:
+      /* The counter IS the shop: one hot horizontal at a metre with the light source on it, a row
+       * of stool seats catching that light just under the lip, and the back of house lit as broken
+       * panels above. Everything else is black — the void under a counter is the darkest thing at
+       * street level and it is what makes the counter read as a counter rather than as a shelf. */
+      if (v > 0.99 && v < 1.31) {
+        h = hash2((u * 3) | 0, 0, sd ^ 0x9F71);
+        return fset(h < 0.5 ? G_EQ : G_8, lite,
+                    (v > 1.19 ? L_HOT[lite] : L_LIT[lite]) * (0.90 + h * 0.18));
+      }
+      if (v > 0.80 && v < 0.99) {                       // stool seats, one every 0.62 m, catching
+        h = xm / 0.62; h -= Math.floor(h);              // the counter light from just under the lip
+        return h < 0.34 ? fset(G_oo, lite, L_LOW[lite]) : fset(0, P.shadow, 0);
+      }
+      /* The counter's own front panel, lit by the strip under its lip. It is the one thing down
+       * here that IS lit — the rest of the void stays black, which is what the stools sit in. */
+      if (v > 0.66 && v < 0.80) {
+        h = hash2((u * 2.2) | 0, 0, sd ^ 0x9F79);
+        return h < 0.74 ? fset(G_UNDER, lite, L_LOW[lite]) : fset(0, P.shadow, 0);
+      }
+      if (v < 0.99) return fset(0, P.shadow, 0);        // the void under the counter
+      if (v > 1.58 && v < 2.24) {                       // back of house, lit in broken panels
+        h = hash2((u / 0.42) | 0, 0, sd ^ 0x9F83);
+        if (h < 0.72) {
+          a = h < 0.20 ? lite2 : lite;
+          return fset(FILL[(h * 1.7 * FILL_N) | 0], a, L_LIT[a] * (0.88 + h * 0.20));
+        }
+        return fset(0, P.shadow, 0);
+      }
+      /* A hanging lamp over the counter every 1.27 m. A lamp is a small HOT cluster, not a lit
+       * surface — the same rule the bulkhead lamp on a shut unit is drawn by. */
+      if (v > 2.26 && v < 2.46) {
+        h = xm / 1.27; h -= Math.floor(h);
+        if (h > 0.36 && h < 0.60) return fset(G_0, P.warm, L_HOT[P.warm]);
+      }
+      return fset(0, P.shadow, 0);
+
+    case T_CONV:
+      /* The bright one, and the only type that lights its whole window. Even cool flood, a
+       * shelving grid on it, and a doorway cut out of the middle — the doorway is what stops the
+       * flood reading as one flat panel, because it puts a black vertical through the brightest
+       * surface on the street. */
+      if (xm > 1.62 && xm < 2.18) {
+        if (xm < 1.72 || xm > 2.08) return fset(G_PIPE, lite, L_HOT[lite]);   // lit jambs
+        if (v > gTop - 0.30) return fset(G_DASH, lite, L_HOT[lite]);          // lit head
+        return fset(0, P.shadow, 0);                                          // the door, dark
+      }
+      h = v / 0.58; h -= Math.floor(h);
+      if (h < 0.24) return fset(G_EQ, lite, L_HOT[lite]);   // shelf edge under the strip light
+      h = hash2((u * 1.6) | 0, (v * 1.7) | 0, sd ^ 0x9F91);
+      a = h < 0.22 ? lite2 : lite;
+      /* L_HOT, not L_LIT, and this is the type that carries it: a convenience store's window is a
+       * ceiling of fluorescent tube two metres from the glass and it is the brightest thing on the
+       * street. It is also 13% of the frontage, which is what makes it affordable: the hot tail
+       * over the 12-frame fixture lands at 4.50% with all eight types in against 4.55% without
+       * them, so the types as a whole are hot-neutral and this is the type paying for the seven
+       * that are darker than what they replaced. */
+      return fset(FILL[(h * FILL_N) | 0], a, L_HOT[a] * (0.90 + h * 0.14));
+
+    case T_LAUNDRY:
+      /* A row of round machine doors. Circles in a line are the single most legible interior this
+       * glyph set can draw — 'O' and 'o' at one height read as machines and as nothing else — so
+       * this type spends everything it has on the doors and leaves the casings black. Two banks,
+       * one at waist height and one stacked over it. */
+      if (v > 0.72 && v < 1.98) {
+        b = (v - 0.72) / 0.63; j = b | 0; b -= j;         // 0.63 m per bank
+        a = xm / 0.52; i = su * 5 + (a | 0); a -= a | 0;  // one machine every 0.52 m, 5 per unit
+        a -= 0.5; b -= 0.5;
+        h = (a * a + b * b) * 4;                          // squared radius in cell units
+        if (h < 0.52) {
+          a = hash2(i, j, sd ^ 0x9FA3) < 0.24 ? lite2 : lite;
+          return fset(h < 0.22 ? G_0 : G_O, a, h < 0.22 ? L_HOT[a] : L_LIT[a]);
+        }
+        if (h < 0.78) return fset(G_oo, lite, L_LOW[lite]);   // the door rim
+        return fset(0, P.shadow, 0);                          // the casing
+      }
+      if (v > 2.08 && v < 2.30) return fset(G_DASH, lite, L_LIT[lite]);   // back-wall strip light
+      return fset(0, P.shadow, 0);
+
+    case T_BAR:
+      /* Dim and warm, and it is the one shopfront on the street DARKER than the street outside
+       * it. A lit row of bottles on the back shelf, the counter lip catching a little of that,
+       * and nothing else at all. This is the type that gives coverage back to the black budget. */
+      if (v > 1.52 && v < 1.74) {
+        i = su * 17 + ((xm / 0.15) | 0);                  // bottles a hand's width apart, 17 per unit
+        h = hash2(i, 0, sd ^ 0x9FB1);
+        if (h < 0.62) {
+          a = h < 0.18 ? lite2 : lite;
+          return fset(h < 0.30 ? G_8 : G_PIPE, a, L_LIT[a] * (0.84 + h * 0.30));
+        }
+        return fset(0, P.shadow, 0);
+      }
+      if (v > 1.06 && v < 1.20) return fset(G_DASH, lite, L_LOW[lite]);   // the counter lip
+      return fset(0, P.shadow, 0);
+
+    case T_ARCADE:
+      /* A wall of screens, and the only surface in this file that is allowed violet. A screen IS
+       * a sign, which is the exception the house rule names ("a violet SURFACE turns the frame
+       * into the cliche; a violet sign is fine"), and it is held to one tile in six so it stays a
+       * garnish. MEASURED, and it is the one census line this feature does move by a visible
+       * fraction: at one tile in six violet went 0.2% -> 0.7% of lit energy over the 12-frame
+       * fixture, a quadrupling of a swatch that was very nearly absent.
+       *
+       * IT HAS COME DOWN, on the lever the author named — 0.17 -> 0.09, fewer violet screens and
+       * not smaller ones. The reason is that this is the one place in the file where the swatch is
+       * a SURFACE and not a strip, which is the distinction the house rule is entirely about, and
+       * the arcade already has the strip: its sign band takes violet on its own draw a few dozen
+       * lines below. A wall of screens that is one-in-eleven violet still reads as an arcade;
+       * one-in-six was starting to read as the colour. */
+      a = xm / 0.62; i = su * 5 + (a | 0); a -= a | 0;  // 0.62 m screens, 5 per unit
+      b = v / 0.52;  j = b | 0; b -= j;
+      if (a > 0.07 && b > 0.10) {
+        h = hash2(i, j, sd ^ 0x9FD1);
+        if (h > 0.90) return fset(0, P.shadow, 0);        // dead cabinet
+        a = h < 0.09 ? P.violet : (h < 0.30 ? lite2 : lite);
+        /* Separate draw for the glyph: welding the fill character to the colour roll would make
+         * every violet screen the same character, which is how a pattern becomes a repeat. The
+         * salt is a long way from 0x9FD1 above and not the next value along — adjacent salts are
+         * measured correlated in this project up to -0.44, and these two read the SAME (i, j),
+         * so a near salt is exactly the case where the second draw would not be a second draw. */
+        b = hash2(i, j, sd ^ 0xA0E3);
+        return fset(FILL[(b * FILL_N) | 0], a,
+                    (b < 0.34 ? L_HOT[a] : L_LIT[a]) * (0.88 + b * 0.22));
+      }
+      return fset(0, P.shadow, 0);                        // the cabinet frames
+
+    case T_HARD:
+      /* Hanging goods on a rail, and crates stacked on the deck under them. This type reads by
+       * its VERTICALS: everything else in this band is horizontal — counters, shelves, machine
+       * banks — so a row of stock hanging at uneven lengths is the one silhouette here that
+       * cannot be mistaken for any of the others. */
+      if (v > 2.14 && v < 2.30) return fset(G_DASH, lite, L_LIT[lite]);   // the rail itself
+      if (v > 1.30 && v < 2.14) {
+        h = xm / 0.26; i = su * 10 + (h | 0); h -= h | 0; // 0.26 m hanger pitch, 10 per unit
+        b = hash2(i, 0, sd ^ 0x9FE1);
+        if (h < 0.58 && v > 1.84 - b * 0.54) {
+          a = b < 0.20 ? lite2 : lite;
+          return fset(b < 0.34 ? G_PIPE : G_V, a, L_LIT[a] * 0.94);
+        }
+        return fset(0, P.shadow, 0);
+      }
+      if (v < 1.24) {                                     // crates on the deck
+        h = hash2((u / 0.44) | 0, (v / 0.31) | 0, sd ^ 0x9FE3);
+        return h < 0.55 ? fset(G_HASH, lite, L_LOW[lite]) : fset(0, P.shadow, 0);
+      }
+      return fset(0, P.shadow, 0);
+
+    case T_PHARM:
+      /* Cool, quiet, and mostly empty — a clinic is lit evenly and has nothing in its window. The
+       * cross does all the identifying. "Quiet" here is SPARSE and not DIM, per the budget rule
+       * above: the interior is lit at full working brightness over a little under half its area
+       * and black over the rest. The cross is P.white, whose ceiling is v 151 — under both pillars —
+       * so the one white object on the street cannot glare. */
+      a = xm - 1.27; if (a < 0) a = -a;
+      b = v - (gTop - 0.90); if (b < 0) b = -b;
+      if ((a < 0.15 && b < 0.52) || (b < 0.15 && a < 0.52))
+        return fset(a < 0.15 && b < 0.15 ? G_8 : G_HASH, P.white, L_LIT[P.white]);
+      /* A QUIET ZONE round the cross, and it is the whole difference between a cross and a
+       * coincidence: drawn straight onto the lit field the arms were the same brightness as the
+       * blocks either side of them and the shape disappeared — looked at, on the flat probe, and
+       * it did not read at all. Two hands of black around it and it reads at a glance. */
+      if (a < 0.72 && b < 0.72) return fset(0, P.shadow, 0);
+      if (v > 0.70 && v < gTop - 0.20) {
+        /* 0.45 m blocks rather than 0.9 m: at 0.9 m a "sparse" third of the field was three
+         * blobs the size of the cross itself, which is what was drowning it. */
+        h = hash2((u / 0.45) | 0, (v / 0.45) | 0, sd ^ 0x9FC1);
+        if (h < 0.46) return fset(FILL[(h * 2.1 * FILL_N) | 0], lite, L_LIT[lite] * (0.94 + h * 0.16));
+        return fset(0, P.shadow, 0);
+      }
+      return fset(0, P.shadow, 0);
+
+    default:      /* T_BARBER */
+      /* A pole and a pair of mirrors. The mirrors are the point: the two lit bands take the SAME
+       * hash, so whatever is lit in the left one is lit in the right one at a fixed offset, and
+       * the type reads as doubled cells — which no other type here does. The pole is a static
+       * helix; see the no-pulse note at the top of this block for why it does not turn. */
+      if (xm > 0.16 && xm < 0.38 && v > 1.10 && v < 2.05) {
+        h = v * 2.9 + xm * 2.2; h -= Math.floor(h);
+        /* Red is brake-lights-and-hazard by house rule, and this is the exception that proves it
+         * is about AREA: half a 0.22 m stripe on a tenth of the units is 0.1% of the band, drawn
+         * at L_LOW so it carries almost no energy either. */
+        return h < 0.5 ? fset(G_8, P.white, L_LIT[P.white]) : fset(G_8, P.red, L_LOW[P.red]);
+      }
+      if (v > 0.86 && v < gTop - 0.24) {
+        a = (xm > 0.58 && xm < 1.14) || (xm > 1.48 && xm < 2.04) ? 1 : 0;
+        if (a) {
+          h = hash2((v / 0.28) | 0, su, sd ^ 0x9FF1);
+          if (h < 0.76) return fset(h < 0.28 ? G_8 : G_EQ, lite, L_LIT[lite] * (0.90 + h * 0.18));
+        }
+        return fset(0, P.shadow, 0);
+      }
+      return fset(0, P.shadow, 0);
+    }
+  }
+
   /* Street level: shutters, a canopy line, and the occasional open shopfront.
    * This band is banded HORIZONTALLY — plinth, glazing, sign, fascia — because the camera eye
    * is 1.7 m up and a near wall's ground floor can fill the whole screen edge. A single flood
@@ -545,7 +935,14 @@
   function ground(u, v, st, sd, cell, lod, t) {
     var su = Math.floor(u / 2.55), fs = u / 2.55 - Math.floor(u / 2.55);
     var r = hash2(su, 0, sd ^ 0x7E31);
-    var open = r < 0.40;
+    /* 0.52, up from 0.40. This band is the nearest and largest surface in the picture — at a 1.8 m
+     * pavement the camera passes within two metres of it and one 2.55 m unit can be a third of the
+     * frame's width — and three units in five being shuttered meant the thing directly beside the
+     * viewer was, more often than not, nothing at all. The measured frame was 39.1% blank cells and
+     * 30.1 points of that was facade; this band and the dead-bay tiers above it are where all of it
+     * lives. Half and a bit open is also simply what a lit street looks like: a parade with more
+     * shutters than shopfronts is a parade at four in the morning. */
+    var open = r < SHOP_OPEN;
     /* The unit's own light colour, on its OWN hash. It cannot ride on `r`: `r` is what decides
      * whether the unit is open at all, so it only ever reaches 0.40 in here and any threshold
      * above that is dead code — which is exactly how "amber or warm" became "amber or warm or
@@ -563,61 +960,273 @@
      * bounds what any one roll can own, at the scale where the eye reads it as depth into the
      * unit rather than as a change of subject. */
     var lite2 = roll[(hash2(su, 11, sd ^ 0x1D8) * 16) | 0];
+    /* WHAT KIND OF SHOP. Rolled once per unit on its own hash and then applied to the glazing, the
+     * sign band, the awning and the colour lean — a type that changed only the colour would be the
+     * thing this band already had. See the STORE TYPES block above for the budget rule the eight
+     * interiors are written to. Rolled for shut units as well, at the cost of one hash, because
+     * that keeps `su` the only thing the type depends on: a unit does not change trade when the
+     * open/shut roll is retuned, and SHOP_OPEN keeps meaning exactly what signage.js re-derives. */
+    var ty = typeOf(su, sd);
+    if (open) { lite = lean(ty, lite, su, sd, 31); lite2 = lean(ty, lite2, su, sd, 37); }
 
+    /* PAINTED-AND-INVISIBLE, AND THAT IS NOT A CHEAP MISTAKE — see the census below the pilaster.
+     * A shut unit's fascia was drawn on P.slate at lum 7. Slate does not clear the print's v=9
+     * floor until lum 11 (measured against core.js's live curve, near bucket), so this was a
+     * continuous course of nothing over half the frontage in the frame. It is black now, which is
+     * what it always rendered as. */
     if (v > st.gnd - 0.42) {                       // canopy / fascia over the whole parade
-      return fset(G_EQ, open ? lite : P.slate, open ? 58 : 7);
+      return open ? fset(G_EQ, lite, 58) : fset(0, P.shadow, 0);
     }
-    if (fs < 0.06 || fs > 0.94) {                  // pilaster between units
-      return fset(G_PIPE, P.slate, 7);
-    }
+    /* Pilaster between units. Also black, and this is the biggest single line of the trim.
+     *
+     * MEASURED, 12 frames (seeds 3001+137k for k=0..5, frames 600 and 1800 at 213x67, every other
+     * file in the tree held identical): this branch, the shut fascia above and the glazing mullion
+     * below wrote 7.3% of EVERY CELL IN THE FRAME at lum 7-9 on P.slate, i.e. at a printed value of
+     * 5-7, below the v=9 floor. Deleting all three moved blank 40.5% -> 47.8% and moved black(v<9),
+     * muddy, hot and every swatch's share of lit energy by 0.1 point or less. The picture is
+     * identical; the paint was not.
+     *
+     * THE FIX IS NOT TO RAISE THEM. A pilaster is 12% of the ground band's width running its full
+     * height, and the ground band is the nearest and largest surface in the picture; lifting it to
+     * a value slate can actually print puts a mid-tone stripe every 2.55 m across the whole near
+     * frame, and slate's ceiling is v 114 — it CANNOT leave the muddy band at any lum. That is the
+     * grey veil this renderer is written to avoid, bought from the one budget that is overdrawn.
+     * Black reads as the division just as well, because what the eye reads is the lit interior
+     * stopping.
+     *
+     * And an invisible cell is worse than a blank one here rather than merely equal to it:
+     * optics.js's shafts skip any cell with `ch !== 0 && lum > 4` and its headlamp wash can only
+     * ADD a mote where lum is 0, so lum-7 paint was a mask that blocked the very effects it was
+     * supposedly leaving something for. */
+    if (fs < 0.06 || fs > 0.94) return fset(0, P.shadow, 0);
     if (open) {
-      /* AWNING. Two units in five have one, and it is the single most useful thing that can happen
-       * to a ground floor: it puts a SLOPE into a band that is otherwise four stacked horizontals,
-       * it throws the shopfront under it into shadow, and it hangs a scalloped valance at eye
-       * height. Drawn as diagonals in the unit's own light colour, dimmed hard — an awning is lit
-       * from underneath by the shop it belongs to and it is canvas, not glass. */
-      if (hash2(su, 21, sd ^ 0x8A1) < 0.40 && v > st.gnd - 2.55 && v < st.gnd - 1.62) {
+      /* AWNING. One unit in four has one, and it is the single most useful thing that can happen to
+       * a ground floor: it breaks a band that is otherwise four stacked horizontals, it throws the
+       * shopfront under it into shadow, and it hangs a scalloped valance at eye height.
+       *
+       * It is a DARK OBJECT WITH BRIGHT MARKS ON IT — black canvas, one lit rib per scallop, and a
+       * lit fringe along the leading edge — which is the same shape every other dark thing in this
+       * file is drawn as, and the reason is under the rib branch below. It used to be a 50/50
+       * stripe of lit-and-slate covering the whole canvas, and that read as cross-hatching on a
+       * wall rather than as cloth over a shop. */
+      /* Gated on the type — see T_AWN: canvas over a food counter, a launderette, a bar or a
+       * parts shop, never over a convenience store's lit window, an arcade or a clinic, all three
+       * of which are types whose whole point is the glazing an awning would shade.
+       * The rate goes 0.40 -> 0.46, which against the 55% of frontage whose type allows one is a
+       * frequency of 0.25 along the parade, DOWN from the old flat 0.40. That is deliberate and it
+       * is the one thing the types cost this band: an awning hangs from 1.65 m to 2.58 m, which is
+       * exactly where a noodle bar's back of house and a hardware shop's hanging rail live, so at
+       * the old frequency three units in five were a type you could not see. A quarter of the
+       * parade keeps its awning and the overhang it puts into the band; the rest show what they
+       * sell. */
+      if (T_AWN[ty] && hash2(su, 21, sd ^ 0x8A1) < 0.46 &&
+          v > st.gnd - 2.55 && v < st.gnd - 1.62) {
         var aw = (st.gnd - 1.62 - v) / 0.93;           // 0 at the fascia, 1 at the front edge
         if (aw > 0.86) {
-          /* Valance: the scalloped fringe that hangs off the leading edge. */
+          /* Valance: the scalloped fringe that hangs off the leading edge, and the one part of an
+           * awning that is unambiguously an awning. Written in PRINTED VALUE like every other lit
+           * tier in this band rather than as a flat lum: at the old 44-74 the same fringe printed
+           * v 125-160 on azure and v 47-88 on warm, so a warm-lit unit's valance was inside the
+           * muddy band and a cool one's was a highlight. L_LOW lands both at v 128-153. */
           var vg = u / 0.42; vg -= Math.floor(vg);
-          return fset(vg < 0.5 ? G_V : G_UNDER, lite, 44 + hash2(su, (u * 2.4) | 0, sd ^ 0x8A2) * 30);
+          return fset(vg < 0.5 ? G_V : G_UNDER, lite,
+                      L_LOW[lite] * (1.00 + hash2(su, (u * 2.4) | 0, sd ^ 0x8A2) * 0.20));
         }
-        var ag = u / 0.55; ag -= Math.floor(ag);        // canvas stripes, the way awnings come
-        return fset(ag < 0.5 ? G_SLASH : G_EQ, ag < 0.5 ? lite : P.slate,
-                    ag < 0.5 ? 26 + aw * 34 : 12 + aw * 14);
+        /* THE CANVAS IS BLACK, WITH ONE LIT SEAM EVERY 0.55 m. It used to be a 50/50 stripe — the
+         * lit half on the unit's own colour at lum 26-60, the other half on P.slate at lum 12-26 —
+         * and that is the single densest mid-tone field this file produced. Counted on one near
+         * block (seed 3412, frame 1800, cols 20-46 rows 26-41): 432 cells, of which 236 printed
+         * inside the muddy 9-119 band and only 49 were blank. The slate half printed v 10-25, which
+         * is visible-but-unreadable, and slate's ceiling is v 114 so no lum could have fixed it.
+         * On screen the pair read as cross-hatching on a wall, not as canvas over a shop.
+         *
+         * Reduce AREA, keep the peak: a 26% duty seam at L_LOW and honest black between. The slope
+         * is carried by the diagonal glyph and by the valance line under it, which is where it was
+         * being read from anyway, and the shopfront the awning shades is still shaded because a
+         * black return here is what occludes it. Measured over the 12-frame fixture: muddy 26.9%
+         * -> 26.2% for the canvas alone, blank +0.8, hot unmoved.
+         *
+         * Brightest at the fascia and dimmest at the front edge, because an awning is lit from
+         * underneath by the shop it belongs to and the back of it is nearest that light.
+         *
+         * The seam pitch is 0.42 m, which is the VALANCE's pitch and not the 0.55 the stripes used
+         * to have. That is the whole read: a stripe now runs up from every scallop instead of
+         * beating against them, so the fringe and the canvas are one object. Looked at on the
+         * probe — at 0.55 against a 0.42 fringe the two rhythms drifted in and out of phase and
+         * the canvas read as pinstripes that happened to end above a row of V's. */
+        var ag = u / 0.42; ag -= Math.floor(ag);        // canvas seams, on the valance's own pitch
+        if (ag < 0.30) return fset(G_SLASH, lite, L_LOW[lite] * (1.18 - aw * 0.20));
+        return fset(0, P.shadow, 0);
       }
 
       /* Sign band under the fascia. Signage is the one place violet is allowed, and it is a
-       * thin strip rather than a whole surface, which is how the references use it. */
+       * thin strip rather than a whole surface, which is how the references use it. It stays ONE
+       * strip, in the same place and at the same height it always was; what the type changes is
+       * its RHYTHM — SIGN_PITCH is how long a lit block runs and SIGN_FILL how much of the strip
+       * is lit at all, so a menu board is a dense column of small marks, a convenience store is
+       * one long unbroken bar, and a bar's sign is a short word in the dark.
+       *
+       * The lum is now L_HOT rather than a flat 176-255. That literal was chosen against amber,
+       * where it prints v 156-178; on azure the same numbers print v 197-218, i.e. every azure
+       * sign in the city was sitting a quarter of the way past the hot line while its amber
+       * neighbour was under it. L_HOT lands both at v~175. */
       if (v > st.gnd - 1.55) {
-        /* The sign takes the unit's OWN light colour: one shop is lit by one set of tubes, and a
-         * sign in a different hue from the window under it splits a single unit into two objects.
-         * It was rolled off `cr` against fixed thresholds here, which is the same district-blind
-         * mistake as the roll above and put azure signs on sodium blocks. */
-        var sc = r < 0.09 ? accentOf(cell, sd) : lite;
-        var sg = hash2(su, Math.floor(u * 3.1), sd ^ 0x515);
-        return fset(sg < 0.22 ? 0 : FILL[(sg * FILL_N) | 0], sc,
-                    sg < 0.22 ? 0 : 176 + sg * 79);
+        var sp = u / SIGN_PITCH[ty];
+        var sg = hash2(sp | 0, su, sd ^ 0x515);
+        if (sg > SIGN_FILL[ty]) return fset(0, P.shadow, 0);
+        /* The accent sign used to be gated on `r`, which is the open/shut roll — so "this unit
+         * has an accent sign" was welded to "this unit is one of the most-open units", the exact
+         * shared-hash bug the file warns about twice above. Its own draw now.
+         * The arcade is the one type that may put violet on its sign: a games parlour's sign is
+         * the reference's own violet, and it is a strip. The clinic's is white, which is the
+         * only swatch here that reads as clinical and cannot glare (ceiling v 151). */
+        var sc = ty === T_ARCADE && sg < 0.20 ? P.violet
+               : (ty === T_PHARM && sg < 0.05 ? P.white
+               : (hash2(su, 47, sd ^ 0x517) < 0.10 ? accentOf(cell, sd) : lite));
+        /* 1.00-1.14 of L_HOT, not 0.88-1.10. On the low half of that older range amber printed
+         * v 168, i.e. UNDER the hot line, and the sign band is the largest genuinely bright thing
+         * in the frame. Measured while tuning: with the band's amber half sitting a few points
+         * under 170 the frame's hot tail fell by more than a point, i.e. out of core.js's 3.5-5
+         * target on the LOW side, which is its own kind of miscalibration — a pillar has to be
+         * able to reach the top of the lit range or nothing in the picture is a highlight. */
+        return fset(FILL[((sg / SIGN_FILL[ty]) * FILL_N) | 0], sc, L_HOT[sc] * (1.00 + sg * 0.14));
       }
       if (v < 0.62)                                       // plinth, in its own shadow
         return hash2(su, Math.floor(v * 6), sd ^ 0x3) < 0.5 ? fset(G_UNDER, P.shadow, 14)
                                                             : fset(0, P.shadow, 0);
-      /* Glazing: interior spill, brightest just above the deck, mullioned every 0.85 m. */
+      /* Glazing. Mullion every 0.85 m first, and it is BLACK: it used to be P.slate at lum 9,
+       * which its own comment correctly said prints v 5 — and then called that "a division the eye
+       * reads as an edge ... [that] costs the print nothing". Half of that is right. It costs the
+       * print nothing because it prints nothing, so the edge the eye was reading was the black
+       * cell, not the glyph; writing the glyph only masked the shafts and the headlamp wash off it.
+       * See the pilaster above for the census. Then the interior, which is the type's own. */
       var fm = u / 0.85; fm -= Math.floor(fm);
-      if (fm < 0.10) return fset(G_PIPE, P.slate, 9);
-      /* Keyed on world u as well as v, so the second fitting breaks the unit up in BOTH axes and
-       * a near shopfront cannot present one flat field of colour however much of the screen it
-       * covers. 1.25 m by 0.77 m patches: furniture-sized, not dither. */
-      var col = hash2(Math.floor(u * 0.8), Math.floor(v * 1.3), sd ^ 0x6C1) < 0.34 ? lite2 : lite;
-      var fall = clamp(1 - (v - 0.62) / (st.gnd - 2.2), 0, 1);
-      var lum = 92 + fall * 104 + hash2(su, Math.floor(v * 2.2), sd) * 34;
-      if (hash2(su, Math.floor(v * 3.1), sd ^ 0x5) < 0.26) lum *= 0.40;  // stock, shelving, bodies
-      return fset(FILL[(hash2(su, Math.floor(v * 1.7), sd ^ 0x2) * FILL_N) | 0], col,
-                  lum * grain(u, v, sd, lod));
+      if (fm < 0.10) return fset(0, P.shadow, 0);
+
+      if (lod > 0) return storeIn(ty, u, v, su, sd, lite, lite2, st.gnd - 1.55);
+
+      /* Beyond ~34 m a whole unit is a couple of columns wide and the type's features — bottles
+       * at 0.15 m, machine doors at 0.52 m — are sub-cell. Drawing them there would sample one
+       * arbitrary point of each and the parade would resolve into noise, so the far band keeps a
+       * MASSED version instead: lit blocks at the working brightness, black between, at the
+       * type's own coverage so a bar is still darker than a convenience store from across the
+       * junction. Keyed on world position, so it is stable as the camera walks into it.
+       *
+       * This replaces the old far-field flood, which painted every cell at lum 92-230 with a
+       * quarter of them knocked to 0.40 of that. Those knocked-down cells printed v 85-110 on
+       * amber — dead centre of the muddy band — over the largest surface in the frame, and
+       * deleting them is where this file's muddy budget comes from. */
+      /* 0.30 + 0.38, not 0.86 + 0.14. The old pair claimed to give each type its own coverage "so
+       * a bar is still darker than a convenience store from across the junction", and SIGN_FILL
+       * runs 0.56-0.98, so what it actually produced was 0.94 to 0.99 — a five-point spread that no
+       * eye can see, on a band that is 94-99% painted, which is the far-field flood the paragraph
+       * above says was deleted. The comment was describing an intention, not the code. This pair
+       * spans 0.51 to 0.67 and the bar-vs-convenience-store difference is real. Measured over the
+       * 12-frame fixture the change is worth 0.0 points of muddy and +0.1 of blank — at 34 m+ the
+       * ground band is usually behind something — so this is a correctness fix to the constant and
+       * to the sentence above it, not a budget one. */
+      var fcov = 0.30 + SIGN_FILL[ty] * 0.38;
+      var fh = hash2(Math.floor(u * 1.1), Math.floor(v * 1.1), sd ^ 0x6C1);
+      if (fh > fcov) return fset(0, P.shadow, 0);
+      var fcol = hash2(Math.floor(u * 0.8), Math.floor(v * 1.3), sd ^ 0x6C3) < 0.30 ? lite2 : lite;
+      return fset(FILL[((fh / fcov) * FILL_N) | 0], fcol, L_LIT[fcol] * (0.90 + fh * 0.20));
     }
-    if (r < 0.42) return fset(0, P.shadow, 0);     // shuttered and truly dead
-    /* Roller shutter: horizontal ribbing, near black, but present. */
+    /* ---- SHUT ------------------------------------------------------------------------------
+     * Everything from here down is a unit with its shutter down, and it is roughly half the
+     * frontage the viewer walks past. It used to be four lines that returned black: 2% truly dead
+     * and the rest a rib pattern drawn on P.shadow at lum 11-19, which on core.js's current table
+     * prints v 0-10 — below the visibility floor, so in practice ALL of it was black. Half of the
+     * biggest surface in the frame was not being drawn.
+     *
+     * THE FIX IS NOT TO PAINT THE SHUTTER GREY. A field of dim metal is bought from the muddy
+     * 9-119 band, which is the one budget in this project that has repeatedly been overdrawn — it
+     * stood at 32.1% against core.js's <30 target when this block was written and at 26.1% after
+     * the trim below, and the headroom it now has was bought by DELETING dim tiers rather than by
+     * finding room for another one. It would arrive as exactly the veil this whole renderer is
+     * written to avoid. A shut shop is a DARK object, and it is drawn the way every other dark
+     * object here is drawn — as a black mass with a few bright things ON it:
+     *
+     *   the lintel     one lit course where the shutter box meets the fascia, which is the only
+     *                  continuous horizontal a shut unit has and the thing that says the frontage
+     *                  is still there in the dark
+     *   a tag          sprayed paint. Bright by nature (it is the one surface on the street with
+     *                  fresh pigment on it under a sodium lamp) and iconic to the genre
+     *   a stair light  a bulkhead lamp over the door beside the shop, burning all night. A LAMP and
+     *                  not a lit surface: the cone it used to throw down the shutter was removed
+     *                  because P.warm cannot clear v=119 below lum 104 and the cone topped out at
+     *                  88 — see the branch itself
+     *   a sliver       one unit in eight has the shutter a hand's width off the ground, with the
+     *                  light of whatever is still open inside coming out under it
+     *
+     * That is a few dozen bright cells per unit against several hundred cells of honest black, so
+     * it lands in the thin part of the histogram (upper 12.3%, hot 3.7% against a 3.5-5 target)
+     * rather than the overdrawn part. */
+
+    /* One draw per decision, additive salts. `r` is spent — it decided open/shut — so nothing
+     * below may be rolled off it or the feature only ever appears on the shuttest units. */
+    var sh1 = hash2(su, 41, sd ^ 0xA31), sh2 = hash2(su, 53, sd ^ 0xA32),
+        sh3 = hash2(su, 67, sd ^ 0xA33), sh4 = hash2(su, 79, sd ^ 0xA35);
+
+    /* The lintel. The shutter box is a hand's depth proud of the wall, so its underside catches
+     * the light spilling along the parade and its front face does not — one lit row, not a band.
+     *
+     * IT TAKES THE DISTRICT'S OWN LIGHT, off the same SHOP roll the open units use, and that is a
+     * census fix rather than a flourish. Drawn as flat P.amber — the argument being that this is a
+     * metre under a sodium lamp, which is the argument the kerb makes and wins — it put a
+     * continuous sodium line along every shut frontage in the city, and shut frontages are half of
+     * them: measured over the six-frame fixture it moved amber from 50.0% of lit energy to 51.8%
+     * and took azure down 28.6 -> 26.9. That is the longest new line in the picture landing
+     * entirely on one pillar. The kerb can be amber because there is one kerb; this is on every
+     * wall, so it has to obey the same district rule the wall does. */
+    if (v > st.gnd - 0.72) return fset(G_DASH, roll[(sh4 * 16) | 0], 90 + sh1 * 44);
+
+    /* The sliver. Not shut after all — the shutter is up a hand's width and the shop behind it is
+     * still lit, which is the single most useful thing that can happen to a dead frontage: it puts
+     * a bright horizontal at ankle height, i.e. down in the lower third where the frame is emptiest
+     * and where nothing else is emissive. */
+    if (sh2 < 0.11 && v < 0.34)
+      return fset(v < 0.17 ? G_UNDER : G_EQ, lite, 128 + sh3 * 58);
+
+    /* A bulkhead lamp over the door to the flats above. One unit in nine (0.68..0.79 of one draw —
+     * the old comment said one in five and the code has never done that), and it is a LAMP: a small
+     * hot cluster, and nothing else.
+     *
+     * THE CONE IT USED TO THROW IS GONE. It ran 1.5 m down the shutter at lum 24-88 on P.warm, and
+     * warm does not clear the muddy band's v=119 top until lum 104 — its ceiling is v 167 at lum
+     * 255 — so every cell of that wash printed v 28-100 and could not have been lifted out of the
+     * band without going brighter than the lamp itself. It was the exact thing the block comment
+     * above forbids: a dim mid-tone field on the nearest surface in the frame, on a swatch the
+     * census already has drifting. Measured over the 12-frame fixture, removing it: muddy 26.9% ->
+     * 26.8%, warm 10.8% -> 10.7% of lit energy, and nothing else moved. The lamp reads on its own,
+     * because a lamp at this scale IS a couple of cells. */
+    if (sh2 > 0.68 && sh2 < 0.79) {
+      var dl = v - 2.28, du = fs - 0.80;
+      if (du < 0) du = -du;
+      if (du < 0.075 && dl > -0.16 && dl < 0.16) return fset(G_0, P.warm, 156 + sh3 * 40);
+    }
+
+    /* A tag. Rolled on the unit and then drawn on its own lattice so it is a MARK with edges and
+     * not a stain: a couple of dense blocks of paint at shoulder height, in a colour nobody chose
+     * for the building. Sprayed work sits where an arm reaches, which is also exactly the band the
+     * eye is in — 1.1 to 2.1 m is the middle of the near wall. */
+    if (sh1 < 0.34 && v > 1.05 && v < 2.15) {
+      var tgu = (u - su * 2.55 - 0.28) / 1.75;
+      if (tgu > 0 && tgu < 1) {
+        var tg = hash2(Math.floor(tgu * 9), Math.floor((v - 1.05) * 6.4), sd ^ 0xA34);
+        if (tg < 0.46) {
+          /* The tag's colour is the DISTRICT ACCENT, which is the one swatch a building already
+           * owns that is not its own light — so a tag reads as somebody else's mark on it rather
+           * than as another window. */
+          return fset(tg < 0.16 ? G_HASH : (tg < 0.31 ? G_PCT : G_SLASH),
+                      accentOf(cell, sd), 116 + tg * 116);
+        }
+      }
+    }
+
+    /* And the shutter itself, which stays black. The ribs are kept at the very bottom of the
+     * range and at a third of the coverage they had: they are not there to be seen, they are there
+     * so that a shutter caught in a headlamp or a lightning stroke has something for the flash to
+     * land on. Everything above is what the viewer actually reads. */
     var rib = Math.floor(v * 3.4);
     return (rib % 3) ? fset(0, P.shadow, 0)
       : fset(G_UNDER, P.shadow, 11 + hash2(su, rib, sd ^ 0xA9) * 8);
@@ -1381,7 +1990,12 @@
   CC.Surf = {
     facade: facade, floorTex: floorTex, sky: sky, fog: fog,
     configure: configure, cfg: CFG, beginFrame: beginFrame,
-    FOG_START: FOG_START, FOG_END: FOG_END
+    FOG_START: FOG_START, FOG_END: FOG_END,
+    /* The share of ground-floor units that are open, published because signage.js's shopSpill has
+     * to re-derive the SAME test to land its pool under a lit window rather than under a shutter —
+     * it says so in its own comment and then hardcoded the number, so raising the rate here left
+     * every spill in the city keyed to the old frontage. One constant, two readers. */
+    SHOP_OPEN: SHOP_OPEN
   };
 })(typeof CC !== 'undefined' ? CC : require('./core.js'));
 /* Standalone `require()` of this file has no global CC, so re-resolve it rather than assuming

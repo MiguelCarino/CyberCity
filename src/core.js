@@ -477,8 +477,21 @@ var CC = (function () {
    * A later src/compose.js taking this slot over MUST call CC.tone itself. */
   var Compose = { post: function (f) { tone(f); } };
 
+  /* HOW WIDE THE PAVEMENT IS, in metres from the building face to the kerb face, and it lives here
+   * rather than in raycast.js because three files have to agree on it or the street comes apart:
+   * raycast.js insets the carriageway by it (twice — once for the street the camera is in and once
+   * for every junction mouth ahead of it), and street.js lays the crowd out against it. It was
+   * written out as a literal 1.4 in all three, which is exactly the arrangement where one of them
+   * gets changed and the kerb the pedestrians walk along stops being the kerb that is drawn.
+   *
+   * 2.15, up from 1.4. The kerb itself eats the first 0.34 m of it, so the walkable strip goes from
+   * 1.06 m to 1.81 m — under two metres is still a narrow city pavement, but 1.06 m is narrower
+   * than a doorway and it was the reason there was nowhere to put anything: a vending machine
+   * standing 0.45 m off the wall and a bollard on the kerb line were the same object. */
+  var PAVE = 2.15;
+
   return {
-    PALETTE: PALETTE, P: P, GLYPHS: GLYPHS, g: g, GI: GI,
+    PALETTE: PALETTE, P: P, GLYPHS: GLYPHS, g: g, GI: GI, PAVE: PAVE,
     tone: tone, Compose: Compose, EXPOSURE: EXPOSURE,
     makeFrame: makeFrame, clearFrame: clearFrame, put: put, poke: poke,
     hash1: hash1, hash2: hash2, mulberry: mulberry,

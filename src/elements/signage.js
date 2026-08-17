@@ -840,9 +840,15 @@
    * with sd the building seed widened the way raycast.js widens it. Re-deriving that here is the
    * whole reason the spill lands under a lit window instead of under a shutter. If surfaces ever
    * re-rolls that test this degrades to spill in a merely plausible place, never to a crash. */
+  /* ...and it is read from CC.Surf rather than written out again. It WAS written out again, as a
+   * literal 0.40, which is how raising the open rate in surfaces.js left every spill pool in the
+   * city keyed to the old frontage: the shutters that used to be dark got shopfronts, and the
+   * pools stayed under the units that had been open before. The fallback keeps this file loadable
+   * on its own, which is the only reason it is not simply CC.Surf.SHOP_OPEN inline. */
   function shopOpen(rec, u) {
     var sd = (rec.seed * 4294967296) | 0;
-    return hash2(Math.floor(u / 2.55), 0, sd ^ 0x7E31) < 0.40;
+    var th = (CC.Surf && CC.Surf.SHOP_OPEN) || 0.52;
+    return hash2(Math.floor(u / 2.55), 0, sd ^ 0x7E31) < th;
   }
 
   CC.ELEMENTS.push({
@@ -876,7 +882,12 @@
        * below instead — a continuous wash along the kerb reads as a painted stripe. */
       for (gz = gz0; gz <= gz1; gz++) {
         for (gx = gx0; gx <= gx1; gx++) {
-          if (drawn > 16) return;
+          /* 22, up from 16, for the same reason the prop lattice was packed tighter: the pavement
+           * is 1.81 m of walkable strip rather than 1.06 m (CC.PAVE), and `depth` below already
+           * runs 1.15-1.90 m, so a pool now covers the pavement instead of stopping short of the
+           * kerb. More frontage to light, more of each pool visible, and the band it lands in
+           * measured 4.7 points of the frame blank. */
+          if (drawn > 22) return;
           var rx = gx + 0.5 - CO.ox, rz = gz + 0.5 - CO.oz;
           var w = rx * CO.fwx + rz * CO.fwz;
           if (w < 1.2 || w > R) continue;
