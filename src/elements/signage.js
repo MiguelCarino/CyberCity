@@ -853,6 +853,9 @@
 
   CC.ELEMENTS.push({
     name: 'shopSpill',
+    /* CITY ONLY. See src/world.js: an element with no `world` belongs to both, and main.js
+     * filters CC.ELEMENTS on this before the layer sort. */
+    world: 'cyber',
     layer: 28,
 
     /* The interface hands `city` to init but not to draw, so park it on the element rather than
@@ -1325,6 +1328,9 @@
 
   CC.ELEMENTS.push({
     name: 'neon',
+    /* CITY ONLY. See src/world.js: an element with no `world` belongs to both, and main.js
+     * filters CC.ELEMENTS on this before the layer sort. */
+    world: 'cyber',
     layer: 30,
 
     init: function (city, rng) {
@@ -1389,6 +1395,9 @@
 
   CC.ELEMENTS.push({
     name: 'signals',
+    /* CITY ONLY. See src/world.js: an element with no `world` belongs to both, and main.js
+     * filters CC.ELEMENTS on this before the layer sort. */
+    world: 'cyber',
     layer: 31,
 
     init: function (city, rng) {
@@ -1494,6 +1503,9 @@
 
   CC.ELEMENTS.push({
     name: 'holo',
+    /* CITY ONLY. See src/world.js: an element with no `world` belongs to both, and main.js
+     * filters CC.ELEMENTS on this before the layer sort. */
+    world: 'cyber',
     layer: 33,
 
     init: function (city, rng) {

@@ -842,6 +842,9 @@
 
   CC.ELEMENTS.push({
     name: 'market',
+    /* CITY ONLY. See src/world.js: an element with no `world` belongs to both, and main.js
+     * filters CC.ELEMENTS on this before the layer sort. */
+    world: 'cyber',
     /* 17: free, and below streetprops (19) and the pedestrians (20) on purpose. Both of those draw
      * after this file and both are depth-tested, so a walker in front of a stall correctly cuts a
      * hole in the counter light rather than being painted over by it. */

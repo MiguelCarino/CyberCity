@@ -782,6 +782,9 @@
 
   CC.ELEMENTS.push({
     name: 'skylanes',
+    /* CITY ONLY. See src/world.js: an element with no `world` belongs to both, and main.js
+     * filters CC.ELEMENTS on this before the layer sort. */
+    world: 'cyber',
     layer: 16,
 
     /* ZERO draws from the shared rng, on purpose. CC.ELEMENTS is init'd in layer order off one

@@ -133,6 +133,9 @@
   var shaft = {
     name: 'lightshafts',
     layer: 78,          // before every modulation pass: the shafts are in the world, not on the lens
+    /* THE TWO WORLDS WITH AIR IN THEM. A shaft is light scattering off something in the air.
+     * See src/world.js: `world` may be a string or a set, and absent means every world. */
+    world: ['cyber', 'west'],
 
     init: function (city, rng) {
       this.seed = ((rng() * 4294967296) | 0) ^ 0x5A17;
@@ -398,6 +401,9 @@
   var wash = {
     name: 'lightwash',
     layer: 79,                // still in the world: this is light on surfaces, not dirt on glass
+    /* THE TWO WORLDS WITH AIR IN THEM. Likewise: this is airglow round a bright source.
+     * See src/world.js: `world` may be a string or a set, and absent means every world. */
+    world: ['cyber', 'west'],
 
     init: function (city, rng) {
       // Small seed, varied additively — see the note in weather.js about hash2 and large seeds.
@@ -620,6 +626,9 @@
   var mistfar = {
     name: 'mistfar',
     layer: 80,
+    /* THE TWO WORLDS WITH AIR IN THEM. Mist.
+     * See src/world.js: `world` may be a string or a set, and absent means every world. */
+    world: ['cyber', 'west'],
 
     init: function (city, rng) { this.seed = (rng() * 30011) | 0; },
 
@@ -796,6 +805,9 @@
   var beads = {
     name: 'lensrain',
     layer: 94,
+    /* THE TWO WORLDS WITH AIR IN THEM. Beads of rain on the lens.
+     * See src/world.js: `world` may be a string or a set, and absent means every world. */
+    world: ['cyber', 'west'],
 
     init: function (city, rng) {
       var s = ((rng() * 4294967296) | 0) ^ 0x0F71C5;

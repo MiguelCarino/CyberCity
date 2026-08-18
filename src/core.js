@@ -418,15 +418,122 @@ var CC = (function () {
    * given a distance beyond it so that it self-occludes against the world pass. */
   var SKY_D = FOG_END;
 
-  // LUT[(bucket*12 + colour)*256 + lum] -> printed lum. 24 KB, built once, never allocated again.
-  var LUT = (function () {
-    var np = PALETTE.length, t = new Uint8Array(DBUCKETS * np * 256);
+  /* ---- THE DAY LADDER ---------------------------------------------------------------------------
+   * The table above is fitted to a NIGHT frame and says so at length: LIGHT OUTRANKS STRUCTURE, the
+   * two pillars own the top of the lit range, white is 0.30 because "white is the thing the light
+   * lands on" and slate is 0.60 because it is unlit concrete. Every one of those sentences is
+   * false at noon, and the inversion is total rather than a scale:
+   *
+   *   THE PILLARS GO OFF.   Sodium and screenlight are what a city has INSTEAD of daylight. At noon
+   *                         a sodium lamp is a grey tube and a screen is a dark rectangle, so amber
+   *                         and azure drop to the bottom of the ladder — azure hardest, from 1.00
+   *                         to 0.30, because it is the highest gain in the night table and a lit
+   *                         window painted at that gain under a bright sky is the one cell that
+   *                         gives away that nothing has really changed.
+   *   STRUCTURE OUTRANKS LIGHT. White is render, board, bone and dust with the sun on it, and slate
+   *                         is concrete and shadowed rock; between them they are most of a daylight
+   *                         frame's area, so they take the top of the ladder — white 0.30 -> 0.92,
+   *                         slate 0.60 -> 0.78.
+   *   SHADOW STOPS BEING A HOLE. At night `shadow` is a swatch the print deletes on purpose. By day
+   *                         a shadow is filled by the whole bright sky above it, so it lifts from
+   *                         0.30 to 0.46 — which is what stops a daylight frame reading as a lit
+   *                         object cut out of black paper.
+   *   ICE AND PURE ARE THE SKY AND THE SPECULAR. Ice carries a daylight sky, which is the largest
+   *                         bright surface in either atmospheric world, so it goes 0.36 -> 0.66.
+   *
+   * GAMMA AND KNEE MOVE WITH IT. The night curve exists to lift a frame that is 55% black and crush
+   * its dither back down; a daylight frame has no dither to crush and no hole to lift, so the day
+   * values are a much weaker lift (0.33 -> 0.62) and a much smaller crush (0.075 -> 0.030). The
+   * muddy band that the night targets fight to keep under 30% is where a daylight picture LIVES —
+   * a lit wall, dust, a blue sky are all mid-tones — so by day the census that matters is the hot
+   * tail, not the muddy one, and tools/metrics.py's targets describe night and only night. */
+  var EXPOSURE_DAY = [
+    /* 0.42 and 0.52, not 0.30 and 0.30, and the correction was forced by a measurement rather than
+     * by taste. At 0.30 the pillars' PRINTED CEILINGS fall to about 150 and 165 — both under the
+     * 170 the census counts as a highlight — so from the moment the blend started, no amber or
+     * azure cell in the frame could be hot however brightly it was written. At the dusk stop the
+     * city had 3061 pillar cells in the frame, exactly none of them hot, against 1477 of 3403 at
+     * night, and the max printed value was 165. A dusk with the neon lit and nothing in the frame
+     * allowed to be bright is not a picture.
+     *
+     * The physical reading is also better at these values. A sodium lamp at noon is a grey tube,
+     * which is what 0.42 says relative to white's 0.92; a large LED sign at noon is perfectly
+     * visible and merely not dazzling, which is what 0.52 says. The swatch that carries a DAYLIGHT
+     * sky is ice, not azure, so raising azure here costs the sky nothing. */
+    0.42,   //  0 amber   — a sodium lamp in daylight: still there, no longer the brightest thing
+    0.52,   //  1 azure   — a big screen in daylight: readable, and not a highlight
+    0.46,   //  2 ember   — rust, brick, red rock: a real daylight surface, and it keeps its place
+    0.70,   //  3 spring  — foliage, and by day there is enough of it to matter
+    0.26,   //  4 violet  — still the rarest thing in the table, and daylight has no use for it
+    0.92,   //  5 white   — THE daylight swatch: render, planed board, bone, dust, cloud
+    0.50,   //  6 red     — paint and hazard, unchanged in kind
+    0.78,   //  7 slate   — concrete and shadowed rock, and the second largest area by day
+    0.62,   //  8 warm    — sunlit timber and skin; it stops being "interior spill" at noon
+    0.66,   //  9 ice     — the daylight sky, which is the largest bright surface either world has
+    0.85,   // 10 pure    — specular, and specular is what a sun makes
+    0.46    // 11 shadow  — filled by the sky rather than empty; see the note above
+  ];
+  var GAMMA_DAY = 0.62, KNEE_DAY = 0.030;
+
+  /* ---- how much of the day table is mixed in ------------------------------------------------------
+   * Quantised, and that is the whole implementation trick. The LUT is 24 KB of pow() and exp() and
+   * the file has always said it is "built once at load, never allocated again"; rebuilding it every
+   * frame would put 24576 transcendental calls on the frame budget. Rebuilding it when a QUANTISED
+   * mix changes puts them on one frame in every four hundred — the clock runs a 420 s cycle and
+   * there are 32 steps across it, so the rebuild happens about once every thirteen seconds, costs
+   * about a millisecond, and lands inside a 16 ms budget with room to spare.
+   *
+   * 32 steps and not 8: the mix moves fastest through dawn and dusk, which is exactly where the eye
+   * is watching the light change, and at 8 steps the ladder visibly clunks between two frames. */
+  var DAY_STEPS = 32;
+  var dayMix = 0, daySun = 0, dayStep = -1;
+
+  /* ---- THE BLEND IS NOT THE SAME SHAPE FOR EVERY SWATCH -------------------------------------
+   * Surfaces gain their daylight EARLY and sources lose theirs LATE, and blending both linearly
+   * against the same number is what made the transitional hours the flattest pictures in the build.
+   *
+   * The physics is ordinary: a wall starts being lit by the sky as soon as there is any sky, so
+   * white and slate should climb from the first light of dawn. A neon sign, a sodium lamp or a lit
+   * window, on the other hand, is still the brightest thing in the frame right through the golden
+   * hour and only stops competing once the sun is properly up — anyone who has seen a lit shopfront
+   * at sunset knows it reads. Under a linear blend the two pillars had already given up half their
+   * gain at the dusk stop, and the city printed 0.68% of its cells hot there against 8.02% at
+   * night and 3.20% at noon: the one hour with both neon AND a bright sky in it was the dimmest
+   * frame of the three.
+   *
+   * Squaring the mix for the four SOURCE swatches holds them near their night gains until the mix
+   * passes about 0.6 and then drops them quickly, which is the shape the eye expects and the shape
+   * that keeps a lit sign lit through dusk. */
+  function ladder(c, mix, sunMix) {
+    /* SOURCES BLEND ON THE SUN, SURFACES ON THE SKY, and they are two different numbers because
+     * they answer two different questions. "Is this wall lit?" is answered by the sky, which is
+     * bright through the whole of twilight. "Has this lamp stopped being the brightest thing in
+     * the frame?" is answered by the SUN, which is down for all of it — and a sodium lamp at dusk
+     * has emphatically not stopped, which is the entire look of the hour.
+     *
+     * Blending both on the sky cost the city its dusk in a way no amount of tuning elsewhere could
+     * reach: amber's gain had already fallen from 0.50 to 0.41 by the golden hour, which puts its
+     * printed ceiling UNDER the 170 the census counts as a highlight, so no amber cell in the frame
+     * could be hot however bright it was written. The measurement said 0.38% of cells hot at dusk
+     * against 8.02% at night. Squared on top, because even direct sun takes a while to beat a neon
+     * sign at close range. */
+    var src = (c === 0 || c === 1 || c === 8 || c === 9);                   // amber azure warm ice
+    var m = src ? sunMix * sunMix : mix;
+    return EXPOSURE[c] + (EXPOSURE_DAY[c] - EXPOSURE[c]) * m;
+  }
+
+  // LUT[(bucket*12 + colour)*256 + lum] -> printed lum. 24 KB, rebuilt only when the day step moves.
+  var LUT = new Uint8Array(DBUCKETS * PALETTE.length * 256);
+  function buildLUT(mix, sunMix) {
+    var np = PALETTE.length, t = LUT;
+    var GM = GAMMA + (GAMMA_DAY - GAMMA) * mix;
+    var KN = KNEE + (KNEE_DAY - KNEE) * mix;
     for (var b = 0; b < DBUCKETS; b++) {
       // bucket centre as a 0..1 depth fraction; the lift is retired linearly across it
       var df = (b + 0.5) / DBUCKETS;
-      var gm = GAMMA + (1 - GAMMA) * df;
+      var gm = GM + (1 - GM) * df;
       for (var c = 0; c < np; c++) {
-        var gain = EXPOSURE[c];
+        var gain = ladder(c, mix, sunMix);
         for (var l = 0; l < 256; l++) {
           var x = l * gain / 255;
           /* A hard clamp here was quietly cancelling the whole point of EXPOSURE: a swatch
@@ -435,15 +542,31 @@ var CC = (function () {
            * The shoulder is an exponential rolloff that never reaches 1, so a swatch can be
            * pushed hard and still keep the difference between its bright and its brightest. */
           if (x > SHOULDER) x = SHOULDER + (1 - SHOULDER) * (1 - Math.exp(-(x - SHOULDER) / (1 - SHOULDER)));
-          var k = x / KNEE; if (k > 1) k = 1;
+          var k = x / KN; if (k > 1) k = 1;
           var y = Math.pow(x, gm) * (k * k * (3 - 2 * k));
           var v = (y * 255 + 0.5) | 0;
           t[(b * np + c) * 256 + l] = v > 255 ? 255 : v;
         }
       }
     }
-    return t;
-  })();
+  }
+  buildLUT(0, 0);
+  dayStep = 0;
+
+  /* Called once per frame from Compose.post, before tone(). `mix` is the day/night blend the
+   * daylight director publishes; everything else here is the quantiser. */
+  function setDayMix(mix, sunMix) {
+    if (!(mix >= 0)) mix = 0; else if (mix > 1) mix = 1;
+    if (!(sunMix >= 0)) sunMix = 0; else if (sunMix > 1) sunMix = 1;
+    /* Quantised on the PAIR, packed into one integer, so the table is still rebuilt only when the
+     * light has actually moved a step rather than once per frame. */
+    var step = Math.round(mix * DAY_STEPS) * (DAY_STEPS + 1) + Math.round(sunMix * DAY_STEPS);
+    if (step === dayStep) return;
+    dayStep = step;
+    dayMix = Math.round(mix * DAY_STEPS) / DAY_STEPS;
+    daySun = Math.round(sunMix * DAY_STEPS) / DAY_STEPS;
+    buildLUT(dayMix, daySun);
+  }
 
   var DSCALE = DBUCKETS / (FOG_END - FOG_START);
 
@@ -475,7 +598,29 @@ var CC = (function () {
    * CC.Compose.post, which is precisely why the print lives behind that name — the offline
    * reference frame and the browser must be the same picture or verification means nothing.
    * A later src/compose.js taking this slot over MUST call CC.tone itself. */
-  var Compose = { post: function (f) { tone(f); } };
+  /* ---- the per-frame print hook ------------------------------------------------------------------
+   * main.js and tools/headless.cjs have both always called this as `post(frame, cam, t)` while the
+   * function took only `f` — the two extra arguments have been arriving and being dropped since the
+   * day it was written. They are what the daylight cycle needs: the print ladder has to know what
+   * time it is, and this is the one place in the pipeline that runs once per frame with the whole
+   * frame in hand and nothing else to do.
+   *
+   * The DIRECTION it reads is `sky` rather than `sun`, and the difference matters at both ends of
+   * the day. `sun` is direct light, which is zero for the whole of twilight — and twilight is not a
+   * night frame: the sky is still the brightest thing in the world and the print has to be part way
+   * up the day ladder to render it. `sky` is exactly that quantity.
+   *
+   * BOTH are passed, because they answer different questions and ladder() sorts them: a SURFACE
+   * gains its daylight from the sky and a SOURCE loses its advantage only to the sun. See the note
+   * on `sky` in daylight.js for why that parameter carries a misleading name on an airless world
+   * and why it is still the right input here. */
+  var Compose = {
+    post: function (f, cam, t) {
+      var D = CC && CC.Daylight;
+      setDayMix(D ? D.P.sky : 0, D ? D.P.sun : 0);
+      tone(f);
+    }
+  };
 
   /* HOW WIDE THE PAVEMENT IS, in metres from the building face to the kerb face, and it lives here
    * rather than in raycast.js because three files have to agree on it or the street comes apart:
@@ -492,7 +637,8 @@ var CC = (function () {
 
   return {
     PALETTE: PALETTE, P: P, GLYPHS: GLYPHS, g: g, GI: GI, PAVE: PAVE,
-    tone: tone, Compose: Compose, EXPOSURE: EXPOSURE,
+    tone: tone, Compose: Compose, EXPOSURE: EXPOSURE, EXPOSURE_DAY: EXPOSURE_DAY,
+    setDayMix: setDayMix, get dayMix() { return dayMix; }, get daySun() { return daySun; },
     makeFrame: makeFrame, clearFrame: clearFrame, put: put, poke: poke,
     hash1: hash1, hash2: hash2, mulberry: mulberry,
     lerp: lerp, clamp: clamp, smooth: smooth, vnoise: vnoise,

@@ -52,7 +52,7 @@ const SKY = skyArg ? skyArg.slice(6) : 'storm';
 
 global.CC = require(path.join(root, 'src/core.js'));
 global.window = undefined;
-for (const rel of ['src/weather_state.js', 'src/city.js', 'src/surfaces.js', 'src/raycast.js',
+for (const rel of ['src/world.js', 'src/proj.js', 'src/daylight.js', 'src/weather_state.js', 'src/city.js', 'src/surfaces.js', 'src/raycast.js',
                    'src/compose.js']) {
   const p = path.join(root, rel); if (fs.existsSync(p)) require(p);
 }
@@ -85,7 +85,7 @@ function pinSky() {
   for (let i = 0; i < K.length; i++) P[K[i]] = PIN.p[i];
   P.name = P.from = P.to = PIN.name; P.blend = 1;
 }
-const els = CC.ELEMENTS.slice().sort((a, b) => (a.layer | 0) - (b.layer | 0));
+const els = CC.ELEMENTS.filter(function (e) { return CC.inWorld(e, CC.World.id); }).sort((a, b) => (a.layer | 0) - (b.layer | 0));
 for (const el of els) if (el.init) el.init(city, rng, { cols: 200, rows: 60 });
 const lg = els.find(e => e.name === 'lightning');
 if (!lg) { console.error('no lightning element'); process.exit(2); }

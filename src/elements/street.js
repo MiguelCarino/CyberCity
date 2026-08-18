@@ -272,6 +272,9 @@
 
   CC.ELEMENTS.push({
     name: 'foodstalls',
+    /* CITY ONLY. See src/world.js: an element with no `world` belongs to both, and main.js
+     * filters CC.ELEMENTS on this before the layer sort. */
+    world: 'cyber',
     layer: 18,
     init: function (city, rng) {
       this.city = city;
@@ -566,36 +569,36 @@
    *           other of the two things a head can do at this size
    */
   var ARCH = [
-    { name: 'plain',   w: 0.13, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
+    { name: 'plain',   w: 0.13, ww: 0.140, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
       brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, wide: 1.00, crest: 0.00, cane: 0,
       tallB: 0.00, stride: 1.00, bob: 0.035, spd: 1.00, accP: 0.06, acc: 3,
       visP: 0.10, scarf: 0, hair: 0.00 },
-    { name: 'coat',    w: 0.14, hem: 0.70, hemTop: 0.46, hemBot: 0.97, legTop: 1.00, legW: 0.30,
+    { name: 'coat',    w: 0.14, ww: 0.200, hem: 0.70, hemTop: 0.46, hemBot: 0.97, legTop: 1.00, legW: 0.30,
       brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, wide: 1.00, crest: 0.00, cane: 0,
       tallB: 0.00, stride: 0.86, bob: 0.028, spd: 0.96, accP: 0.10, acc: 3,
       visP: 0.08, scarf: 1, hair: 0.00 },
-    { name: 'hood',    w: 0.12, hem: 0.26, hemTop: 0.58, hemBot: 0.92, legTop: 1.00, legW: 0.30,
+    { name: 'hood',    w: 0.12, ww: 0.030, hem: 0.26, hemTop: 0.58, hemBot: 0.92, legTop: 1.00, legW: 0.30,
       brim: 0.00, pack: 0.00, bag: 0.00, hood: 1, umb: 0, wide: 1.02, crest: 0.00, cane: 0,
       tallB: 0.00, stride: 0.96, bob: 0.024, spd: 1.08, accP: 0.14, acc: 1,
       visP: 0.22, scarf: 0, hair: 0.00 },
-    { name: 'skirt',   w: 0.10, hem: 0.34, hemTop: 0.50, hemBot: 0.76, legTop: 0.76, legW: 0.19,
+    { name: 'skirt',   w: 0.10, ww: 0.120, hem: 0.34, hemTop: 0.50, hemBot: 0.76, legTop: 0.76, legW: 0.19,
       brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, wide: 0.92, crest: 0.00, cane: 0,
       tallB: 0.00, stride: 1.24, bob: 0.052, spd: 1.02, accP: 0.10, acc: 4,
       visP: 0.08, scarf: 1, hair: 0.00 },
-    { name: 'courier', w: 0.09, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
+    { name: 'courier', w: 0.09, ww: 0.000, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
       brim: 0.00, pack: 0.55, bag: 0.00, hood: 0, umb: 0, wide: 1.00, crest: 0.00, cane: 0,
       tallB: 0.00, stride: 1.14, bob: 0.030, spd: 1.30, accP: 0.34, acc: 2,
       visP: 0.34, scarf: 0, hair: 0.00 },
     /* The one figure allowed a narrow accent down its own seam, and it is 5% of the crowd. */
-    { name: 'shell',   w: 0.06, hem: 0.16, hemTop: 0.55, hemBot: 0.95, legTop: 1.00, legW: 0.30,
+    { name: 'shell',   w: 0.06, ww: 0.000, hem: 0.16, hemTop: 0.55, hemBot: 0.95, legTop: 1.00, legW: 0.30,
       brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 0, wide: 1.00, crest: 0.00, cane: 0,
       tallB: 0.14, stride: 0.98, bob: 0.032, spd: 1.04, accP: 0.78, acc: 1,
       visP: 0.40, scarf: 0, hair: 0.00 },
-    { name: 'hat',     w: 0.07, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
+    { name: 'hat',     w: 0.07, ww: 0.230, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
       brim: 0.55, pack: 0.00, bag: 0.00, hood: 0, umb: 1, wide: 1.00, crest: 0.00, cane: 0,
       tallB: 0.00, stride: 0.92, bob: 0.026, spd: 0.94, accP: 0.06, acc: 3,
       visP: 0.04, scarf: 0, hair: 0.00 },
-    { name: 'bagger',  w: 0.11, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
+    { name: 'bagger',  w: 0.11, ww: 0.080, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.30,
       brim: 0.00, pack: 0.00, bag: 0.60, hood: 0, umb: 1, wide: 1.00, crest: 0.00, cane: 0,
       tallB: 0.00, stride: 1.00, bob: 0.034, spd: 0.97, accP: 0.18, acc: 4,
       visP: 0.08, scarf: 0, hair: 0.00 },
@@ -609,7 +612,7 @@
      * The narrow office figure. Reads by being the only thing on the street with a straight edge
      * all the way down: no hem, no hood, narrow shoulders, a hard case at the hip, and the
      * briskest walk in the table that is not a courier's. */
-    { name: 'suit',    w: 0.08, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.26,
+    { name: 'suit',    w: 0.08, ww: 0.030, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.26,
       brim: 0.00, pack: 0.00, bag: 0.34, hood: 0, umb: 1, wide: 0.90, crest: 0.00, cane: 0,
       tallB: 0.04, stride: 1.06, bob: 0.022, spd: 1.12, accP: 0.05, acc: 4,
       visP: 0.06, scarf: 1, hair: 0.00 },
@@ -618,7 +621,7 @@
      * docker, somebody in three coats, somebody with a load. `wide` feeds the screen-area budget,
      * so this one is retired further out than the rest; that is correct rather than a side effect,
      * because it blacks out half as much frame again at the same distance. */
-    { name: 'heavy',   w: 0.06, hem: 0.10, hemTop: 0.62, hemBot: 0.94, legTop: 1.00, legW: 0.34,
+    { name: 'heavy',   w: 0.06, ww: 0.050, hem: 0.10, hemTop: 0.62, hemBot: 0.94, legTop: 1.00, legW: 0.34,
       brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 0, wide: 1.46, crest: 0.00, cane: 0,
       tallB: -0.06, stride: 0.78, bob: 0.030, spd: 0.82, accP: 0.12, acc: 3,
       visP: 0.10, scarf: 0, hair: 0.00 },
@@ -626,14 +629,14 @@
      * costume feature that survives all the way down to six rows, because it changes the OUTLINE
      * of the head rather than adding anything beside it, and the head is the last thing a figure
      * has left. Piping, because this is the same person the technical shell exists for. */
-    { name: 'crest',   w: 0.05, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.28,
+    { name: 'crest',   w: 0.05, ww: 0.000, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.28,
       brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 0, wide: 0.94, crest: 0.16, cane: 0,
       tallB: 0.02, stride: 1.10, bob: 0.040, spd: 1.14, accP: 0.46, acc: 1,
       visP: 0.44, scarf: 0, hair: 0.00 },
     /* Slow, stooped, and the only figure whose gait has a third beat in it: the stick lands
      * between the feet. Its pace is the point — a crowd in which everybody moves at within 30% of
      * everybody else is a crowd on a conveyor, and this is the low end. */
-    { name: 'elder',   w: 0.05, hem: 0.30, hemTop: 0.48, hemBot: 0.90, legTop: 1.00, legW: 0.28,
+    { name: 'elder',   w: 0.05, ww: 0.080, hem: 0.30, hemTop: 0.48, hemBot: 0.90, legTop: 1.00, legW: 0.28,
       brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, wide: 0.96, crest: 0.00, cane: 1,
       tallB: -0.11, stride: 0.70, bob: 0.016, spd: 0.66, accP: 0.08, acc: 4,
       visP: 0.02, scarf: 1, hair: 0.00 },
@@ -660,7 +663,7 @@
      * out. That is not a side effect to be worked around — a cloak blacks out more picture than
      * anything else on the pavement, and the whole point of retiring on AREA is that the costume
      * that occludes most goes first. */
-    { name: 'cloak',   w: 0.055, hem: 0.95, hemTop: 0.42, hemBot: 0.74, legTop: 1.00, legW: 0.30,
+    { name: 'cloak',   w: 0.055, ww: 0.075, hem: 0.95, hemTop: 0.42, hemBot: 0.74, legTop: 1.00, legW: 0.30,
       brim: 0.00, pack: 0.00, bag: 0.00, hood: 1, umb: 0, wide: 0.94, crest: 0.00, cane: 0,
       tallB: 0.00, stride: 0.82, bob: 0.022, spd: 0.90, accP: 0.16, acc: 1,
       visP: 0.16, scarf: 0, hair: 0.00 },
@@ -680,7 +683,7 @@
      * silhouette argument —
      * mass around the head and shoulders — and because a figure whose outline is soft at the top
      * wants something that moves. */
-    { name: 'mane',    w: 0.05, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.26,
+    { name: 'mane',    w: 0.05, ww: 0.020, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 1.00, legW: 0.26,
       brim: 0.00, pack: 0.00, bag: 0.00, hood: 0, umb: 1, wide: 0.96, crest: 0.00, cane: 0,
       tallB: 0.00, stride: 1.08, bob: 0.046, spd: 1.06, accP: 0.20, acc: 4,
       visP: 0.12, scarf: 1, hair: 0.30 },
@@ -700,7 +703,7 @@
      * about one figure in twenty-four — the rate the lamp was asked for. It reads as a property of
      * THIS costume rather than as a lottery every walker enters, which is the same argument the
      * technical shell makes for its piping. */
-    { name: 'rigger',  w: 0.070, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 0.66, legW: 0.50,
+    { name: 'rigger',  w: 0.070, ww: 0.050, hem: 0.00, hemTop: 0.00, hemBot: 1.00, legTop: 0.66, legW: 0.50,
       brim: 0.00, pack: 0.30, bag: 0.00, hood: 0, umb: 0, wide: 1.12, crest: 0.00, cane: 0,
       tallB: -0.02, stride: 0.84, bob: 0.026, spd: 0.88, accP: 0.75, acc: 5,
       visP: 0.30, scarf: 0, hair: 0.00 }
@@ -708,7 +711,7 @@
   /* How far a swinging arm reaches past the shoulder line, in shoulder half-widths. See the arm
    * block in the column loop for why the arms are part of the cut-out rather than a lit mark. */
   var ARM_EXT = 0.20;
-  var ARCH_TOT = 0;
+  var ARCH_TOT = 0, ARCH_TOT_W = 0;
   (function () {
     /* `ext` is how far past the shoulder line this costume can possibly reach, so the column loop
      * knows where to stop without testing every accessory on every column of every figure. */
@@ -725,10 +728,32 @@
       if (ARM_EXT > e) e = ARM_EXT;
       A.ext = e;
       ARCH_TOT += A.w; A.acc0 = ARCH_TOT;
+      /* THE SECOND COLUMN IS THE FRONTIER'S, and it is a re-weighting rather than a second table:
+       * the fifteen silhouettes are the same fifteen, because a body is a body and every one of
+       * these was drawn as a shape rather than as a costume. What changes is how often each comes
+       * up. A courier's satchel and a visored head are the two that are unmistakably of the city,
+       * so they fall to near nothing; the brimmed hat goes from 7% of the crowd to 20% and the
+       * long coat from 14% to 18%, which between them are the frontier's silhouette; and `cloak`,
+       * which the city uses for a long cape, is the serape and triples.
+       *
+       * An archetype may go to ZERO — `shell` does — and the pick below handles that correctly
+       * because it tests the RUNNING TOTAL: a zero-weight entry has the same accumulator as its
+       * predecessor and can never win the comparison. */
+      ARCH_TOT_W += (A.ww === undefined ? A.w : A.ww); A.acc1 = ARCH_TOT_W;
     }
   })();
+  /* Which crowd this is. Read off the CITY rather than off CC.World, for the reason world.js
+   * gives: between a keypress and the rebuild those are two different answers, and this one has to
+   * match the map the walkers are standing on. */
+  var PED_WEST = 0;
   function archPick(h) {
-    var r = h * ARCH_TOT, i;
+    var i;
+    if (PED_WEST) {
+      var rw = h * ARCH_TOT_W;
+      for (i = 0; i < ARCH.length - 1; i++) if (rw < ARCH[i].acc1) return ARCH[i];
+      return ARCH[ARCH.length - 1];
+    }
+    var r = h * ARCH_TOT;
     for (i = 0; i < ARCH.length - 1; i++) if (r < ARCH[i].acc0) return ARCH[i];
     return ARCH[ARCH.length - 1];
   }
@@ -1003,26 +1028,52 @@
      * which is the same two-pillar rule the facades themselves obey. One in five breaks it,
      * because a street has more light in it than the wall behind you. */
     var scr = bestH === P.azure;
-    p.rim = (h10 < 0.80 ? scr : !scr) ? P.azure : P.amber;
+    /* AZURE IS SCREENLIGHT AND THERE ARE NO SCREENS ON THE FRONTIER. The rim is the colour of
+     * whatever is lighting this figure, and out there that is a kerosene lamp behind a window or
+     * the last of the sun — both warm. One in five still breaks the rule, as in the city, because
+     * a street has more light in it than the wall behind you; it just breaks it towards warm
+     * rather than towards a shopfront monitor. */
+    p.rim = PED_WEST ? ((h10 < 0.80) ? P.amber : P.warm)
+                     : ((h10 < 0.80 ? scr : !scr) ? P.azure : P.amber);
     /* Umbrellas. Owning one is not the same as having it up — see the easing in update(). */
     p.umbOwn = A.umb && h9 < 0.62 ? 1 : 0;
     p.uRate = 0.20 + h1 * 0.26;              // seconds-scale, and different for every figure
     /* A phone is a screen, which is the one thing violet is licensed for. Conditional on the gate,
      * h12/0.18 is itself uniform on 0..1 and independent of it, so the colour needs no extra
      * draw — the same trick pays for the accent below. */
-    if (h12 < 0.18) {
+    /* NOBODY ON THE FRONTIER IS LOOKING AT A SCREEN. This was the single most visible piece of the
+     * wrong century left in that world: one figure in five carrying a small azure or violet glow
+     * at chest height, which is a phone, which is a hundred and thirty years early. The draw is
+     * still TAKEN so the hash stream downstream of it is unchanged between worlds — only the
+     * result is thrown away. */
+    if (h12 < 0.18 && !PED_WEST) {
       var q = h12 / 0.18;
       p.phone = q < 0.70 ? P.azure : (q < 0.88 ? P.ice : P.violet);
     } else p.phone = -1;
     /* THE ONE BODY ACCENT, and only about one figure in five has one. */
     if (h8 < A.accP) {
       var qa = h8 / A.accP;
-      p.acc = A.acc;
+      /* WHICH KIND OF ACCENT, and on the frontier three of the six kinds do not exist. The colour
+       * was already re-mapped below, but `p.acc` decides the SHAPE and the shape is drawn from a
+       * hardcoded swatch further down:
+       *   acc 1  a seam of piping down the body      — electroluminescent, no 1880s referent
+       *   acc 2  a courier's reflective strip        — drawn in P.ice regardless of accHue, and
+       *          retroreflective tape is a 1930s material
+       *   acc 5  a shoulder lamp with a light cone   — an electric torch on a strap
+       * All three fall back to acc 3, which is a cigarette: an ember dot at the face, which is
+       * period-correct, is the same one-cell cost, and is a better read on a frontier figure than
+       * any of them. acc 4 (something carried and lit — a lantern) is kept as it is. */
+      p.acc = PED_WEST ? ((A.acc === 1 || A.acc === 2 || A.acc === 5) ? 3 : A.acc) : A.acc;
       /* Piping leans violet rather than spring, and that is a PRINT decision, not a taste one:
        * core.js gives spring an exposure weight of 1.55 against violet's 0.70, so the same lum
        * prints spring more than twice as hot and a green seam was reading as the brightest thing
        * on the pavement. */
-      p.accHue = A.acc === 1 ? (qa < 0.34 ? P.spring : P.violet)
+      /* The frontier's accents are DYED CLOTH, not piping and not a glowing seam: a red
+       * neckerchief, an ember bandana, a white collar. Spring, violet and ice all come off the
+       * ladder there — the first two are the city's signage garnish and the third is a glint on
+       * something manufactured. */
+      p.accHue = PED_WEST ? (qa < 0.42 ? P.red : (qa < 0.76 ? P.ember : P.white))
+               : A.acc === 1 ? (qa < 0.34 ? P.spring : P.violet)
                : A.acc === 2 ? P.ice
                : A.acc === 3 ? P.ember
                : A.acc === 5 ? P.amber
@@ -1042,7 +1093,7 @@
      * licence covers, and red is hazard, which is what a targeting overlay is. At 15.9% of the
      * crowd wearing one, red at 0.07 of those is under 1 figure in 90 and does not move red's
      * 0.3% share of lit energy measurably. */
-    if (h17 < A.visP) {
+    if (h17 < A.visP && !PED_WEST) {
       var qv = h17 / A.visP;
       p.vis = 1;
       p.visHue = qv < 0.46 ? P.azure : (qv < 0.74 ? P.ember : (qv < 0.87 ? P.ice
@@ -1054,8 +1105,15 @@
   CC.ELEMENTS.push({
     name: 'pedestrians',
     layer: 20,
+    /* THE TWO WORLDS WITH AIR IN THEM. Nobody walks a lunar plain in shirtsleeves; the crowd is an atmospheric-world
+     * object and a suited figure is a different silhouette that this element cannot draw.
+     * See src/world.js: `world` may be a string or a set, and absent means every world. */
+    world: ['cyber', 'west'],
     init: function (city, rng, dims) {
       this.city = city;
+      /* Which world's costume weights the crowd draws from — see archPick. Set here, at the one
+       * moment the map is handed over, rather than read per walker. */
+      PED_WEST = (city && city.world === 'west') ? 1 : 0;
       /* Small seed and additive offsets, per the house rule for hash2 — and the draw is still one
        * rng() call, so no downstream element's stream moves. */
       this.seed = (rng() * 30011) | 0;
@@ -1668,6 +1726,9 @@
   CC.ELEMENTS.push({
     name: 'cat',
     layer: 21,
+    /* THE TWO WORLDS WITH AIR IN THEM. For the same reason as the crowd, and more so.
+     * See src/world.js: `world` may be a string or a set, and absent means every world. */
+    world: ['cyber', 'west'],
     init: function (city, rng) {
       this.city = city;
       this.seed = (rng() * 2147483647) | 0;
@@ -1782,6 +1843,9 @@
 
   CC.ELEMENTS.push({
     name: 'traffic',
+    /* CITY ONLY. See src/world.js: an element with no `world` belongs to both, and main.js
+     * filters CC.ELEMENTS on this before the layer sort. */
+    world: 'cyber',
     layer: 22,
     init: function (city, rng) {
       this.city = city;
@@ -1997,6 +2061,9 @@
 
   CC.ELEMENTS.push({
     name: 'litter',
+    /* CITY ONLY. See src/world.js: an element with no `world` belongs to both, and main.js
+     * filters CC.ELEMENTS on this before the layer sort. */
+    world: 'cyber',
     layer: 24,
     init: function (city, rng) {
       this.city = city;

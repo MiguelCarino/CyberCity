@@ -22,7 +22,12 @@ const rows  = parseInt(pos[3] || '60', 10);
 
 global.CC = require(path.join(root, 'src/core.js'));
 global.window = undefined;
-const order = ['src/weather_state.js','src/city.js','src/surfaces.js','src/raycast.js','src/control.js','src/compose.js'];
+const order = ['src/world.js','src/proj.js','src/daylight.js','src/weather_state.js','src/city.js','src/surfaces.js','src/raycast.js','src/control.js','src/compose.js'];
+/* Painters are globbed, exactly as build.js globs them, so a new world's texture layer is present
+   offline the moment the file exists — the harness rendering a different element/painter set from
+   the browser is the one failure this whole tool exists to prevent. */
+for (const pf of fs.readdirSync(path.join(root, 'src')).sort())
+  if (/^surf_.*\.js$/.test(pf)) order.splice(order.indexOf('src/raycast.js'), 0, 'src/' + pf);
 for (const rel of order) {
   const p = path.join(root, rel);
   if (fs.existsSync(p)) require(p);
@@ -32,10 +37,40 @@ if (fs.existsSync(edir))
   for (const f of fs.readdirSync(edir).sort()) if (f.endsWith('.js')) require(path.join(edir, f));
 
 const CC = global.CC;
+
+/* WHICH WORLD, and it has to be chosen BEFORE the city is made — city.js resolves CC.World once
+   inside make() and the map is the frontier or the city from that moment on. `--world=west`, or
+   just `--west`, because that is what gets typed. */
+/* The bare shorthand is checked against the REGISTRY rather than against a pair of literals, so
+   `--moon` works the day the world exists instead of being silently ignored and rendering the city
+   under the new world's name. */
+const wArg = flags.map(a => a.replace(/^--/, ''))
+                  .find(a => a.slice(0, 6) === 'world=' ||
+                             !!(CC.World && CC.World.at(a) && CC.World.at(a).id === a));
+if (wArg && CC.World) CC.World.force(wArg.slice(0, 6) === 'world=' ? wArg.slice(6) : wArg);
+const WORLD = CC.World ? CC.World.id : 'cyber';
+
+/* ---- tuning overrides, and they are ONLY for tuning ------------------------------------------
+   Neither of these is a thing the browser does on its own, so a frame rendered with either is not
+   the frame the browser draws and stderr says so. They exist because the two questions this
+   harness cannot otherwise answer are "what does the sunset look like" (the walk faces wherever
+   the route sends it, and the sun is in one fixed direction) and "what does the dust storm look
+   like" (a preset the schedule reaches once in several thousand frames).
+     --yaw=<radians>    hold the camera's heading after every camera update
+     --weather=<name>   force a preset, by name, from t=0                                       */
+const yawArg = flags.find(a => a.slice(0, 6) === '--yaw=');
+const YAW = yawArg ? parseFloat(yawArg.slice(6)) : null;
+const wxArg = flags.find(a => a.slice(0, 10) === '--weather=');
+if (wxArg && CC.Weather) CC.Weather.set(wxArg.slice(10), 0);
+/* --time=<stop|0..1> pins the hour, which is not a thing the browser does on its own either: the
+   clock runs on a 420 s cycle, so a fixture that wants noon cannot wait for it. */
+const tmArg = flags.find(a => a.slice(0, 7) === '--time=');
+const TIME = tmArg ? tmArg.slice(7) : null;
 const f = CC.makeFrame(cols, rows);
 const t = frameN / 60;
 
 const city = CC.City ? CC.City.make(seed) : null;
+if (CC.Daylight) CC.Daylight.init(city);
 if (CC.Weather) CC.Weather.init(city, CC.mulberry(seed ^ 0x5bf03635));
 if (CC.Control) CC.Control.reset();
 const cam = {
@@ -56,7 +91,10 @@ const rng = CC.mulberry(seed ^ 0x9e3779b9);
 // Layer-sorted BEFORE init, because main.js does the same and every element pulls from this one
 // shared rng: a different init order gives every downstream element a different stream, and the
 // offline reference frame stops being the frame the browser draws.
-const els = CC.ELEMENTS.slice().sort((a, b) => (a.layer | 0) - (b.layer | 0));
+/* Gated on world exactly as main.js gates it, and gated BEFORE the layer sort so the shared rng
+   is drawn in the same order the browser draws it. An element with no `world` belongs to both. */
+const els = CC.ELEMENTS.filter(e => CC.inWorld(e, WORLD))
+                       .sort((a, b) => (a.layer | 0) - (b.layer | 0));
 for (const el of els) { if (el.init) el.init(city, rng, {cols, rows}); }
 
 /* One rendered frame, in main.js's render() order and with main.js's clear. Nothing here is
@@ -110,12 +148,28 @@ const t0 = Date.now();
 for (let k = 0; k <= frameN; k++) {
   const kt = k / 60;
   // Weather first: an element's update() this tick must see this tick's weather.
-  if (CC.Weather) CC.Weather.update(1 / 60, kt);
+  if (CC.Daylight) {
+    /* Re-pinned every tick, unlike the weather: the clock has no "forced" flag to test because it
+       has no schedule to release an override back to — set() only moves an offset, so re-setting
+       to the same stop is idempotent and costs one frac(). */
+    if (TIME !== null) CC.Daylight.set(/^[\d.]+$/.test(TIME) ? parseFloat(TIME) : TIME, kt);
+    CC.Daylight.update(1 / 60, kt);
+  }
+  if (CC.Weather) {
+    /* Re-stamped only once the override has been RELEASED — the schedule drops it whenever the
+       segment under it moves on, which is right for a viewer and wrong for a fixture. Stamping it
+       every tick instead is the obvious version and it is broken: the blend out of the previous
+       preset is measured from the stamp, so re-stamping holds it at zero forever and the forced
+       weather never arrives. */
+    if (wxArg && !CC.Weather.P.forced) CC.Weather.set(wxArg.slice(10), kt);
+    CC.Weather.update(1 / 60, kt);
+  }
   // Through Control, exactly as main.js drives it. With no DOM attached it is pure autopilot,
   // so this is the same walk city.camera produced before control.js existed -- and that is the
   // point: an untouched keyboard has to render the frame this harness renders.
   if (CC.Control) CC.Control.update(1 / 60, kt, cam, city);
   else if (city && city.camera) city.camera(cam, city, kt);
+  if (YAW !== null) cam.yaw = YAW;
   for (const el of els) if (el.update) el.update(1 / 60, kt, cam);
   // The last tick's draw is the frame we print, and it happens below so that cam.t is the
   // requested t exactly. Every earlier tick is drawn and thrown away, for its side effects on the
@@ -145,7 +199,7 @@ process.stdout.write(out.join('\n') + '\n');
    Measured over seeds 5..150 step 5 at frame 600 it lands between 0.897 and 1.060, so quoting a
    frame's numbers without it is quoting a measurement taken at an unstated exposure. */
 const ex = els.filter(e => e.name === 'exposure' && typeof e.adapt === 'number')[0];
-process.stderr.write(`rendered seed=${seed} frame=${frameN} ${cols}x${rows} elements=${CC.ELEMENTS.length} ` +
+process.stderr.write(`rendered seed=${seed} frame=${frameN} ${cols}x${rows} world=${WORLD} time=${CC.Daylight ? CC.Daylight.P.name : '-'} elements=${els.length}/${CC.ELEMENTS.length} ` +
   (cold ? 'COLD-START (adaptation pinned, NOT the browser frame) ' : `replay=${frameN + 1} frames `) +
   (ex ? `exposure=${ex.adapt.toFixed(3)} ` : '') +
   `in ${ms}ms\n`);

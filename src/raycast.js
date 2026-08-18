@@ -14,7 +14,7 @@
   'use strict';
 
   var P = CC.P, poke = CC.poke, hash2 = CC.hash2, vnoise = CC.vnoise;
-  var G_COLON = CC.g(':');
+  var G_COLON = CC.g(':'), G_DASH = CC.g('-');
 
   /* city.js can emit 58+46 for a landmark. The far-cutoff below must never UNDER-estimate this or
    * a tower is dropped from the skyline the instant a nearer roof lifts the silhouette. */
@@ -41,7 +41,13 @@
    * different heights and the memo would hand the podium the tower's parapet. surfaces.js needs it
    * to know where the wall stops — a parapet is the one piece of a facade that cannot be placed
    * from u and v alone, and without it a roofline is just where the windows happen to run out. */
-  var SC = { seed: 0, style: 0, litRate: 0.3, accent: 0, hue: undefined, h: 0 };
+  /* `faceX` and `side` are set after bindCell alongside `h`, and for the same reason: they are
+   * properties of the HIT, not of the building, so the memo must not cache them. They say which of
+   * the cell's four walls the ray crossed, which is dead weight in the city — its light comes from
+   * the street and every face is lit the same — and is the entire lighting model of the frontier,
+   * where a single low sun means one side of the road is amber and the other is a silhouette.
+   * Two stores per wall hit, on a path that already does one. */
+  var SC = { seed: 0, style: 0, litRate: 0.3, accent: 0, hue: undefined, h: 0, faceX: 1, side: 1 };
   var scRec = null;
   function bindCell(rec) {
     if (rec !== scRec) {
@@ -77,10 +83,32 @@
       if (seg > 0.72) return sgset(0, P.shadow, 0);
     }
     var sd = (s.seed * 4294967296) | 0;
-    var h = hash2(Math.floor(du * 2.4), Math.floor(dv * 2.4), sd);
     /* A slow whole-sign pulse plus tube-by-tube ageing, keyed on t and the sign's own seed alone.
-     * Any camera term in here and the signage boils as you walk. */
+     * Any camera term in here and the signage boils as you walk. On a painted board the same term
+     * is the lamp under it guttering, which is the same 14% and reads correctly as either. */
     var pulse = CC.reducedMotion ? 0.93 : 0.86 + 0.14 * vnoise(t * 0.7 + s.seed * 40, 0x51);
+
+    /* ---- a PAINTED BOARD, not a lit panel ---------------------------------------------------
+     * city.js's frontier signs carry `board`, and they are the opposite object to a neon sign in
+     * the one way that matters here: a neon sign IS the light, so filling its whole box with a lit
+     * glyph is correct, and a board is a dark plank with a few letters painted on it. Filling a
+     * 5x2 m board the neon way put a solid white rectangle the size of a shopfront in the middle
+     * of the frame — measured at seed 42 it was the largest single object in the picture.
+     *
+     * So the box is mostly plank: a sparse slate grain at lum 16, which reads as timber and still
+     * occludes the wall behind it. The LETTERING is a coarse lattice inside the middle band, about
+     * 40% covered, and it is the only bright thing here. Two hashes on the same lattice, because
+     * the letters and the grain must not be able to occupy the same cell. */
+    if (s.board) {
+      var lu = Math.floor(du * 2.9), lv = Math.floor(dv * 3.4);
+      var ink = hash2(lu, lv, sd ^ 0x2C1D);
+      if (dv > s.h * 0.24 && dv < s.h * 0.80 && ink < 0.46)
+        return sgset(s.glyph, s.hue, (148 + ink * 220) * pulse);
+      return hash2(lu, lv, sd ^ 0x5D33) < 0.34 ? sgset(G_DASH, P.slate, 16)
+                                               : sgset(0, P.shadow, 0);
+    }
+
+    var h = hash2(Math.floor(du * 2.4), Math.floor(dv * 2.4), sd);
     return sgset(s.glyph, s.hue, (172 + h * 66) * (h < 0.10 ? 0.3 : 1) * pulse);
   }
 
@@ -108,7 +136,7 @@
    * fixed and known, so there is no reason to hand the collector a fresh one sixty times a second.
    * configure() copies these into CFG, so the scratch is never retained. */
   var CFGARG = { grid: 8.0, streetX: 4.0, streetPeriod: 0, half: 3.1,
-                 horizon: 33.6, rows: 60, skyVScale: 1 };
+                 horizon: 33.6, rows: 60, skyVScale: 1, skyK: 1, swap: 0 };
   /* One neutral-camera row, in the elevation units Surf.sky hashes on. cellAspect/2/tan(fov/2) at
    * the neutral fov 1.25 is what `scale` works out to per column, so dividing the live scale back
    * out gives 1.0 whenever the camera is at that fov and grows as it zooms in — which is what
@@ -149,11 +177,17 @@
     /* streetPeriod 0 disables the wrap: we know the real centreline, and a wrapped copy of the
      * road markings would surface on pavements and down alleys where there is no road. */
     CFGARG.grid = 8.0; CFGARG.streetX = cx; CFGARG.streetPeriod = 0; CFGARG.half = hw;
+    CFGARG.swap = swapFloor;
     CFGARG.horizon = horizon; CFGARG.rows = rows;
     /* Surf.sky hashes its vertical on an ELEVATION, and only the caster knows the projection that
      * turns a screen row into one. A guard for the degenerate case: a caller that hands us a zero
      * or absent scale must not put a NaN into every sky cell in the frame. */
     CFGARG.skyVScale = (scale > 0 && cols > 0) ? (SKY_NEUTRAL * cols) / scale : 1;
+    /* The horizontal counterpart, and the same deal: sky() is handed an index, and only the caster
+     * knows how many of them there are to a radian. surf_west.js turns it back into a bearing so
+     * the sunset stays in the west while the viewer turns round. Kept in step with skyK below by
+     * being derived from the same expression. */
+    CFGARG.skyK = cols > 0 ? cols / 1.25 : 1;
     CC.Surf.configure(CFGARG);
     loadCrossings(city, camx, camz);
   }
@@ -414,7 +448,7 @@
         var u = faceX ? (oz + dz * w) : (ox + dx * w);
         var rec = city.cell(cx, cz);
         var sc = rec ? bindCell(rec) : null;
-        if (sc) sc.h = h;
+        if (sc) { sc.h = h; sc.faceX = faceX; sc.side = faceX ? sX : sZ; }
         var sign = rec && rec.sign;
 
         for (var r = sil - 1; r >= r0; r--) {

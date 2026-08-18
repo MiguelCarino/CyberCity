@@ -9,7 +9,7 @@
         : (typeof globalThis !== 'undefined' && globalThis.CC) ? globalThis.CC : null;
 
   var hash2, clamp, vnoise, P;      // bound on first make(), never at load time
-  var STYLE = null, SIGN_G = null;
+  var STYLE = null, SIGN_G = null, STYLE_W = null, SIGN_G_W = null;
 
   /* ---- salt spreading -------------------------------------------------
    * Every draw below is hash2(coord, coord, S + k) for a small literal k, and hash2 mixes its
@@ -52,11 +52,48 @@
   ];
   var SIGN_CH = ['#', '8', '0', 'X', 'O', '=', 'Z'];
 
+  /* ---- the frontier's timber -------------------------------------------------------------------
+   * Same triple, read the same way by surfaces: [lit opening, dim fill, small-window alt]. What
+   * changes is that out here the DIM glyph is the wall rather than the mullion — a clapboard front
+   * is a solid mass of horizontal boards with two or three openings punched in it, so the fill has
+   * to carry the whole facade and the lit glyph is a rarity. The city's fills are lattices (':',
+   * '=', '|') because a curtain wall IS a lattice; these are strokes, because a board is a stroke.
+   *
+   * '~' and '_' were both tried as the plank fill and both are too thin at 9 px to mass — a wall
+   * of them prints as scan-lines and the building dissolves. '-' and '=' hold. */
+  var STYLE_CH_WEST = [
+    ['8', '-', 'o'],   // 0 clapboard  — horizontal boards, the main-street standard
+    ['0', '|', 'o'],   // 1 batten     — vertical board-and-batten, barns and warehouses
+    ['O', '=', ':'],   // 2 falsefront — planed and painted, the storefronts with money
+    ['#', "'", 'o'],   // 3 adobe      — rendered mud brick, almost no openings
+    ['X', '.', ':'],   // 4 fieldstone — rubble wall, a bank or a jail
+    ['8', '=', 'o'],   // 5 log        — squared timber, the oldest buildings in town
+    /* 6 is NOT a building. A `range` lot that drew a butte is marked with this style and nothing
+     * else — surf_west.js switches to rock on it, and it is carried as a style index rather than
+     * as a new record field because the style is the one piece of the record raycast.js already
+     * copies into the scratch it hands the texture layer. One integer, no new plumbing. */
+    ['%', '&', ':']    // 6 rock       — sandstone butte, bedded and weathered
+  ];
+  /* A painted board, not a neon tube: the glyphs that read as LETTERING at two cells tall. 'M',
+   * 'W' and 'N' are in here because a shop board seen down the street is legible as the SHAPE of
+   * writing long before it is legible as writing, and those three carry that shape. */
+  var SIGN_CH_WEST = ['M', 'W', 'N', 'H', 'X', 'A', 'K'];
+
+  /* ---- the Moon's two surfaces, and there are only two ------------------------------------------
+   * A world with no buildings needs no styles: index 7 is regolith and index 8 is rock, and the
+   * triple is read by surf_moon.js as [sunlit, shadowed, grain]. The indices continue the west
+   * table's numbering rather than restarting, because city.js's `style` is one integer shared by
+   * every world and a reader who sees 8 should be able to find it in one table. */
+  var STYLE_CH_MOON = [
+    ['%', '.', ':'],   // 7 regolith  — powder, and mostly not painted at all
+    ['8', ':', '%']    // 8 rock      — breccia and basalt, blocky and hard-edged
+  ];
+
   // Districts are the colour masses. Weights keep the two pillars dominant and violet rare,
   // which is the reference ratio (amber ~26% of lit pixels, azure ~27%, violet a garnish).
-  var DIST = null;
+  var DIST = null, DIST_CYBER = null, DIST_WEST = null, DIST_MOON = null;
   function buildDistricts() {
-    DIST = [
+    DIST_CYBER = [
       // hMin is the floor of the canyon wall, not the average: with the squared height curve most
       // lots sit near hMin, so this number is what sets how enclosed the street feels.
       // The lit/weight pairs were tuned against a 1.44 M-cell census until facade-area x litRate
@@ -112,26 +149,249 @@
       { name: 'arcade',   hue: P.azure,  mix: P.amber,  mixP: 0.55, accent: P.warm,  styles: [1, 3],
         hMin: 13, hMax: 27, lit: 0.30, signP: 0.60, landmark: 0.004, w: 0.06 }
     ];
+
+    /* ---- the frontier's five and a half ----------------------------------------------------------
+     * Same job: districts are the colour masses, and they are what stops a town of timber boxes
+     * printing as one timber box. Read against the city table above, three things are different and
+     * all three are the setting rather than a taste:
+     *
+     * hMin/hMax are 4-11 against the city's 8-56. A frontier main street is TWO STOREYS, and the
+     * whole reason to build this world is what that does to the frame — the city gives you a slot
+     * of sky between rooflines, this gives you a horizon, and the horizon is the picture. It is
+     * also why `landmark` is so much likelier here (a steeple or a water tank at 14-24 m is the
+     * only vertical for a mile) and why the landmark heights below are a fifth of the city's.
+     *
+     * lit is a THIRD of the city's, because there is no grid out here. A window is lit when
+     * somebody is in the room with a lamp, so the litRate numbers are what a kerosene town can
+     * actually afford, and the mass of every facade is unlit board carried by the dim glyph.
+     *
+     * `range` is the district that is mostly NOT a district: 62% of its lots are empty ground and
+     * one in fourteen is a butte instead of a building. It is 26% of the ground by weight, which
+     * is what opens the town out into country every few blocks instead of tiling frontage to the
+     * horizon. Its `hue` still matters — a butte is lit by the same low sun as everything else.
+     */
+    DIST_WEST = [
+      { name: 'main',     hue: P.warm,   mix: P.amber,  mixP: 0.72, accent: P.amber, styles: [0, 2, 0, 2],
+        hMin: 6.2, hMax: 10, lit: 0.20, signP: 0.66, landmark: 0.022, w: 0.21,
+        vacant: 0.07, butte: 0 },
+      { name: 'dust',     hue: P.slate,  mix: P.white,  mixP: 0.74, accent: P.white, styles: [0, 1, 5],
+        hMin: 5.0, hMax: 8.5, lit: 0.11, signP: 0.18, landmark: 0.004, w: 0.19,
+        vacant: 0.20, butte: 0 },
+      { name: 'adobe',    hue: P.ember,  hue2: P.warm,  mix: P.warm,  mixP: 0.66, accent: P.warm, styles: [3, 3, 4],
+        hMin: 4.4, hMax: 7.5, lit: 0.13, signP: 0.12, landmark: 0.010, w: 0.14,
+        vacant: 0.16, butte: 0 },
+      { name: 'ranch',    hue: P.ember,  mix: P.slate,  mixP: 0.58, accent: P.red,   styles: [1, 1, 5],
+        hMin: 5.4, hMax: 9.5, lit: 0.09, signP: 0.09, landmark: 0.006, w: 0.13,
+        vacant: 0.30, butte: 0.004 },
+      /* The mission quarter: lime-washed plaster and the one place with trees in it. white leads,
+       * spring is the cottonwood, and it carries the church — landmark 0.05 is by far the highest
+       * in either world, because a mission IS its bell tower. */
+      { name: 'mission',  hue: P.white,  mix: P.amber,  mixP: 0.60, accent: P.spring, styles: [3, 4, 2],
+        hMin: 5.4, hMax: 9.5, lit: 0.14, signP: 0.07, landmark: 0.050, w: 0.07,
+        vacant: 0.22, butte: 0 },
+      { name: 'range',    hue: P.slate,  mix: P.ember,  mixP: 0.62, accent: P.ember, styles: [4, 1, 4],
+        hMin: 4.4, hMax: 7.5, lit: 0.06, signP: 0.02, landmark: 0.000, w: 0.26,
+        vacant: 0.62, butte: 0.072 }
+    ];
+
+    /* ---- MOONWALK: districts as TERRAIN TYPES rather than colour masses ---------------------
+     * Every field means what it means everywhere else; what changes is that the thing being
+     * described is ground rather than architecture. `lit: 0` and `signP: 0` on every row are
+     * doing real work: signP 0 leaves rec.sign null, so raycast.js's signPixel is never entered
+     * and the entire signage path — the brightest thing the caster can draw — is switched off by
+     * DATA, with no code change and no way for a neon blade sign to appear on a crater rim.
+     *
+     * `hue` is white or slate and never anything warm, and that is the lighting doctrine in the
+     * table: there is no atmosphere to redden anything, and core.js prints slate at a ceiling of
+     * 114 — under the muddy band's own ceiling — so slate can never be the LIT face of anything.
+     * It is the shadow swatch here and nothing else. */
+    DIST_MOON = [
+      /* The floor of a mare, and the district that IS the plain: 94% of its lots are open ground,
+       * which is why it is the heaviest row in the table. */
+      { name: 'mare',     hue: P.slate, mix: P.white, mixP: 0.70, accent: P.white, styles: [7],
+        hMin: 0.5, hMax: 1.8, lit: 0, signP: 0, landmark: 0.000, w: 0.30,
+        vacant: 0.94, boulder: 0.10, crater: 0.06 },
+      /* Ejecta — the blanket thrown out of a crater, and the one place the ground has real relief
+       * in it. Its lots are rock piles a metre to five metres high. */
+      { name: 'ejecta',   hue: P.white, mix: P.slate, mixP: 0.62, accent: P.pure,  styles: [7, 8],
+        hMin: 1.2, hMax: 5.0, lit: 0, signP: 0, landmark: 0.000, w: 0.20,
+        vacant: 0.70, boulder: 0.55, crater: 0.10 },
+      /* Rim. The crater branch in computeCell fires here: a raised ring round a flat walkable
+       * floor, and the only district in any world that draws a SHAPE rather than a height. */
+      { name: 'rim',      hue: P.white, mix: P.slate, mixP: 0.66, accent: P.pure,  styles: [8],
+        hMin: 2.0, hMax: 7.0, lit: 0, signP: 0, landmark: 0.004, w: 0.16,
+        vacant: 0.52, boulder: 0.18, crater: 0.46 },
+      /* Highland — older, rougher, higher, and the only district that draws a massif. That is
+       * what puts something on the horizon which is terrain rather than backdrop. */
+      { name: 'highland', hue: P.white, mix: P.slate, mixP: 0.74, accent: P.pure,  styles: [8, 7],
+        hMin: 3.5, hMax: 15.0, lit: 0, signP: 0, landmark: 0.030, w: 0.14,
+        vacant: 0.58, boulder: 0.24, crater: 0.08 },
+      /* The landing site: flat, scoured, and the district the hardware elements probe for. Its
+       * ground is 96% empty because the descent engine cleared it. */
+      { name: 'site',     hue: P.slate, mix: P.white, mixP: 0.60, accent: P.amber, styles: [7],
+        hMin: 0.3, hMax: 1.2, lit: 0, signP: 0, landmark: 0.000, w: 0.08,
+        vacant: 0.96, boulder: 0.04, crater: 0.02, hardware: 1 },
+      /* Regolith plain — the transitional ground, and deliberately the dullest row in the table.
+       * It exists so that two interesting districts are rarely adjacent. */
+      { name: 'plain',    hue: P.slate, mix: P.white, mixP: 0.80, accent: P.white, styles: [7],
+        hMin: 0.4, hMax: 1.4, lit: 0, signP: 0, landmark: 0.000, w: 0.12,
+        vacant: 0.92, boulder: 0.14, crater: 0.04 }
+    ];
+
+    norm(DIST_CYBER); norm(DIST_WEST); norm(DIST_MOON);
+    /* Hung on the themes, so make() reads TH.dist and nothing selects a table by comparing a
+     * string. The three-line `west ? A : B` chain this replaced is the exact shape that made a
+     * third world silently inherit the city's districts. */
+    TH_CYBER.dist = DIST_CYBER; TH_WEST.dist = DIST_WEST; TH_MOON.dist = DIST_MOON;
+    DIST = DIST_CYBER;
+  }
+  function norm(T) {
     var acc = 0;
-    for (var i = 0; i < DIST.length; i++) { acc += DIST[i].w; DIST[i].acc = acc; }
-    DIST.total = acc;
+    for (var i = 0; i < T.length; i++) { acc += T[i].w; T[i].acc = acc; }
+    T.total = acc;
+  }
+
+  /* ---- what a world changes about the ground plan ----------------------------------------------
+   * Only the numbers that ARE the setting, and each one is here because leaving it at the city's
+   * value produced something that read wrong rather than because a table wanted filling.
+   *
+   *   AVE/CROSS   block pitch. The frontier's is 70% longer in both axes: a town is a handful of
+   *               buildings on a long road, and at the city's 30 m pitch you get a crossroads
+   *               every ten seconds of walking, which reads as a city with short buildings.
+   *   half        street half-width, and this is the single biggest change in the file. A city
+   *               street is a canyon 7-13 m across; a frontier main street is 17-21 m of dirt,
+   *               wide enough to turn a wagon team in, and that width is most of what makes the
+   *               frame read as open country rather than as a demolished city.
+   *   lot*        footprints. Smaller and shallower — a shopfront is 5-9 m of frontage.
+   *   alley/plaza the city's block-breakers. Alleys stay (a gap between two buildings is a
+   *               frontier staple); plazas become the corral/square and get bigger and commoner.
+   *   setback     INVERTED, and see computeCell: the city drops a lot's outer ring to a podium,
+   *               the frontier raises the outer ring into a false front and drops the interior.
+   *   butte*      the height band a `range` lot's rock rises to, when it draws one.
+   */
+  var TH_CYBER = {
+    id: 'cyber', AVE: 30, CROSS: 26,
+    aveJit: 15, aveOff: -7, crossJit: 13, crossOff: -6,
+    aveWide: 6, aveMid: 4, aveNarrow: 3, aveMidP: 0.35, aveEvery: 4,
+    crossWide: 3, crossMid: 2, crossNarrow: 1, crossMidP: 0.28, crossEvery: 5,
+    lotW: 6, lotWVar: 7, lotD: 6, lotDVar: 8,
+    alleyMin: 10, alleyP: 0.45, alleyDeepMin: 11, alleyDeepP: 0.35,
+    plazaP: 0.13, plazaBigP: 0.26, plazaR: 5, plazaRVar: 7,
+    vacant: 0.06, setbackP: 0.42, podMin: 7, podVar: 10, falseFront: 0,
+    lmMin: 58, lmVar: 46, crownTall: 55, DG: 26, sky: 0,
+    styleCh: STYLE_CH, signCh: SIGN_CH, styleBase: 0,
+    setbackMode: 'podium', signShape: 'blade', signPalette: 'neon'
+  };
+  var TH_WEST = {
+    id: 'west', AVE: 52, CROSS: 44,
+    aveJit: 19, aveOff: -9, crossJit: 15, crossOff: -7,
+    aveWide: 9, aveMid: 7, aveNarrow: 6, aveMidP: 0.42, aveEvery: 3,
+    crossWide: 6, crossMid: 4, crossNarrow: 3, crossMidP: 0.34, crossEvery: 4,
+    lotW: 5, lotWVar: 5, lotD: 6, lotDVar: 6,
+    alleyMin: 9, alleyP: 0.52, alleyDeepMin: 10, alleyDeepP: 0.40,
+    plazaP: 0.20, plazaBigP: 0.34, plazaR: 6, plazaRVar: 9,
+    vacant: 0.14, setbackP: 0.68, podMin: 0, podVar: 0, falseFront: 1,
+    lmMin: 14, lmVar: 10, crownTall: 13, DG: 34, sky: 1,
+    butteMin: 9, butteVar: 23, rockStyle: 6,
+    styleCh: STYLE_CH_WEST, signCh: SIGN_CH_WEST, styleBase: 0,
+    setbackMode: 'falsefront', signShape: 'board', signPalette: 'painted'
+  };
+  /* ---- MOONWALK ---------------------------------------------------------------------------
+   * The lattice is kept and made INVISIBLE, which is the only way an engine whose route walker
+   * follows street centrelines can render an open plain. Three moves at once: the pitch roughly
+   * doubles against the frontier, the corridors roughly double again, and the blocks go almost
+   * entirely vacant. What is left is a plain with faint 25-40 m seams through it that nothing
+   * marks — and a walk that still has somewhere to walk, because a corridor is still a corridor
+   * even when there is nothing built along it.
+   *
+   *   AVE 96 / CROSS 84 — at SPEED 1.6 that is a crossing every 52-60 s against the frontier's
+   *     30. A crossroads you meet twice a minute reads as a grid; one you meet once a minute
+   *     reads as a coincidence.
+   *   aveJit 38 / aveOff -18 — the jitter has to stay bounded well under AVE/2 or colX's block
+   *     arithmetic breaks; 20 against 48 is safe, and it is large enough that no two consecutive
+   *     corridors are the same distance apart, which is what kills the ruled-grid read.
+   *   setbackP 0 — the setback/false-front branch is a BUILDING idea. A rock has no podium and no
+   *     capping board, so the branch is skipped outright rather than asked to pick a half.
+   *   lmMin/lmVar 26-60 m — a "landmark" here is a massif. raycast.js's HMAX is 108 and must never
+   *     under-estimate the tallest thing emitted; 60 is comfortably under, so HMAX is untouched.
+   *   startT 0.10 — see chooseStart. The city's threshold asks for a wall at 57 degrees on both
+   *     sides, which nothing on the Moon clears, so every seed would scan all 64 candidates and
+   *     then fall back to the argmax anyway.
+   */
+  var TH_MOON = {
+    id: 'moon', AVE: 96, CROSS: 84,
+    aveJit: 38, aveOff: -18, crossJit: 34, crossOff: -16,
+    aveWide: 20, aveMid: 15, aveNarrow: 11, aveMidP: 0.55, aveEvery: 2,
+    crossWide: 17, crossMid: 13, crossNarrow: 10, crossMidP: 0.50, crossEvery: 2,
+    lotW: 7, lotWVar: 9, lotD: 7, lotDVar: 9,
+    alleyMin: 12, alleyP: 0.70, alleyDeepMin: 12, alleyDeepP: 0.70,
+    plazaP: 0.55, plazaBigP: 0.70, plazaR: 14, plazaRVar: 16,
+    vacant: 0.62, setbackP: 0.00, podMin: 0, podVar: 0, falseFront: 0,
+    lmMin: 26, lmVar: 34, crownTall: 999, DG: 58, sky: 1,
+    rimMin: 1.4, rimVar: 4.2, startT: 0.10,
+    styleCh: STYLE_CH_MOON, signCh: SIGN_CH_WEST, styleBase: 7,
+    setbackMode: 'none', signShape: 'none', signPalette: 'none'
+  };
+
+  /* ---- the theme registry ---------------------------------------------------------------------
+   * A MAP, not a ternary. The line this replaced was `id === 'west' ? TH_WEST : TH_CYBER`, and its
+   * failure mode with a third world was not an error: an unknown id fell through to the city and
+   * built a cyberpunk heightmap under somebody else's name. A missing key still falls back — a
+   * world with no theme has to build SOMETHING — but adding a world is now one row. */
+  var THEMES = { cyber: TH_CYBER, west: TH_WEST, moon: TH_MOON };
+  function themeOf(id) { return THEMES[id] || TH_CYBER; }
+  function worldId() {
+    return (C && C.World && C.World.id) ? C.World.id : 'cyber';
   }
 
   function bind() {
     if (!C) C = (typeof globalThis !== 'undefined' && globalThis.CC) ? globalThis.CC : null;
     if (!C) throw new Error('CC.City needs core.js loaded first');
     hash2 = C.hash2; clamp = C.clamp; vnoise = C.vnoise; P = C.P;
-    STYLE = [];
-    for (var i = 0; i < STYLE_CH.length; i++)
-      STYLE.push([C.g(STYLE_CH[i][0]), C.g(STYLE_CH[i][1]), C.g(STYLE_CH[i][2])]);
-    SIGN_G = [];
-    for (var j = 0; j < SIGN_CH.length; j++) SIGN_G.push(C.g(SIGN_CH[j]));
+    /* One pass over the registry rather than four named slots. `styleBase` is the index the
+     * theme's first style row occupies in the world-wide numbering, so a record's `style` stays a
+     * single integer that means the same thing wherever it is read. */
+    for (var k in THEMES) {
+      var T = THEMES[k];
+      T.styles = glyphTable(T.styleCh);
+      T.signs = signTable(T.signCh);
+    }
+    STYLE = THEMES.cyber.styles; STYLE_W = THEMES.west.styles;
+    SIGN_G = THEMES.cyber.signs; SIGN_G_W = THEMES.west.signs;
     buildDistricts();
+  }
+  function glyphTable(src) {
+    var out = [];
+    for (var i = 0; i < src.length; i++)
+      out.push([C.g(src[i][0]), C.g(src[i][1]), C.g(src[i][2])]);
+    return out;
+  }
+  function signTable(src) {
+    var out = [];
+    for (var j = 0; j < src.length; j++) out.push(C.g(src[j]));
+    return out;
   }
 
   function make(seed) {
     if (!STYLE) bind();
     var S = seed | 0;
+
+    /* THE WORLD IS RESOLVED ONCE, HERE, and then shadowed into locals for the whole of make().
+     * Every function below closes over these names, so a city built as the frontier stays the
+     * frontier no matter what the viewer presses afterwards — main.js rebuilds on a world change
+     * rather than mutating a live map, and this is what makes that safe. It is also why nothing
+     * downstream ever reads CC.World to decide geometry: the map already decided. */
+    /* THE BOOLEAN IS GONE. This used to read `west = TH.falseFront === 1`, and the whole of the
+     * per-world behaviour of make() hung off it — the district table, the glyph tables, the sign
+     * palette and the sign geometry — inferred from an unrelated geometry field. Every `if (west)`
+     * below really meant "if not the city", so a third world would have inherited the city's
+     * districts, its glyphs, its violet-bearing sign palette and its blade signs, silently. Each
+     * of those is now a field the theme states about itself. */
+    var TH = themeOf(worldId());
+    var AVE = TH.AVE, CROSS = TH.CROSS;
+    var DIST = TH.dist;
+    var STY = TH.styles;
+    var SIGNS = TH.signs;
 
     /* ---- street lattice ------------------------------------------------
        Avenues run along +z, cross streets along +x. Position jitter is a function of the
@@ -140,10 +400,16 @@
     // Half-widths, in metres. These set how much of the frame the walls can eat: at 9 m the near
     // facade bases projected below the horizon and swallowed the floor, so the boulevard is 13 m
     // and the meanest side street is 7. Spacing guarantees a >=6 m block between any two.
-    function ax(k) { return k * AVE + ((hash(k, 0, S + 101) * 15) | 0) - 7; }
-    function aw(k) { return (k % 4 === 0) ? 6 : (hash(k, 0, S + 102) < 0.35 ? 4 : 3); }
-    function cz(m) { return m * CROSS + ((hash(0, m, S + 201) * 13) | 0) - 6; }
-    function cw(m) { return (m % 5 === 0) ? 3 : (hash(0, m, S + 202) < 0.28 ? 2 : 1); }
+    function ax(k) { return k * AVE + ((hash(k, 0, S + 101) * TH.aveJit) | 0) + TH.aveOff; }
+    function aw(k) {
+      return (k % TH.aveEvery === 0) ? TH.aveWide
+           : (hash(k, 0, S + 102) < TH.aveMidP ? TH.aveMid : TH.aveNarrow);
+    }
+    function cz(m) { return m * CROSS + ((hash(0, m, S + 201) * TH.crossJit) | 0) + TH.crossOff; }
+    function cw(m) {
+      return (m % TH.crossEvery === 0) ? TH.crossWide
+           : (hash(0, m, S + 202) < TH.crossMidP ? TH.crossMid : TH.crossNarrow);
+    }
 
     // Scratch records: computeCell is only ever called from buildChunk, never re-entrantly.
     var SX = { street: 0, k: 0, b: 0, x0: 0, x1: 0 };
@@ -175,7 +441,7 @@
        A plain modulo grid would tile the city into visible squares; nearest-site over a jittered
        lattice gives contiguous organic zones ~26 cells across, which is the size the reference
        study landed on. Neighbouring cells that draw the same type simply merge into a bigger mass. */
-    var DG = 26;
+    var DG = TH.DG;
     function districtType(p, q) {
       var r = hash(p, q, S + 7) * DIST.total, i;
       for (i = 0; i < DIST.length - 1; i++) if (r < DIST[i].acc) return i;
@@ -209,12 +475,12 @@
       var t, wid, pos;
 
       // Alleys split the block wall so the canyon breaks and you glimpse depth down a slot.
-      if (bw >= 10 && hash(bK, bM, S + 301) < 0.45) {
+      if (bw >= TH.alleyMin && hash(bK, bM, S + 301) < TH.alleyP) {
         wid = hash(bK, bM, S + 302) < 0.25 ? 2 : 1;
         pos = x0 + 3 + ((hash(bK, bM, S + 303) * (bw - 6 - wid)) | 0);
         if (gx >= pos && gx < pos + wid) { cH = 0; cD = districtAt(gx, gz); return; }
       }
-      if (bd >= 11 && hash(bK, bM, S + 304) < 0.35) {
+      if (bd >= TH.alleyDeepMin && hash(bK, bM, S + 304) < TH.alleyDeepP) {
         wid = hash(bK, bM, S + 305) < 0.25 ? 2 : 1;
         pos = z0 + 3 + ((hash(bK, bM, S + 306) * (bd - 6 - wid)) | 0);
         if (gz >= pos && gz < pos + wid) { cH = 0; cD = districtAt(gx, gz); return; }
@@ -224,8 +490,8 @@
       // twice as likely on a boulevard because that is where the camera spends most of its walk.
       var kk, mm, r, dxp, dzp;
       for (kk = bK; kk <= bK + 1; kk++) for (mm = bM; mm <= bM + 1; mm++) {
-        if (hash(kk, mm, S + 401) < (kk % 4 === 0 ? 0.26 : 0.13)) {
-          r = 5 + ((hash(kk, mm, S + 402) * 7) | 0);
+        if (hash(kk, mm, S + 401) < (kk % 4 === 0 ? TH.plazaBigP : TH.plazaP)) {
+          r = TH.plazaR + ((hash(kk, mm, S + 402) * TH.plazaRVar) | 0);
           dxp = gx - ax(kk); if (dxp < 0) dxp = -dxp;
           dzp = gz - cz(mm); if (dzp < 0) dzp = -dzp;
           if (dxp < r && dzp < r && dxp + dzp < r * 1.4) { cH = 0; cD = districtAt(gx, gz); return; }
@@ -235,8 +501,8 @@
       // Lots: a whole footprint shares one height and one look, so buildings read as slabs.
       // 6-13 m frontages, never less: a 30 m tower on a 4 m footprint reads as a stick, and the
       // references are all wide masses.
-      var lw = 6 + ((hash(bK, bM, S + 307) * 7) | 0);
-      var ld = 6 + ((hash(bK, bM, S + 308) * 8) | 0);
+      var lw = TH.lotW + ((hash(bK, bM, S + 307) * TH.lotWVar) | 0);
+      var ld = TH.lotD + ((hash(bK, bM, S + 308) * TH.lotDVar) | 0);
       var lx = x0 + (((gx - x0) / lw) | 0) * lw;
       var lz = z0 + (((gz - z0) / ld) | 0) * ld;
 
@@ -247,18 +513,62 @@
       var D = DIST[did];
 
       var h;
-      if (hash(lx, lz, S + 504) < 0.06) {
-        h = 0;                                        // vacant lot / interior courtyard
+      /* Vacancy is the district's own now rather than one number for the whole map, because on the
+       * frontier it is not an exception — `range` is 62% empty ground and that emptiness is the
+       * entire reason the world has a horizon in it. The city's six districts all carry 0.06,
+       * which is exactly the literal that used to be here. */
+      var vac = D.vacant !== undefined ? D.vacant : TH.vacant;
+      if (hash(lx, lz, S + 504) < vac) {
+        h = 0;                                        // vacant lot / interior courtyard / open range
+      } else if (D.butte && TH.butteMin !== undefined && hash(lx, lz, S + 507) < D.butte) {
+        /* A BUTTE, and the only piece of geology in either world. It takes the whole lot at one
+         * height with no setback and no record fields that mean anything to a facade — surf_west
+         * reads `h` against the district and paints rock rather than boards. Flat-topped on
+         * purpose: the silhouette is what does the work at 90 m, and a rounded top reads as a
+         * spoil heap. */
+        h = TH.butteMin + hash(lx, lz, S + 508) * TH.butteVar;
+      } else if (D.crater && TH.rimMin !== undefined && hash(lx, lz, S + 509) < D.crater) {
+        /* A CRATER RIM, and the only place in any world where a lot's height is a function of
+         * position INSIDE the lot. Everything else in this file gives a lot one height, because a
+         * building is a slab; a crater is a SHAPE, and it has to be, because the thing that reads
+         * at character resolution is the RING — a flat floor with a raised lip round it, seen
+         * edge-on from a metre seven off the ground.
+         *
+         * The floor is height 0, which is deliberate twice over: it is walkable, so the route can
+         * cross a crater instead of being fenced out of one, and it costs the ray marcher nothing
+         * until the ray actually reaches the rim.
+         *
+         * A sine profile rather than a step, for the same reason the frontier's rock strata are
+         * not ruled lines: a step reads as masonry. */
+        var ccx = lx + lw * 0.5, ccz = lz + ld * 0.5;
+        var crr = (lw < ld ? lw : ld) * 0.5;
+        var cdx = gx + 0.5 - ccx, cdz = gz + 0.5 - ccz;
+        var cq = Math.sqrt(cdx * cdx + cdz * cdz) / crr;   // 0 at the centre, 1 at the rim
+        if (cq > 1 || cq < 0.68) h = 0;
+        else h = (TH.rimMin + hash(lx, lz, S + 510) * TH.rimVar) *
+                 Math.sin(((cq - 0.68) / 0.32) * Math.PI);
       } else {
         t = hash(lx, lz, S + 501);
         h = D.hMin + t * t * (D.hMax - D.hMin);       // squared: most blocks modest, a few tall
-        if (hash(lx, lz, S + 502) < D.landmark) h = 58 + hash(lx, lz, S + 503) * 46;
-        // Setback: the lot's outer ring drops to a podium, which is what gives the rooftop
-        // silhouette its steps instead of one flat parapet per block.
-        if (lw >= 4 && ld >= 4 && hash(lx, lz, S + 505) < 0.42) {
+        if (hash(lx, lz, S + 502) < D.landmark) h = TH.lmMin + hash(lx, lz, S + 503) * TH.lmVar;
+        if (lw >= 4 && ld >= 4 && hash(lx, lz, S + 505) < TH.setbackP) {
           var ix = gx - lx, iz = gz - lz;
-          if (ix === 0 || iz === 0 || ix === lw - 1 || iz === ld - 1) {
-            var pod = 7 + hash(lx, lz, S + 506) * 10;
+          var edge = (ix === 0 || iz === 0 || ix === lw - 1 || iz === ld - 1);
+          if (TH.setbackMode === 'falsefront') {
+            /* THE FALSE FRONT, and it is the city's setback turned inside out. A frontier
+             * storefront is a shed with a flat board wall carried a metre and a half above its own
+             * roofline so the building looks bigger from the street than it is — the defining
+             * silhouette of the whole setting, and it is one comparison away from the podium rule
+             * the city already had. The OUTER ring keeps the lot's height and the interior drops,
+             * so every roofline in town steps DOWN away from the street instead of up. */
+            if (!edge) {
+              var drop = 1.1 + hash(lx, lz, S + 506) * 1.7;
+              h -= drop; if (h < 2.4) h = 2.4;
+            }
+          } else if (TH.setbackMode === 'podium' && edge) {
+            // Setback: the lot's outer ring drops to a podium, which is what gives the rooftop
+            // silhouette its steps instead of one flat parapet per block.
+            var pod = TH.podMin + hash(lx, lz, S + 506) * TH.podVar;
             if (pod < h) h = pod;
           }
         }
@@ -269,6 +579,20 @@
     /* ---- per-cell record ------------------------------------------------ */
     function signHue(lx, lz, D) {
       var r = hash(lx, lz, S + 701);
+      /* NO AZURE AND NO VIOLET OUT HERE, and that is the whole discipline of the frontier palette
+       * in one function. Both of those swatches read as EMITTED light — they are the screen and
+       * the tube, and the city earns them because it is lit by screens and tubes. A painted board
+       * is lit by the sun or by a lamp behind it, so the frontier's signs live in the warm half of
+       * the palette and the only cool thing in the frame is shadow. Put one azure sign on a
+       * timber front and the whole world stops being a place and starts being a filter. */
+      if (TH.signPalette === 'none') return P.white;      // no signs are rolled at all; see DIST_MOON
+      if (TH.signPalette === 'painted') {
+        if (r < 0.30) return P.warm;
+        if (r < 0.58) return P.amber;
+        if (r < 0.76) return P.white;
+        if (r < 0.90) return P.ember;
+        return P.red;
+      }
       // Signage obeys the same two-pillar discipline as everything else; violet stays a garnish,
       // and the arcade strip is the one place it is allowed to lead.
       if (D.accent === P.violet) return r < 0.42 ? P.violet : (r < 0.74 ? P.azure : P.amber);
@@ -282,35 +606,77 @@
 
     function makeRec(gx, gz, h, did, lx, lz) {
       var D = DIST[did];
-      var style = D.styles[(hash(lx, lz, S + 601) * D.styles.length) | 0];
-      var g = STYLE[style];
-      var lit = clamp(D.lit * (0.5 + hash(lx, lz, S + 602) * 1.3), 0.02, 0.5);
+      var rock = !!(D.butte && TH.rockStyle !== undefined && hash(lx, lz, S + 507) < D.butte);
+      var style = rock ? TH.rockStyle : D.styles[(hash(lx, lz, S + 601) * D.styles.length) | 0];
+      /* THE STYLE INDEX IS WORLD-WIDE AND THE GLYPH TABLE IS PER-THEME, which is why this
+       * subtraction exists. `style` travels on the record and out to the painters, and a reader who
+       * sees 8 should be able to find row 8 in one table rather than having to know which world's
+       * table it belongs to — the frontier's rock is 6, the Moon's regolith is 7 and its rock is 8,
+       * and none of those numbers repeats. The theme's own glyph table is short and starts at
+       * `styleBase`, so the lookup takes the offset off again. Without it the Moon indexed row 7 of
+       * a two-row table and every cell record came back with an undefined glyph. */
+      var g = STY[style - (TH.styleBase | 0)] || STY[0];
+      var lit = rock ? 0 : clamp(D.lit * (0.5 + hash(lx, lz, S + 602) * 1.3), 0.02, 0.5);
 
       var sign = null;
-      if (hash(lx, lz, S + 603) < D.signP) {
-        var vert = hash(lx, lz, S + 604) < 0.45 && h > 16;
-        var sh = vert ? 5 + hash(lx, lz, S + 605) * 7 : 2 + hash(lx, lz, S + 606) * 2.5;
-        var room = h - sh - 4; if (room < 1) room = 1;
-        sign = {
-          y: 3 + hash(lx, lz, S + 607) * room,       // metres up the facade to the sign's foot
-          h: sh,
-          w: vert ? 1 : 2 + ((hash(lx, lz, S + 608) * 3) | 0),
-          hue: signHue(lx, lz, D),
-          glyph: SIGN_G[(hash(lx, lz, S + 609) * SIGN_G.length) | 0],
-          vertical: vert,
-          seed: hash(lx, lz, S + 610)
-        };
+      if (!rock && D.signP > 0 && TH.signShape !== 'none' && hash(lx, lz, S + 603) < D.signP) {
+        if (TH.signShape === 'board') {
+          /* A PAINTED BOARD, not a blade sign, and the two differ in every dimension. The city's
+           * sign is TALL and NARROW and hung out over the street so it is legible down the canyon;
+           * a frontier sign is WIDE and SHORT and nailed flat across the false front, because the
+           * front is a flat board wall that exists to be written on and there is no canyon to be
+           * legible down. The one vertical form out here is the hanging shingle over a doorway,
+           * which is small and rare.
+           *
+           * It sits high: `y` is measured up from the false front's foot, so the board lands in the
+           * top third of the building where the storey below can still be a lit window. */
+          var vertW = hash(lx, lz, S + 604) < 0.14;
+          /* 1.15-1.95 m tall, and the number is set by signPixel's reveal rather than by what a
+           * shop board measures. That function keeps a fixed 22 cm dark margin all the way round —
+           * right for a city blade sign five metres tall — so a 70 cm board, which is what a real
+           * one is, came out with a 26 cm strip of lit paint down the middle and printed as a
+           * dashed line. The box is drawn oversize so the LIT part of it is board-sized. */
+          var shW = vertW ? 1.4 + hash(lx, lz, S + 605) * 1.0 : 1.00 + hash(lx, lz, S + 606) * 0.7;
+          var roomW = h - shW - 2.6; if (roomW < 0.4) roomW = 0.4;
+          sign = {
+            y: vertW ? 2.3 + hash(lx, lz, S + 607) * 0.5 : 2.6 + hash(lx, lz, S + 607) * roomW,
+            h: shW,
+            w: vertW ? 0.9 : 2.4 + hash(lx, lz, S + 608) * 2.2,
+            hue: signHue(lx, lz, D),
+            glyph: SIGNS[(hash(lx, lz, S + 609) * SIGNS.length) | 0],
+            vertical: vertW,
+            board: 1,
+            seed: hash(lx, lz, S + 610)
+          };
+        } else {
+          var vert = hash(lx, lz, S + 604) < 0.45 && h > 16;
+          var sh = vert ? 5 + hash(lx, lz, S + 605) * 7 : 2 + hash(lx, lz, S + 606) * 2.5;
+          var room = h - sh - 4; if (room < 1) room = 1;
+          sign = {
+            y: 3 + hash(lx, lz, S + 607) * room,       // metres up the facade to the sign's foot
+            h: sh,
+            w: vert ? 1 : 2 + ((hash(lx, lz, S + 608) * 3) | 0),
+            hue: signHue(lx, lz, D),
+            glyph: SIGNS[(hash(lx, lz, S + 609) * SIGNS.length) | 0],
+            vertical: vert,
+            seed: hash(lx, lz, S + 610)
+          };
+        }
       }
 
       var cr = hash(lx, lz, S + 611);
+      var tall = h > TH.crownTall;
       return {
-        district: D.name, did: did, style: style,
-        hue: hash(lx, lz, S + 615) < D.mixP ? D.hue : D.mix, accent: D.accent,
+        district: D.name, did: did, style: style, rock: rock,
+        hue: rock ? D.hue : (hash(lx, lz, S + 615) < D.mixP ? D.hue : D.mix), accent: D.accent,
         glyph: g[0], dim: g[1], alt: g[2],
         dimLum: 22 + ((hash(lx, lz, S + 612) * 20) | 0),  // suggested brightness for the fill glyph
         litRate: lit, sign: sign,
-        h: h, landmark: h > 55,
-        crown: h > 55 ? 3 : (cr < 0.14 ? 1 : (cr < 0.24 ? 2 : 0)),  // 0 none 1 mast 2 tank 3 beacon
+        h: h, landmark: tall,
+        /* 0 none 1 mast 2 tank 3 beacon in the city; 0 none 1 chimney 2 water tank 3 steeple on the
+         * frontier. Same field, same three shapes at the same three rates — what differs is which
+         * element reads it (structure.js against west_roof.js), and a rock never wears one. */
+        crown: rock ? 0 : (tall ? 3 : (cr < 0.14 ? 1 : (cr < 0.24 ? 2 : 0))),
         lotX: lx, lotZ: lz,
         seed: hash(lx, lz, S + 613),      // stable per building — hash this for per-facade variety
         face: hash(gx, gz, S + 614)       // stable per cell — hash this for per-column variety
@@ -608,7 +974,13 @@
      * opening frame, over the 32-seed sweep at frame 600: 1.00 gives facade min 48.0 with 5 of 32
      * seeds under 60%, 1.15 gives 51.9 and 3 of 32, 1.22 gives 58.1 and 1 of 32. Two seeds of
      * thirty-two is not worth trading a third of the city's boulevards for. */
-    var START_T = 1.00;
+    /* THEMED, because 1.00 rad asks for a parapet at 57 degrees on BOTH sides within 14 m and
+     * nothing on the Moon clears that. Left at the city's value, every lunar seed would scan all
+     * 64 candidates — some 59,000 height() calls and a few hundred chunk builds on page load — and
+     * then fall back to the argmax anyway, which is exactly the outcome this search exists to
+     * avoid. The Moon asks for 0.10 rad instead: a 1.4 m boulder at 14 m, or a crater rim at 20,
+     * which is enough that the opening frame has something in the near field. */
+    var START_T = TH.startT !== undefined ? TH.startT : 1.00;
     var _start = { k: 0, m: 0, back: 18 };
     function chooseStart(o) {
       var N = 8 * 8 * START_BACKS.length, j, k, m, b, sc;
@@ -648,7 +1020,12 @@
       isStreet: function (gx, gz) { return height(gx, gz) <= 0; },
       // Exposed for surfaces/elements that want to reason about the corridor itself.
       aveX: ax, aveW: aw, crossZ: cz, crossW: cw,
-      AVE: AVE, CROSS: CROSS, SPEED: SPEED
+      AVE: AVE, CROSS: CROSS, SPEED: SPEED,
+      /* WHICH WORLD THIS MAP IS, carried on the map rather than read off CC.World. An element that
+       * asks the registry is asking what the viewer last pressed; an element that asks the city is
+       * asking what it is actually standing in, and between the keypress and the rebuild those are
+       * two different answers. */
+      world: TH.id
     };
   }
 

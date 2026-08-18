@@ -70,6 +70,22 @@
    * Where an EXISTING tuned constant is scaled — the searchlight's mote brightness — rel() is used
    * and is named as such at the site. */
   var W_CLOUD = 0.75, W_FOG = 0.30, W_HAZE = 0.40, W_RAIN = 0.65, W_WIND = 0.55, W_FOGREL = 1;
+  /* ---- the hour ---------------------------------------------------------------------------------
+   * Every object in this file is a NIGHT object — a star, a moon, a beacon, a searchlight, an
+   * airliner's strobe — and until the clock existed, "night" was an assumption baked into the fact
+   * that the file ran at all. It is now a number, and the four things that read it read it here.
+   *
+   * D_STAR is the one that matters most and it is not `1 - sun`: a star needs a genuinely DARK
+   * sky, not merely an absent sun, and the whole of civil twilight has no sun in it and no stars
+   * either. CC.Daylight.P.star is exactly that quantity — it keys on the twilight curve rather
+   * than on the solar altitude — which is why this file reads `star` and not `night`. */
+  var D_STAR_V = 1, D_LAMP = 1, D_SKY = 0;
+  function bindDay() {
+    var D = CC.Daylight;
+    D_STAR_V = D ? D.P.star : 1;
+    D_LAMP = D ? D.P.lamp : 1;
+    D_SKY = D ? D.P.sky : 0;
+  }
   function bindWeather() {
     var Wm = CC.Weather, p = Wm ? Wm.P : null;
     W_CLOUD = p ? p.cloud : 0.75;
@@ -123,6 +139,7 @@
 
   function setup(frame, cam) {
     bindWeather();
+    bindDay();
     var yaw = cam.yaw || 0, fov = cam.fov || 1.25;
     CB.fwx = Math.sin(yaw); CB.fwz = Math.cos(yaw);
     CB.rgx = Math.cos(yaw); CB.rgz = -Math.sin(yaw);
@@ -202,6 +219,9 @@
   CC.ELEMENTS.push({
     name: 'cloudbase',
     layer: 3,
+    /* THE TWO WORLDS WITH AIR IN THEM. There is no deck for the town to light the underside of.
+     * See src/world.js: `world` may be a string or a set, and absent means every world. */
+    world: ['cyber', 'west'],
     draw: function (frame, cam, t) {
       setup(frame, cam);
       /* Under about 0.4 the deck is a few wisps nobody would notice and 20 000 noise evaluations
@@ -259,8 +279,13 @@
            * continuous amber strip along the rooftops is a sunset, and this is one in the morning
            * in the rain. Amber has to be given real luminance to survive its own print weight of
            * 0.19, so the cells that get it are counted rather than spread. */
-          if (row > lowRow && v > 0.55 && hash2((nx * 190) | 0, (ny * 260) | 0, 0x71C4) < 0.30) {
-            hue = P.amber; lum = 44 + 30 * v;
+          /* THE UNDERGLOW IS TEN THOUSAND STREETLIGHTS, so it belongs to a world that has them and
+           * to an hour at which they are lit. In the frontier — a kerosene town of two hundred
+           * people — it was painting a sodium wash on the underside of the cloud deck, and by day
+           * in either world there is nothing under the cloud bright enough to light it at all. */
+          if (row > lowRow && v > 0.55 && D_LAMP > 0.15 && CC.World && CC.World.is('cyber') &&
+              hash2((nx * 190) | 0, (ny * 260) | 0, 0x71C4) < 0.30) {
+            hue = P.amber; lum = (44 + 30 * v) * D_LAMP;
           }
           plot(frame, col, row, gl, hue, lum, D_CLOUD);
         }
@@ -281,6 +306,10 @@
   CC.ELEMENTS.push({
     name: 'stars',
     layer: 4,
+    /* Both atmospheric worlds, and NOT the Moon: a lunar sky has stars at noon and they are hard,
+     * colourless and welded to a black dome, which is a different object drawn a different way —
+     * see elements/moon_ground.js. This one is a star seen through air. */
+    world: ['cyber', 'west'],
     init: function (city, rng) {
       var r = fork(rng), i;
       stX = new Float32Array(NSTAR); stY = new Float32Array(NSTAR); stZ = new Float32Array(NSTAR);
@@ -333,6 +362,16 @@
        * half of fading — a star going behind a cloud edge, which is what it is. */
       var thr = cloudThr() - 0.05, FEATHER = 0.05;
       var vis = 1 - W_FOG * 1.25; if (vis <= 0) return; if (vis > 1) vis = 1;
+      /* THE THIRD THING THAT TAKES THE STARS AWAY, and the one that was missing: daylight. Before
+       * the clock existed this element ran unconditionally, which was harmless in a city that was
+       * always at night and actively wrong in the frontier, where four hundred stars — the
+       * brightest of them in ICE, the neon-cyan swatch — were painted over a sunset with the sun
+       * still visibly above the horizon.
+       *
+       * A DIMMER rather than a mask, unlike the cloud above it, because that is what dawn actually
+       * does: the faint ones go first and the two or three brightest hold on into the blue. The
+       * magnitude curve at init does the rest for free. */
+      vis *= D_STAR_V; if (vis <= 0.01) return;
       for (var i = 0; i < NSTAR; i++) {
         var p = proj(stX[i], stY[i], stZ[i]);
         if (!p.ok) continue;
@@ -356,6 +395,12 @@
   CC.ELEMENTS.push({
     name: 'moon',
     layer: 5,
+    /* Both atmospheric worlds — and it used to run in the LUNAR one too, which would have been
+     * absurd, and in the frontier, where it was worse than absurd: sky.js parks the moon at
+     * D_MOON 9.0e4 and west_sky.js parks the sun at 1.02e5, so the moon won the depth test and
+     * painted itself and a cyan halo straight over the sunset. It is now gated to the two worlds
+     * that have a sky to hang it in, and faded out by daylight below. */
+    world: ['cyber', 'west'],
     init: function (city, rng) {
       var r = fork(rng);
       moAz0 = (r() - 0.5) * 0.26;                    // the avenue runs +z, which is yaw 0
@@ -390,6 +435,11 @@
        * enough to swallow the moon whole. That rise-and-fall is why it is a product of the haze
        * and the REMAINING disc rather than a function of either alone. */
       var disc = 1.18 - 1.28 * W_CLOUD; if (disc <= 0.02) return; if (disc > 1) disc = 1;
+      /* Daylight takes the moon before cloud does. A daytime moon is a real and lovely thing, but
+       * it is a pale grey wafer at a tenth of this luminance, and drawing a night moon into a lit
+       * sky is the single most obvious way to announce that nothing about the light has actually
+       * changed. It keeps a tenth of itself through twilight and goes entirely by mid-morning. */
+      disc *= 0.10 + 0.90 * D_STAR_V; if (disc <= 0.02) return;
       /* sqrt, not the disc itself. Multiplying by disc linearly made the halo strongest exactly
        * where the moon was already bright and killed it at the mid-cover the effect belongs to —
        * the square root keeps a scattering term that is still worth something when the disc behind
@@ -443,6 +493,9 @@
 
   CC.ELEMENTS.push({
     name: 'aircraft',
+    /* CITY ONLY. See src/world.js: an element with no `world` belongs to both, and main.js
+     * filters CC.ELEMENTS on this before the layer sort. */
+    world: 'cyber',
     layer: 6,
     init: function (city, rng) {
       var r = fork(rng), i;
@@ -513,6 +566,9 @@
 
   CC.ELEMENTS.push({
     name: 'searchlights',
+    /* CITY ONLY. See src/world.js: an element with no `world` belongs to both, and main.js
+     * filters CC.ELEMENTS on this before the layer sort. */
+    world: 'cyber',
     layer: 8,
     init: function (city, rng) {
       var r = fork(rng), i;
@@ -624,6 +680,9 @@
 
   CC.ELEMENTS.push({
     name: 'beacons',
+    /* CITY ONLY. See src/world.js: an element with no `world` belongs to both, and main.js
+     * filters CC.ELEMENTS on this before the layer sort. */
+    world: 'cyber',
     layer: 7,
     init: function (city) {
       var r = forkCity(city, 0x2B9A31), i;
@@ -691,6 +750,9 @@
 
   CC.ELEMENTS.push({
     name: 'skyrare',
+    /* CITY ONLY. See src/world.js: an element with no `world` belongs to both, and main.js
+     * filters CC.ELEMENTS on this before the layer sort. */
+    world: 'cyber',
     layer: 9,
     init: function (city) {
       var r = forkCity(city, 0x77E115);
@@ -787,6 +849,9 @@
 
   CC.ELEMENTS.push({
     name: 'blimps',
+    /* CITY ONLY. See src/world.js: an element with no `world` belongs to both, and main.js
+     * filters CC.ELEMENTS on this before the layer sort. */
+    world: 'cyber',
     layer: 12,
     init: function (city, rng) {
       var r = fork(rng), i, j;
@@ -896,6 +961,9 @@
 
   CC.ELEMENTS.push({
     name: 'drones',
+    /* CITY ONLY. See src/world.js: an element with no `world` belongs to both, and main.js
+     * filters CC.ELEMENTS on this before the layer sort. */
+    world: 'cyber',
     layer: 13,
     init: function (city, rng) {
       var r = fork(rng), i;

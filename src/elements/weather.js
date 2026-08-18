@@ -337,6 +337,9 @@
   CC.ELEMENTS.push({
     name: 'rain',
     layer: 12,
+    /* THE TWO WORLDS WITH AIR IN THEM. Vacuum has no weather; rain on the Moon was diagonal streaks across a black sky.
+     * See src/world.js: `world` may be a string or a set, and absent means every world. */
+    world: ['cyber', 'west'],
     init: function (city, rng) {
       bindWorld(city, rng);
       /* The drop table is filled from a fork, not from `rng`, so that RN_MAX cannot re-seed the
@@ -364,8 +367,17 @@
          * one-in-eight tinted drop is a drop passing through a sign's spill, and it is what stops
          * the rain reading as grey dust. */
         var h = r();
-        rHue[i] = h < 0.70 ? P.slate : (h < 0.86 ? P.ice
-                : (h < 0.94 ? P.amber : P.azure));
+        /* THE TINTED FIFTH IS A DROP PASSING THROUGH A SIGN'S SPILL, so it takes the colour of the
+         * light there is. In the city that is neon — ice and azure. On the frontier it is a lantern
+         * or a lit window, and both of those are warm; a cyan raindrop over a timber town is the
+         * city's palette leaking into a world that has no source for it.
+         *
+         * `world` is read once at init, from the city, rather than per drop: the pool is built once
+         * and a rebuild is what a world change is. */
+        var wWest = !!(city && city.world === 'west');
+        rHue[i] = h < 0.70 ? P.slate
+                : wWest ? (h < 0.86 ? P.white : (h < 0.94 ? P.amber : P.warm))
+                        : (h < 0.86 ? P.ice   : (h < 0.94 ? P.amber : P.azure));
       }
       syncWeather(0);
       wetEma = pWet; wetLastT = -1e9;
@@ -636,6 +648,9 @@
 
   CC.ELEMENTS.push({
     name: 'steam',
+    /* CITY ONLY. See src/world.js: an element with no `world` belongs to both, and main.js
+     * filters CC.ELEMENTS on this before the layer sort. */
+    world: 'cyber',
     layer: 14,
     init: function (city, rng) {
       bindWorld(city, rng);
@@ -818,6 +833,9 @@
   CC.ELEMENTS.push({
     name: 'fogbank',
     layer: 8,
+    /* THE TWO WORLDS WITH AIR IN THEM. Fog is suspended water. There is none.
+     * See src/world.js: `world` may be a string or a set, and absent means every world. */
+    world: ['cyber', 'west'],
     init: function (city, rng) {
       bindWorld(city, rng);
       fgSeed = smallSeed(rng);
@@ -1029,6 +1047,9 @@
   CC.ELEMENTS.push({
     name: 'lowcloud',
     layer: 7,
+    /* THE TWO WORLDS WITH AIR IN THEM. A cloud deck needs an atmosphere to hold it up.
+     * See src/world.js: `world` may be a string or a set, and absent means every world. */
+    world: ['cyber', 'west'],
     init: function (city, rng) {
       bindWorld(city, rng);
       clSeed = smallSeed(rng);
@@ -1182,6 +1203,9 @@
   CC.ELEMENTS.push({
     name: 'lightning',
     layer: 40,
+    /* THE TWO WORLDS WITH AIR IN THEM. A stroke needs a charged medium to travel through.
+     * See src/world.js: `world` may be a string or a set, and absent means every world. */
+    world: ['cyber', 'west'],
     init: function (city, rng) {
       bindWorld(city, rng);
       lgSeed = smallSeed(rng);

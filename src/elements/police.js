@@ -1031,6 +1031,9 @@
    * ============================================================================================ */
   CC.ELEMENTS.push({
     name: 'police',
+    /* CITY ONLY. See src/world.js: an element with no `world` belongs to both, and main.js
+     * filters CC.ELEMENTS on this before the layer sort. */
+    world: 'cyber',
     layer: 25,
     init: function (city, rng, dims) {
       this.city = city;

@@ -220,6 +220,8 @@
    * event; the once-a-second probe underneath it is the fallback for a browser that fires the
    * event before we attach, or not at all. */
   var padSeen = 0, padProbe = 0;
+  /* Edge state for the world button; see pollPad. */
+  var padWorld = 0;
   function pollPad(dt) {
     K.gx = 0; K.gz = 0; K.grun = 0; K.glx = 0; K.gly = 0;
     if (typeof navigator === 'undefined' || !navigator.getGamepads) return;
@@ -253,6 +255,26 @@
           var v = typeof bb === 'number' ? bb : (bb.value !== undefined ? bb.value : (bb.pressed ? 1 : 0));
           if (v > 0.35) K.grun = 1;
         }
+        /* BUTTON 3 CYCLES THE WORLD — Y on an Xbox pad, triangle on a PlayStation one, and the
+         * standard mapping puts it there on both. It is the only thing on a pad that is not a
+         * movement, and it is here because a pad is the one input device that CAN reach the second
+         * world without a keyboard. (A phone cannot, and is not given a gesture for it: every
+         * gesture on a touchscreen is already spoken for by the screen-split walk and look, and a
+         * hidden two-finger something that rebuilds the world is a trap rather than a control. The
+         * URL is the answer there — cybercity.carino.systems/#west/42 — and the README says so.)
+         *
+         * EDGE-TRIGGERED, held in `padWorld`. A button read level-triggered at 60 Hz would rebuild
+         * the world sixty times a second for as long as a thumb rested on it. */
+        var y = b[3];
+        var down = y ? (typeof y === 'number' ? y > 0.5 : !!y.pressed) : false;
+        if (down && !padWorld && CC.World && hooksRef && hooksRef.world) {
+          /* One cycling rule rather than this open-coded forward-only copy of it, which was
+           * correct for exactly two worlds and would have needed two presses to come home from
+           * the third. */
+          hooksRef.world(CC.World.LIST[(CC.World.index + 1) % CC.World.count].id);
+          K.act = 1;
+        }
+        padWorld = down;
       }
     }
     /* Only a deflected stick counts as somebody driving. A pad sitting on a sofa with a sticky
@@ -458,9 +480,14 @@
    * Everything below this line is skipped entirely when there is no window, which is what keeps
    * the offline reference frame honest. */
   var el = null;
+  /* The hooks main.js hands over, held at module scope because pollPad() needs one of them and
+   * runs from update() rather than from an event handler. Null until attach(), which is exactly
+   * the offline case: the harness never attaches, so nothing here can fire in a reference frame. */
+  var hooksRef = null;
 
   function attach(win, doc, canvas, hooks) {
     if (!win || !doc) return;
+    hooksRef = hooks || null;
     el = canvas || doc.documentElement;
 
     function set(e, down) {
@@ -501,17 +528,64 @@
           case 'KeyP': paused = paused ? 0 : 1; Control.paused = paused; break;
           case 'KeyF': if (hooks && hooks.fullscreen) hooks.fullscreen(); break;
           case 'KeyN': if (hooks && hooks.reseed) hooks.reseed(); break;
+          /* ---- the clock ------------------------------------------------------------------------
+           * T steps the time of day round its six named stops — night, dawn, morning, noon,
+           * afternoon, dusk — and Shift+T steps it back. It is a "toggle" in the sense the request
+           * asked for and rather more: two presses from noon gets you to dusk, four gets you back.
+           *
+           * Y stops and restarts the automatic cycle. Neither seizes the camera (hit stays 2):
+           * changing the hour is not a reason for the walk to stop, which is the same rule the
+           * weather presets have obeyed since they existed. */
+          case 'KeyT':
+            if (CC.Daylight) CC.Daylight.step(hooks && hooks.now ? hooks.now() : 0,
+                                              e.shiftKey ? -1 : 1);
+            break;
+          case 'KeyY':
+            if (CC.Daylight) CC.Daylight.freeze(hooks && hooks.now ? hooks.now() : 0);
+            break;
           case 'BracketLeft': if (CC.Weather) CC.Weather.cycle(hooks && hooks.now ? hooks.now() : 0, -1); break;
           case 'BracketRight': if (CC.Weather) CC.Weather.cycle(hooks && hooks.now ? hooks.now() : 0, 1); break;
           default: hit = 0;
         }
-        if (!hit && /^Digit[1-6]$/.test(c) && CC.Weather) {
-          CC.Weather.set(parseInt(c.slice(5), 10) - 1, hooks && hooks.now ? hooks.now() : 0);
-          hit = 2;
-        }
-        if (!hit && h && h.length === 1 && h >= '1' && h <= '6' && CC.Weather) {
-          CC.Weather.set(h.charCodeAt(0) - 49, hooks && hooks.now ? hooks.now() : 0);
-          hit = 2;
+        /* THE DIGITS ARE THE WORLDS NOW, and the weather has moved onto the same digits held with
+         * Shift. That is a demotion of the weather keys and it is the right way round: which world
+         * you are standing in is the larger fact — it rebuilds the map, the sky and half the
+         * element list — and it is the one a viewer who has just been told "press 1 or 2" will
+         * reach for. The weather keeps [ and ], which is the control that was already there and
+         * the one that survives on a keyboard with no digit row worth speaking of.
+         *
+         * Shift is also the RUN key, so shift-2 walks faster for as long as it is held. That is
+         * accepted rather than worked around: the alternative was a modifier this file has to
+         * swallow, and a viewer who runs half a step while changing the weather has lost nothing.
+         *
+         * Both spellings, as before: `code` for a physical digit row, `key` for the layouts where
+         * the top row is not digits at all. With Shift down, `key` is the SHIFTED character ('!'
+         * for Digit1 on a US layout, '"' on a UK one, and so on), so the key path cannot read the
+         * digit and only the code path handles the weather — which is why the shifted branch is
+         * code-only and the unshifted one keeps both. */
+        var dg = /^Digit[1-9]$/.test(c) ? parseInt(c.slice(5), 10)
+               : (h && h.length === 1 && h >= '1' && h <= '9' ? h.charCodeAt(0) - 48 : 0);
+        if (!hit && dg) {
+          if (e.shiftKey) {
+            /* Gated on the LIVE preset table rather than on the literal 6, which was correct only
+             * because both worlds happened to ship exactly six presets. PRESETS is a getter on the
+             * weather director precisely so it tracks the world. */
+            if (CC.Weather && /^Digit[1-9]$/.test(c) && dg <= CC.Weather.PRESETS.length) {
+              CC.Weather.set(dg - 1, hooks && hooks.now ? hooks.now() : 0);
+              hit = 2;
+            }
+          } else if (hooks && hooks.world && CC.World && dg <= CC.World.count) {
+            /* The rebuild happens inside the hook — main.js owns the city — and it takes long
+             * enough (a fresh heightmap, 40-odd element inits) that the frame it lands on is a
+             * cold one. giveBack() is NOT called: a viewer who has taken the controls and then
+             * asks for the other world wants to be standing in it, not watching the autopilot. */
+            /* No hint stamp here: the hook rebuilds, the rebuild calls Control.reset(), and
+             * reset() re-arms the overlay from t=0 — which the new world also restarts. The
+             * controls therefore reintroduce themselves on arrival, which is what a viewer who
+             * has just been moved somewhere else actually wants. */
+            hooks.world(dg);
+            hit = 2;
+          }
         }
       }
       /* THE RELEASE KEYS MUST NOT RE-ARM THE TAKE-OVER, and for a long time they did: Escape and
@@ -680,7 +754,7 @@
       K.fwd = K.back = K.left = K.right = K.run = K.crouch = 0;
       K.yawL = K.yawR = K.pitchU = K.pitchD = 0; K.mdx = 0; K.mdy = 0; K.any = 0; K.act = 0;
       K.tx = K.tz = K.trun = 0; K.gx = K.gz = K.grun = 0; K.glx = K.gly = 0;
-      seedWanted = 0;
+      seedWanted = 0; padWorld = 0;
       /* N rebuilds the city and calls through here, and a new city that arrives paused is a viewer
        * staring at a still they did not ask for. */
       paused = 0; Control.paused = 0;

@@ -25,8 +25,34 @@
    * A city is a pure function of its seed, so the fragment IS the artwork's address. Anything that
    * is not an integer is folded with FNV-1a, which means #shinjuku is a perfectly good city and
    * people can name their own. */
+  /* ---- world in the fragment -------------------------------------------------------------------
+   * The address of a place is now WHICH WORLD and WHICH SEED, and the old form has to keep working
+   * because it is the form that has been sent to people: `#42` is city 42 and always will be. A
+   * world other than the default prefixes itself — `#west/42` — which is a URL somebody can also
+   * type from memory, and which reads as a path rather than as a query because that is what it is.
+   *
+   * Returns the world id, or null for "the fragment did not say", which the boot path distinguishes
+   * from "the fragment said cyber": neither changes anything today, but a third world added later
+   * must not silently inherit whatever was live. */
+  function worldFromHash() {
+    var h = (window.location.hash || '').replace(/^#/, '').trim();
+    var i = h.indexOf('/');
+    /* NO PREFIX MEANS THE DEFAULT WORLD, not "the fragment did not say", and the difference is a
+     * real bug that only shows on a navigation. `#42` addresses the city — that is the whole point
+     * of fragment() omitting the prefix for LIST[0] — so returning null here made the hashchange
+     * handler read "no opinion" and leave a viewer standing on the frontier while the URL in front
+     * of them said otherwise. Going from #west/42 to #42 by editing the address bar, or by a back
+     * button, did nothing at all. */
+    if (i < 0) return CC.World ? CC.World.DEFAULT : 'cyber';
+    var w = CC.World && CC.World.at(h.slice(0, i));
+    return w ? w.id : null;
+  }
+
   function seedFromHash() {
-    var h = (window.location.hash || '').replace(/^#/, '').replace(/^seed=/, '').trim();
+    var h = (window.location.hash || '').replace(/^#/, '').trim();
+    var sl = h.indexOf('/');
+    if (sl >= 0) h = h.slice(sl + 1);
+    h = h.replace(/^seed=/, '').trim();
     if (!h) return null;                 // null, not 0 — #0 is a legitimate city
     /* Literal only within the 32-bit window a seed actually occupies — signed at the bottom so
      * #-1 keeps working, unsigned at the top because that is the form replaceState writes and a
@@ -40,6 +66,17 @@
     var s = 2166136261;
     for (var i = 0; i < h.length; i++) { s ^= h.charCodeAt(i); s = Math.imul(s, 16777619); }
     return s >>> 0;
+  }
+
+  /* The fragment, written from the two facts that make it. One function, because there were three
+   * call sites writing '#' + seed by hand and a world that only two of them knew about is a link
+   * that takes the reader somewhere else. */
+  function fragment(w, sd) {
+    return '#' + (w && w !== CC.World.DEFAULT ? w + '/' : '') + (sd >>> 0);
+  }
+  function writeFragment() {
+    if (window.history && history.replaceState)
+      history.replaceState(null, '', fragment(CC.World ? CC.World.id : 'cyber', seed));
   }
 
   /* ---- viewport ------------------------------------------------------------------------------
@@ -100,6 +137,11 @@
     cam.z = city && city.startZ !== undefined ? city.startZ : 0.5;
     /* A new city is a new sky and a fresh walk. Weather gets its OWN rng rather than a draw from
      * the element stream below, so adding it did not reshuffle every element's noise. */
+    /* THE CLOCK IS INITIALISED BEFORE THE WEATHER AND BEFORE EVERY ELEMENT, because both of those
+     * read it: an element's init() may size itself to the hour, and the weather director's first
+     * update happens under whatever sky the clock says. Unlike the weather it is NOT reset by a
+     * rebuild — see daylight.js's init — so pressing 2 at noon puts you on the frontier at noon. */
+    if (CC.Daylight) CC.Daylight.init(city);
     if (CC.Weather) CC.Weather.init(city, CC.mulberry(seed ^ 0x5bf03635));
     if (CC.Control) CC.Control.reset();
     var rng = CC.mulberry(seed ^ 0x9e3779b9);
@@ -120,7 +162,16 @@
      * tools/headless.cjs in the same edit: the harness sorts CC.ELEMENTS itself, and a harness
      * ordering elements differently from the browser is an offline reference frame that is not
      * the frame the browser draws. */
-    var seq = CC.ELEMENTS, rank = [], q;
+    /* THE WORLD GATE, and it happens BEFORE the sort for the reason the tie-break note below
+     * spells out: every element pulls from one shared rng in layer order, so which elements are
+     * present decides what every later element's noise stream is. Filtering after the sort would
+     * give the same answer here and a different one the day someone reorders the filter. An
+     * element with no `world` belongs to both — see src/world.js. */
+    var live = CC.World ? CC.World.id : 'cyber';
+    var seq = [], q;
+    for (q = 0; q < CC.ELEMENTS.length; q++)
+      if (CC.inWorld(CC.ELEMENTS[q], live)) seq.push(CC.ELEMENTS[q]);
+    var rank = [];
     for (q = 0; q < seq.length; q++) rank.push(q);
     rank.sort(function (a, b) { return ((seq[a].layer | 0) - (seq[b].layer | 0)) || (a - b); });
     els = [];
@@ -142,7 +193,9 @@
      * INSTANCE that make() returns. Guarding on the module put the whole piece in a chair: the
      * camera was placed once in build() and never moved again, so a browser showed one still
      * frame with rain falling on it. */
-    /* Weather first — an element updating this tick must see this tick's sky, not last tick's. */
+    /* Clock first, then weather: an element updating this tick must see this tick's sky, not last
+     * tick's, and the weather is read against the hour rather than the other way round. */
+    if (CC.Daylight) CC.Daylight.update(dt, t);
     if (CC.Weather) CC.Weather.update(dt, t);
     /* Through CC.Control, which arbitrates between the autopilot and whoever is holding the keys.
      * With nothing attached and nothing pressed it delegates straight to city.camera, so the walk
@@ -276,6 +329,10 @@
     CC.Canvas.init(canvas);
     layout();
 
+    /* World first, seed second, and in that order because city.js resolves CC.World inside make():
+     * building the city and then setting the world gives a frontier flag over a city map. */
+    var w0 = worldFromHash();
+    if (w0 && CC.World) CC.World.force(w0);
     var s = seedFromHash();
     /* === null, not !s. seedFromHash already distinguishes "no fragment" (null) from "#0", and
      * testing falsiness threw that distinction away: #0 built a RANDOM city and then replaceState
@@ -284,7 +341,8 @@
       s = (Math.random() * 4294967296) >>> 0;
       /* replaceState, not location.hash: writing the hash directly would push a history entry and
        * fire hashchange, rebuilding the city we are about to build. */
-      if (window.history && history.replaceState) history.replaceState(null, '', '#' + s);
+      seed = s;
+      writeFragment();
     }
     build(s);
 
@@ -295,8 +353,15 @@
     // that DID go fullscreen would keep drawing at the old grid until something else resized it.
     document.addEventListener('webkitfullscreenchange', onResize);
     window.addEventListener('hashchange', function () {
-      var ns = seedFromHash();
-      if (ns !== null && ns !== seed) build(ns);   // same reason: navigating to #0 is a real move
+      /* Two facts can have moved, and a world change with the SAME seed is still a move — which is
+       * why the seed test alone is no longer enough to decide whether to rebuild. force(), not
+       * set(): set() would fire the change callback and rebuild, and then this would rebuild
+       * again on the next line. */
+      var nw = worldFromHash(), ns = seedFromHash();
+      var moved = 0;
+      if (nw && CC.World && nw !== CC.World.id) { CC.World.force(nw); moved = 1; }
+      if (ns !== null && ns !== seed) moved = 1;   // same reason: navigating to #0 is a real move
+      if (moved) build(ns === null ? seed : ns);
     });
     window.addEventListener('pointerdown', goFullscreen, { passive: true });
     window.addEventListener('keydown', function (e) {
@@ -312,9 +377,22 @@
         fullscreen: goFullscreen,
         reseed: function () {
           var ns = (Math.random() * 4294967296) >>> 0;
-          if (window.history && history.replaceState) history.replaceState(null, '', '#' + ns);
+          seed = ns;
+          writeFragment();
           build(ns);
-        }
+        },
+        /* WORLD SWITCH. The seed is kept: #42 is a place in every world, and pressing 2 is
+         * therefore "show me this seed as the frontier" rather than "take me somewhere random".
+         * That is the whole reason the switch is worth having on a key — the two worlds share
+         * their street lattice indices, so the same number puts you on the same corner of the
+         * same map with a different town built on it. */
+        world: function (v) {
+          if (!CC.World || !CC.World.set(v)) return 0;
+          writeFragment();
+          build(seed);
+          return 1;
+        },
+        worldName: function () { return CC.World ? CC.World.name : ''; }
       });
       /* Pointer lock is a mouse-look, and a mouse-look nobody asked for is a trap: it is only
        * requested on a real click, which is also the gesture that goes fullscreen. */

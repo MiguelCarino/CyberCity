@@ -343,7 +343,14 @@ function makeEnv(opts) {
     bump('getComputedStyle');
     return { getPropertyValue: function () { return ''; }, fontFamily: '', width: '0px', height: '0px' };
   };
-  win.navigator = { userAgent: 'domshim', platform: 'shim', maxTouchPoints: 5 };
+  /* getGamepads is present but empty by default, which is the state of a browser with no pad
+   * plugged in and the branch control.js takes on every desktop. `env.pads` is what a test writes
+   * to in order to plug one in. */
+  env.pads = [];
+  win.navigator = {
+    userAgent: 'domshim', platform: 'shim', maxTouchPoints: 5,
+    getGamepads: function () { bump('getGamepads'); return env.pads; }
+  };
   win.alert = function () { bump('alert'); };
   win.window = win;
   win.self = win;
@@ -609,7 +616,12 @@ testCase('idle-resume', function (ok) {
 });
 
 /* ============================================================================================
- * 5. weather keys 1..6 and [ ]
+ * 5. weather keys SHIFT+1..6 and [ ]
+ *
+ * The bare digits moved to the WORLDS when the frontier landed — see src/world.js and the note in
+ * control.js — so every preset here is asked for with shift held. Shift is also the run key, which
+ * is why the camera-seizure check below still matters: shift-2 walks faster for as long as it is
+ * held, and it must still not hand the camera to the viewer.
  * ========================================================================================== */
 testCase('weather-keys', function (ok) {
   const env = makeEnv({}).run();
@@ -619,8 +631,8 @@ testCase('weather-keys', function (ok) {
   const names = CC.Weather.PRESETS.map(p => p.name);
 
   for (let i = 0; i < 6; i++) {
-    keydown(env, 'Digit' + (i + 1));
-    keyup(env, 'Digit' + (i + 1));
+    keydown(env, 'Digit' + (i + 1), { shiftKey: true });
+    keyup(env, 'Digit' + (i + 1), { shiftKey: true });
     env.tick(400);                                 // past TRANS_FORCED (5 s) at 60 Hz
     ok(CC.Weather.current === names[i], 'Digit' + (i + 1) + ' -> ' + names[i], CC.Weather.current);
     ok(CC.Weather.P.forced === true, 'Digit' + (i + 1) + ': the override is flagged as forced');
@@ -629,9 +641,11 @@ testCase('weather-keys', function (ok) {
       CC.Weather.P.rain.toFixed(3) + ' vs ' + want);
     ok(CC.Control.mode === 0, 'Digit' + (i + 1) + ': changing the sky did NOT seize the camera');
   }
-  /* The layout-independent path: some keyboards deliver no `code`, only `key`. */
-  keydown(env, 'Digit3', { code: '' }); env.tick(400);
-  ok(CC.Weather.current === 'rain', 'a bare key "3" with no code still sets the preset', CC.Weather.current);
+  /* WITH SHIFT DOWN THERE IS NO KEY PATH, and that is by design rather than an omission: `key` is
+   * the SHIFTED character on every layout ('!' on US, '"' on UK), so it cannot carry the digit and
+   * only `code` can. The bare-key path still exists and now selects a WORLD; it is tested there. */
+  keydown(env, 'Digit3', { shiftKey: true }); env.tick(400);
+  ok(CC.Weather.current === 'rain', 'Shift+3 -> rain', CC.Weather.current);
 
   keydown(env, 'BracketRight'); env.tick(400);
   ok(CC.Weather.current === 'downpour', '] cycled forward from rain', CC.Weather.current);
@@ -739,6 +753,143 @@ testCase('hint-fullscreen-newseed', function (ok) {
   keydown(env, 'KeyN'); env.tick(120);
   ok(!CC.Control.paused, 'N while paused released the pause');
   return [env, fs];
+});
+
+/* ============================================================================================
+ * 7b. WORLDS — the digits, the fragment, and the rebuild that a world change is.
+ *
+ * This is the case that would have caught the whole shape of the feature going wrong, and there
+ * are four separate things in it that only a running page can answer: that a digit reaches
+ * main.js's `world` hook at all, that the hook rebuilds on the SAME seed rather than reseeding,
+ * that the fragment it writes round-trips back through worldFromHash on a reload, and that a
+ * rebuilt world actually draws — an element list filtered to the wrong world renders an empty
+ * frame and nothing in src/ would notice.
+ * ========================================================================================== */
+testCase('worlds', function (ok) {
+  const env = makeEnv({ hash: '#4242' }).run();
+  const CC = env.CC;
+  if (!ok(!!CC, 'booted')) return env;
+  env.tick(90);
+  ok(CC.World.id === 'cyber', 'a bare seed fragment boots the city', CC.World.id);
+  const drew0 = env.get('drawImage');
+  ok(drew0 > 0, 'the city drew', drew0);
+
+  keydown(env, 'Digit2'); keyup(env, 'Digit2');
+  env.tick(90);
+  ok(CC.World.id === 'west', '2 moved to the frontier', CC.World.id);
+  ok(CC.Main.seed === 4242, 'the seed came with it — a world change is not a reseed', CC.Main.seed);
+  ok(env.win.location.hash === '#west/4242', 'the fragment names the world', env.win.location.hash);
+  const drew1 = env.get('drawImage') - drew0;
+  ok(drew1 > 0, 'the frontier drew', drew1);
+  ok(env.errors.length === 0, 'no exceptions across the switch');
+
+  keydown(env, 'Digit1'); keyup(env, 'Digit1');
+  env.tick(60);
+  ok(CC.World.id === 'cyber', '1 came back to the city', CC.World.id);
+  ok(env.win.location.hash === '#4242', 'the default world drops its prefix again', env.win.location.hash);
+
+  /* Pressing the world you are already in must not restart the walk. */
+  const before = camSnap(CC);
+  keydown(env, 'Digit1'); keyup(env, 'Digit1');
+  env.tick(4);
+  ok(dist(before, camSnap(CC)) < 3, '1 while already in the city did not rebuild');
+
+  /* A digit past the end of the list is not a world and must not be swallowed as one. */
+  keydown(env, 'Digit7'); keyup(env, 'Digit7');
+  env.tick(30);
+  ok(CC.World.id === 'cyber', 'a digit with no world behind it changes nothing', CC.World.id);
+
+  /* ---- the gamepad's world button -----------------------------------------------------------
+   * A pad is the one input device other than a keyboard that can reach the second world, so the
+   * button is worth a test rather than worth trusting. Button 3 is Y on an Xbox pad and triangle
+   * on a PlayStation one under the standard mapping. The EDGE is the thing being checked: held
+   * down, it must move exactly one world and then stop. */
+  /* `connected` matters: pollPad skips a pad without it, which is what a browser reports for a
+   * slot that has been unplugged. */
+  const pad = { connected: true, axes: [0, 0, 0, 0], buttons: [] };
+  for (let i = 0; i < 8; i++) pad.buttons.push({ pressed: false, value: 0 });
+  env.pads = [pad];
+  env.fire(env.win, 'gamepadconnected', {});
+  env.tick(10);
+  ok(CC.World.id === 'cyber', 'plugging a pad in changes nothing on its own', CC.World.id);
+  pad.buttons[3].pressed = true;
+  env.tick(60);                                   // held down for a whole second
+  ok(CC.World.id === 'west', 'Y moved to the frontier', CC.World.id);
+  ok(env.win.location.hash === '#west/4242', 'and wrote the fragment', env.win.location.hash);
+  /* WALK THE WHOLE ROSTER rather than assuming one more press comes home — which is what this
+   * asserted while there were exactly two worlds, and which became false the moment there were
+   * three. It now presses count-1 more times and checks it has arrived back at the start, so it
+   * stays true however many worlds the registry grows. */
+  for (var wi = 1; wi < CC.World.count; wi++) {
+    pad.buttons[3].pressed = false;
+    env.tick(6);
+    pad.buttons[3].pressed = true;
+    env.tick(20);
+  }
+  ok(CC.World.id === 'cyber', 'pressing Y once per world walks the whole roster home', CC.World.id);
+  pad.buttons[3].pressed = false;
+  env.pads = [];
+  env.tick(20);
+  ok(env.errors.length === 0, 'the pad threw nothing');
+
+  // Cold boot straight into the frontier, which is the form a shared link takes.
+  const w = makeEnv({ hash: '#west/77' }).run();
+  w.tick(90);
+  ok(!!w.CC && w.CC.World.id === 'west', '#west/77 boots the frontier', w.CC && w.CC.World.id);
+  ok(!!w.CC && w.CC.Main.seed === 77, '#west/77 boots seed 77', w.CC && w.CC.Main.seed);
+  ok(w.get('replaceState') === 0, 'a complete fragment is not rewritten on boot', w.get('replaceState'));
+  ok(w.get('drawImage') > 0, 'the frontier drew from a cold boot', w.get('drawImage'));
+  ok(w.errors.length === 0, 'cold boot into the frontier threw nothing');
+
+  // And the alias, because it is the word a person types.
+  const a = makeEnv({ hash: '#western/5' }).run();
+  a.tick(30);
+  ok(!!a.CC && a.CC.World.id === 'west', '#western/5 is the same place', a.CC && a.CC.World.id);
+
+  /* THE THIRD WORLD BOOTS AND DRAWS. This is the case that would have caught the whole class of
+   * silent third-world failures the plumbing audit found — a world whose theme, painter, weather
+   * table or element gate falls through to the city renders a perfectly good frame of the WRONG
+   * PLACE, and nothing short of looking would notice. Checking that it drew is not enough on its
+   * own, so the element count is checked too: the Moon must not be running the city's rain. */
+  const m = makeEnv({ hash: '#moon/9' }).run();
+  m.tick(90);
+  ok(!!m.CC && m.CC.World.id === 'moon', '#moon/9 boots Moonwalk', m.CC && m.CC.World.id);
+  ok(!!m.CC && m.CC.Main.seed === 9, 'and seed 9', m.CC && m.CC.Main.seed);
+  ok(m.get('drawImage') > 0, 'Moonwalk drew', m.get('drawImage'));
+  ok(!!m.CC && m.CC.Weather.PRESETS.length === 1,
+     'Moonwalk runs its own weather table, not the city\'s six',
+     m.CC && m.CC.Weather.PRESETS.length);
+  ok(m.errors.length === 0, 'Moonwalk threw nothing');
+
+  /* THE CLOCK. T steps the time of day and Y stops it; neither may seize the camera. */
+  const d = makeEnv({}).run();
+  d.tick(60);
+  /* Asserted on the PHASE and not on the name, which is a real distinction rather than pedantry:
+   * the clock's six stops are not six names. 'night' is both the stop at phase 0.00 and the whole
+   * band from 0.795 round to 0.225, so a seed that opens at 0.85 steps to 0.00 and is still, quite
+   * correctly, called night. The first version of this check asserted the name changed and failed
+   * on exactly that seed. */
+  const t0 = d.CC.Daylight.P.phase;
+  keydown(d, 'KeyT'); keyup(d, 'KeyT'); d.tick(6);
+  ok(Math.abs(d.CC.Daylight.P.phase - t0) > 1e-6, 'T stepped the time of day',
+     t0.toFixed(3) + ' -> ' + d.CC.Daylight.P.phase.toFixed(3) + ' (' + d.CC.Daylight.P.name + ')');
+  ok(d.CC.Control.mode === 0, 'T did not seize the camera', d.CC.Control.mode);
+  const names = {};
+  for (var q = 0; q < 6; q++) { keydown(d, 'KeyT'); keyup(d, 'KeyT'); d.tick(6);
+                                names[d.CC.Daylight.P.name] = 1; }
+  ok(Object.keys(names).length >= 5, 'six presses of T visit the whole clock',
+     Object.keys(names).join(','));
+  keydown(d, 'KeyY'); keyup(d, 'KeyY'); d.tick(4);
+  ok(d.CC.Daylight.frozen === true, 'Y stopped the automatic cycle');
+  const held = d.CC.Daylight.P.phase;
+  d.tick(600);
+  ok(Math.abs(d.CC.Daylight.P.phase - held) < 1e-9, 'and the clock is holding still',
+     d.CC.Daylight.P.phase.toFixed(5));
+  keydown(d, 'KeyY'); keyup(d, 'KeyY'); d.tick(60);
+  ok(d.CC.Daylight.frozen === false, 'Y again restarted it');
+  ok(d.CC.Daylight.P.phase > held, 'and it picked up from where it stopped');
+  ok(d.errors.length === 0, 'the clock keys threw nothing');
+  return env;
 });
 
 /* ============================================================================================

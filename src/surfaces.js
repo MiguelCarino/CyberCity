@@ -96,7 +96,17 @@
      * camera", and the world pass overwrites it every frame from the live projection so that the
      * star field magnifies under zoom instead of being re-dealt. Defaulted to 1 so an
      * unconfigured harness — and the standalone parse check — still gets the shipped sky. */
-    skyVScale: 1
+    skyVScale: 1,
+    /* Index units per RADIAN in sky()'s horizontal — raycast.js's `skyK`, published because
+     * surf_west.js has to turn `sx` back into a world bearing to know where the sun is, and it has
+     * no camera and no column count to derive one from. This file never reads it: the city's sky
+     * is the same in every direction on purpose. */
+    skyK: 1,
+    /* 1 when raycast.js has transposed the floor's coordinates onto a cross street. This file has
+     * never needed it — a kerb is a kerb in either axis — but surf_west.js decides which side of
+     * the road the sun is on, and that is an answer about a WORLD axis, so it has to know which one
+     * `wx` currently is. */
+    swap: 0
   };
   function configure(o) {
     if (!o) return CFG;
@@ -118,6 +128,31 @@
    * MIGRATION RULE, applied throughout: every tuned constant below is scaled by rel(...), which is
    * 1.0 under the 'rain' preset the whole build was tuned against. Multiplying by the raw P.wet
    * would silently re-tune the street to 90% of what shipped. */
+  /* ---- the hour ---------------------------------------------------------------------------------
+   * Same cache-on-t as the weather beside it, and for the same reason: this file would otherwise
+   * ask the director for the time twenty thousand times a frame for an answer that cannot change
+   * inside one. Because the key is the CLOCK and not a counter, scrubbing the harness to frame 9000
+   * syncs the same hour the browser has there.
+   *
+   * WHAT EACH ONE IS FOR, because they are not interchangeable and the picture goes wrong quickly
+   * if they are:
+   *   dSky  how bright the sky is, 0..1. This is the one that lifts the STRUCTURE — the spandrel,
+   *         the dead glass, the road — because in daylight the thing lighting a wall is the whole
+   *         hemisphere above it and not the sun.
+   *   dLamp how much artificial light is on, 0..1, with hysteresis: it is what takes the lit
+   *         windows, the sodium pool, the kerb's own colour and the bulkhead lamps away by day. It
+   *         is NOT 1-dSky — lamps are lit through both twilights and out well past sunrise.
+   *   dSun  direct sun, 0 through the whole of twilight. Only things that need a SHADOW read this.
+   */
+  var dT = 1 / 0, dSky = 0, dLamp = 1, dSun = 0, dWarm = 0;
+  function dayAt(t) {
+    if (t === dT) return;
+    dT = t;
+    var D = CC.Daylight;
+    if (!D) return;                      // standalone require: hold the tuned night
+    dSky = D.P.sky; dLamp = D.P.lamp; dSun = D.P.sun; dWarm = D.P.warm;
+  }
+
   var wT = 1 / 0, wWet = 1, wRain = 1, wWind = 1, wFogP = 0.30;
   function weatherAt(t) {
     if (t === wT) return;
@@ -147,7 +182,23 @@
   }
   function litOf(cell) {
     var r = cell && cell.litRate;
-    return typeof r === 'number' ? clamp(r, 0, 1) : 0.34;
+    r = typeof r === 'number' ? r : 0.34;
+    /* SCALED BY THE HOUR, and this is the single change that turns a night city into a day one.
+     * city.js bakes litRate into the record at build time as a per-district constant, so it is a
+     * property of the BUILDING; how many of those windows have a light burning in them is a
+     * property of the CLOCK, and the two were the same number for as long as it was always night.
+     *
+     * It does not go to zero at noon. A deep floorplate has its lights on at midday and always
+     * has; what changes is that the window stops being brighter than the wall around it, which is
+     * handled where the window is painted rather than here.
+     *
+     * IT IS EXACTLY 1.0 AT dLamp 1, and that is a rule rather than a coincidence. The shipped night
+     * look is the tuned baseline — every constant in this file was fitted against it over a
+     * 128-frame census — so every daylight scale added anywhere in the build has to be the identity
+     * at night, or the feature silently re-tunes the picture it was supposed to leave alone. The
+     * first cut of this line was 0.22 + 0.93*dLamp, which is 1.15 at night, and it moved 1083 cells
+     * of a 12000-cell reference frame before the comparison caught it. */
+    return clamp(r * (0.22 + 0.78 * dLamp), 0, 1);
   }
   /* One accent per building, never two — a facade that mixes ember and violet stops reading
    * as one object. Violet stays rare: it is ~12% of an accent that is itself ~10% of windows. */
@@ -172,8 +223,71 @@
    * Every hash is keyed on the bay index and the building seed, never on u/v directly and never
    * on anything derived from the camera — a facade whose windows re-roll as you walk destroys
    * the illusion faster than any other error in this project. */
+  /* ---- THE DAY LIFT, and it is one function rather than twenty-five edits -------------------
+   * facade() writes through exactly one funnel, and that is where daylight is applied, because the
+   * alternative is a `if (day)` at every one of the twenty-five sites that currently write
+   * P.shadow — and a scatter like that is how half of them end up not being updated together.
+   *
+   * WHAT IT DOES, and each of the three is an inversion rather than a scale:
+   *
+   *   THE UNLIT STRUCTURE BECOMES THE SURFACE. At night the mullion, the spandrel and the dead
+   *   glass are written on P.shadow at lum 8-42 and the file argues at length that this is "mass
+   *   the print deletes... coverage rather than texture". By day that same mass is the largest
+   *   visible thing in the frame: a concrete wall lit by the whole sky. So the swatch moves to
+   *   slate and then to white as the sky comes up, and the lum moves with it. Nothing about WHICH
+   *   cells are painted changes — only what they are painted as.
+   *
+   *   THE BLANK CELLS FILL IN. A night facade is 40% blank because unlit spandrel is nothing; a
+   *   sunlit one is a continuous surface. A blank cell gets a sparse structural glyph, keyed on
+   *   quantised world coordinates so it is welded to the building exactly as the grain is.
+   *
+   *   THE LIT WINDOWS LOSE THEIR ADVANTAGE. A lamp behind glass at noon is not brighter than the
+   *   render around it; it is slightly darker. litOf() has already thinned how MANY of them there
+   *   are, and this thins how much they stand out.
+   *
+   * EVERY BRANCH IS THE IDENTITY AT dSky 0, which is the rule the whole feature is built on: the
+   * night look is the tuned baseline and a daylight cycle may not move it by a cell. */
   var FOUT = { ch: 0, col: 0, lum: 0 };
+  var fU = 0, fV = 0, fSd = 0;
   function fset(ch, col, lum) {
+    if (dSky > 0.02) {
+      /* SQUARED, and it is the same argument the print ladder makes one file over: a wall does
+       * start catching skylight at first light, but it does not become the SUBJECT of the frame
+       * until the sky is genuinely bright. Under a linear ramp the city's dusk had 56% of its lit
+       * energy in white — a swatch the day ladder caps at a printed 151 and which therefore can
+       * never be a highlight — so the neon was still there and simply had nothing left to be
+       * brighter than: 0.68% of cells hot at dusk against 8.02% at night. Squaring holds the wall
+       * back through twilight and lets the signs own the frame for the hour that is theirs. */
+      var dK = dSky * dSky;
+      if (ch === 0 || lum <= 0) {
+        var hb = hash2(Math.floor(fU * 2.6), Math.floor(fV * 2.6), (fSd ^ 0x7D13) | 0);
+        if (hb < 0.14 + 0.50 * dK) {
+          ch = hb < 0.34 ? G_DASH : (hb < 0.62 ? G_COLON : G_QUOTE);
+          col = dK > 0.55 ? P.white : P.slate;
+          lum = (26 + hb * 96) * dK;
+        }
+      } else if (col === P.shadow) {
+        col = dK > 0.48 ? P.white : P.slate;
+        lum = lum * (1 + 2.6 * dK) + 62 * dK;
+      } else if (col === P.warm || col === P.amber || col === P.azure || col === P.ice) {
+        /* KEYED ON THE SUN, NOT ON THE SKY, and the difference is the whole of dusk. A lamp behind
+         * glass loses its advantage over the wall when there is DIRECT light on that wall — not
+         * during twilight, when the sky is bright and the sun is down and the neon is the best
+         * thing in the frame. Scaling by dSky instead cost the city its dusk twice over: the print
+         * ladder had already pulled azure's gain from 1.00 toward 0.30 at that hour, and this
+         * multiplied the lum on top of it. Measured at seed 42: the dusk frame printed 0.68% hot
+         * and a lit p90 of 114, against 8.02%/172 at night and 3.20%/135 at noon — the one hour
+         * that should be the best in the world was the dimmest picture of the three. */
+        /* SQUARED, for the same reason the print ladder squares its source blend, and this is the
+         * line that was actually costing the city its dusk. Tracing it took a while and is worth
+         * writing down: the hot cells in a night frame are mostly LIT WINDOWS drawn through this
+         * function, not the neon drawn by signage.js — 1477 of them at seed 42 — and a linear
+         * 1 - 0.52*sun took a window written at 240 down to 160, which is four points under the
+         * line the census counts as a highlight. The printed CEILINGS were never the problem;
+         * azure's is 219 at that hour. The lums were. */
+        lum *= 1 - 0.52 * dSun * dSun;
+      }
+    }
     FOUT.ch = ch; FOUT.col = col;
     FOUT.lum = lum < 0 ? 0 : (lum > 255 ? 255 : lum | 0);
     return FOUT;
@@ -189,9 +303,14 @@
   }
 
   function facade(u, v, cell, dist, t) {
+    if (alt) return alt.facade(u, v, cell, dist, t);
     if (v < 0) v = 0;
-    weatherAt(t === undefined ? 0 : t);
+    weatherAt(t === undefined ? 0 : t); dayAt(t === undefined ? 0 : t);
     var sd = seedOf(cell), st = styleOf(cell, sd);
+    /* Stashed for fset's day lift, which needs a world coordinate to hash on and cannot be handed
+     * one without changing a signature that twenty-five call sites use. Three stores per cell on a
+     * path that already does a dozen. */
+    fU = u; fV = v; fSd = sd;
 
     var wu = Math.floor(u / st.pu), wv = Math.floor(v / st.pv);
     var fu = u / st.pu - wu, fv = v / st.pv - wv;
@@ -1272,7 +1391,8 @@
   var WATER_N = WATER.length;
 
   function floorTex(wx, wz, dist, t) {
-    weatherAt(t === undefined ? 0 : t);
+    if (alt) return alt.floorTex(wx, wz, dist, t);
+    weatherAt(t === undefined ? 0 : t); dayAt(t === undefined ? 0 : t);
     var lane = wx - CFG.streetX;
     if (CFG.streetPeriod > 0) lane -= Math.round(lane / CFG.streetPeriod) * CFG.streetPeriod;
     var al = lane < 0 ? -lane : lane;
@@ -1339,6 +1459,9 @@
      * this is what they land on.
      *
      * Squared falloff and no edge — light does not have one. */
+    /* The pool under a street lamp is the carriageway's only large-scale rhythm — and it is a LAMP,
+     * so it goes out when the lamps do. What replaces it by day is the sky lifting the whole road
+     * evenly, which is handled in the tiers below rather than here. */
     var lampK = 0;
     if (fl > 0) {
       var lj = Math.floor(wz / 13.5);
@@ -1347,6 +1470,7 @@
       var dll = (lane - lcl) / 3.0, dlpz = (wz - lcz) / 4.1;
       lampK = 1 - (dll * dll + dlpz * dlpz);
       if (lampK < 0) lampK = 0; else lampK *= lampK;
+      lampK *= dLamp;
     }
 
     mirNow = clamp(pd * 0.95 + sheet * (0.40 + rut * 0.26), 0, 1);
@@ -1481,7 +1605,11 @@
 
       /* Centreline: dashed, sodium-amber because that is the colour the street lamps paint it. */
       if (al < 0.13 && (wz - Math.floor(wz / 4.6) * 4.6) < 2.8)
-        return rset(G_PIPE, P.amber, 150 + sheet * 60);
+        /* Sodium-amber because that is the colour the street lamps paint it — at night. By day it
+         * is white paint on grey tarmac and nothing else, and amber's day EXPOSURE of 0.30 would
+         * make a yellow centreline the dimmest line on the road rather than the brightest. */
+        return rset(G_PIPE, dSky > 0.45 ? P.white : P.amber,
+                    (150 + sheet * 60) * (dSky > 0.45 ? 0.9 + 0.5 * dSky : 1));
 
       /* Edge line. Solid, unbroken, and the reason it is here: it is the one white line that runs
        * the entire depth of the frame, so it converges to the vanishing point on its own and
@@ -1544,7 +1672,13 @@
          * print a mean v of 143 with 3.3% of them over the v=170 hot line, against a whole-frame
          * hot tail of 3.57% in core.js's 3.5-5 band — bright, in band, and not the frame's
          * brightest object. If amber's gain moves again, this number is the one to re-measure. */
-        return rset(G_UNDER, P.amber, 124 + kw * 34 + lampK * 74 + mirNow * 30);
+        /* The kerb is the longest continuous line in the frame. At night it is a metre under a
+         * sodium lamp and nothing else in the picture is lit so unambiguously; by day it is
+         * concrete lit by the sky, which is white, and its rhythm comes from the sky rather than
+         * from the lamp spacing that lampK carries. */
+        return dSky > 0.45
+          ? rset(G_UNDER, P.white, (96 + kw * 30 + mirNow * 26) * (0.7 + 0.7 * dSky))
+          : rset(G_UNDER, P.amber, 124 + kw * 34 + lampK * 74 + mirNow * 30);
       return rset(G_EQ, P.slate, 10 + kw * 12);
     }
 
@@ -1841,8 +1975,70 @@
    * module state, no allocation, no camera term, and if a caller ever violates the sweep order
    * the worst case is a glow anchored one row off. */
   var skyLastSy = 1e9, skyRoof = 0;
+  /* The surface star field's own visibility. It is a SECOND star field — elements/sky.js draws
+   * four hundred placed stars and this draws the faint scatter between them — and it had the same
+   * bug: nothing took it away when the sun came up. */
+  function dStarSurf() { return CC.Daylight ? CC.Daylight.P.star : 1; }
+
+  /* ---- THE CITY BY DAY ----------------------------------------------------------------------
+   * Everything below this line is a night sky: light pollution anchored to a roofline, and stars.
+   * A day sky is not that function with different numbers, it is a different object, so it gets
+   * its own branch rather than a scatter of `if (day)` inside the night one.
+   *
+   * WHAT A CITY SKY LOOKS LIKE FROM THE BOTTOM OF A CANYON, which is the only place this renderer
+   * ever stands: a bright, nearly featureless band, palest at the roofline where you are looking
+   * through the most air and along the most of the city's own murk, cooling and deepening upward.
+   * It is the INVERSE of the night gradient in every respect — bright at the horizon rather than
+   * glowing at the rooftops, near-solid rather than dithered thin, and cool rather than sodium.
+   *
+   * THE SWATCHES ARE CHOSEN OFF THE DAY LADDER, not off what a sky "is". core.js's day EXPOSURE
+   * table puts ice at 0.66 and white at 0.92 and drops azure to 0.30 — so azure, which is the
+   * obvious swatch for a blue sky and is the swatch the NIGHT ladder makes a pillar, is by day the
+   * one that cannot carry it. Ice carries the blue and white carries the pale band under it.
+   *
+   * IT IS NEAR-SOLID, and that is the one place this file's standing argument is deliberately
+   * overruled. The night sky is dithered because "a solid low-lum fill would read as the grey sky
+   * the references refuse to have" — true, and a day sky IS a solid fill, which is why the muddy
+   * census that argument protects is a night census and says so now. */
+  function skyDay(sx, sy, ey, aboveH) {
+    var rows = CFG.rows > 8 ? CFG.rows : 60;
+    /* Height up the visible dome, 0 at the horizon. Fractions of the GRID rather than rows, the
+     * same rule the night glow's e-fold learned. */
+    var a = aboveH / rows;
+    var hs = hash2(sx, ey, CFG.skySeed ^ 0x3D), hs2 = hash2(sx, ey, CFG.skySeed ^ 0x5B);
+
+    /* Murk: the city's own haze, thickest at the roofline. It is what makes a city sky white at
+     * the bottom and blue at the top, and it thickens with the weather's fog and haze. */
+    var murk = Math.exp(-a / (0.16 + 0.20 * wFogP)) * (0.55 + 0.45 * wFogP);
+    var lift = dSky * (1 - 0.45 * W_CLOUD_DAY());
+
+    /* Near-solid, thinning only at the very top where the dome is deepest. */
+    var cover = (0.94 - 0.30 * a) * lift;
+    if (hs > cover) return sset(0, P.shadow, 0);
+
+    if (murk > 0.55) {
+      /* The pale band along the rooftops. White at the top of its range: this is the largest
+       * bright surface a daytime city frame has, and the day ladder gives white the headroom to
+       * be it. */
+      return sset(hs2 > 0.5 ? G_EQ : G_DASH, P.white,
+                  (150 + 70 * murk) * lift * (0.86 + 0.22 * hs2));
+    }
+    if (murk > 0.22) {
+      return sset(G_TICK, hs2 > 0.34 ? P.ice : P.white,
+                  (120 + 90 * murk) * lift * (0.84 + 0.26 * hs2));
+    }
+    /* The deep dome. Ice, and it darkens upward — which is real, and is the only gradient in a
+     * clear day sky the eye reliably reads. */
+    return sset(hs2 > 0.72 ? G_COLON : G_DOT, P.ice,
+                (74 + 84 * murk) * lift * (0.8 + 0.3 * hs2));
+  }
+  function W_CLOUD_DAY() { return CC.Weather ? CC.Weather.P.cloud : 0.75; }
 
   function sky(sx, sy, t) {
+    /* Before the roofline memo, not after: the frontier's sky does not use it, and running the
+     * sweep-order bookkeeping for a consumer that will never read it is dead work per cell. */
+    if (alt) return alt.sky(sx, sy, t);
+    dayAt(t === undefined ? 0 : t);
     if (sy >= skyLastSy) skyRoof = sy + 1;
     skyLastSy = sy;
 
@@ -1873,6 +2069,15 @@
     var e = CFG.rows * 0.185;
     if (e < 3) e = 3;
     var aboveH = CFG.horizon - sy; if (aboveH < 0) aboveH = 0;
+    /* THE HANDOVER, and it is a hard switch on purpose. A blend between a dithered sodium glow and
+     * a near-solid daylight field is not a twilight, it is two skies drawn at half strength each;
+     * what makes the transition read is that both sides of it are already scaled by dSky, so the
+     * night sky is fading out on its own as the day sky fades in on its own, and the swap happens
+     * where each of them is contributing least. 0.30 is the middle of civil twilight. */
+    if (dSky > 0.30) {
+      var ey0 = Math.floor((CFG.horizon - sy) * CFG.skyVScale);
+      return skyDay(sx, sy, ey0, aboveH);
+    }
     /* The star field's VERTICAL, which must be an elevation and not a screen row.
      *
      * The integration note at the top of this file tells the caller how to compensate for yaw and
@@ -1895,6 +2100,11 @@
     var glow = Math.exp(-aboveR / e) * 0.94;
     var gh = Math.exp(-aboveH / e);
     if (gh > glow) glow = gh;
+    /* It is the CITY LIGHTING ITS OWN UNDERSIDE, so it goes out with the city's lights rather than
+     * with the sun. In the pre-dawn hour when the lamps are still burning the glow is still there
+     * and the sky above it is already grey, which is exactly right and is the one hour this
+     * function and skyDay() are both contributing. */
+    glow *= 0.15 + 0.85 * dLamp;
 
     /* 124, not 82, and the reason WAS the print's KNEE. That instruction — "if EXPOSURE[amber]
      * moves, re-measure the sky's lit fraction" — has now been honoured, because it did move, and
@@ -1932,14 +2142,14 @@
     /* Stars only well clear of the glow — nothing survives being seen through a city. Gated on
      * the glow itself rather than on a second row count, so the two can never drift apart:
      * exp(-0.64) is where the dither has thinned enough for a star to hold its own. */
-    if (glow < 0.53) {
+    if (glow < 0.53 && dStarSurf() > 0.02) {
       var s = hash2(sx, ey, 0x1337);
-      if (s < 0.0075) {
+      if (s < 0.0075 * dStarSurf()) {
         /* Twinkle is motion, and motion is opt-out. Frozen it is still a star. */
         var tw = CC.reducedMotion ? 0.86
                : 0.55 + 0.45 * hash2(sx ^ Math.floor(t * 0.8), ey, 0x99);
         return sset(s < 0.0018 ? G_PLUS : G_DOT, s < 0.0035 ? P.ice : P.white,
-                    (52 + s * 9000) * tw);
+                    (52 + s * 9000) * tw * dStarSurf());
       }
     }
     return sset(0, P.shadow, 0);
@@ -1957,6 +2167,18 @@
    * those wants to be re-based every time it drizzles. What the weather moves is how far you can
    * SEE, and that is this pair. */
   var fogEnd = FOG_END, fogSpan = FOG_END - FOG_START;
+  /* ---- and how far you can see on the frontier -------------------------------------------------
+   * 210 m against the city's 125, and a gentler curve on top of it. This is not a preference about
+   * haze, it is the difference between the two places: a city street is a canyon and everything in
+   * it is within forty metres, so a ramp that crushes past 55 m costs nothing and buys the black
+   * the print wants. A frontier main street is 17 m wide with two-storey buildings on it, so the
+   * far end of it is 150 m away and IN FRAME — and under the city's ramp all of it, plus every
+   * butte behind it, printed as black. Measured at 200x60: the whole picture came out at 0.10% hot
+   * and 66% blank with the street simply ending in nothing about a third of the way up the frame.
+   *
+   * The exponent moves with it, 1.5 -> 1.25, because the point of the long ramp is the far end and
+   * a pow that crushes the tail would give the distance back with one hand and take it with the
+   * other. Everything nearer than FOG_START is untouched in both worlds. */
   function refog() {
     /* P.fog is 0.30 under the reference preset, so k is 0 for the look that shipped, +1 in a full
      * mist and about -0.31 on a clear night. Deliberately a gentle swing: the house rule is that
@@ -1964,17 +2186,49 @@
      * that ate forty metres of canyon would take the frame's black budget with it. */
     var k = (wFogP - 0.30) / 0.70;
     if (k > 1) k = 1; else if (k < -0.45) k = -0.45;
-    fogEnd = FOG_END * (1 - 0.26 * k);
-    fogSpan = fogEnd - FOG_START;
+    /* The RANGE and the CURVE both come off the live painter now rather than off `alt` used as a
+     * boolean meaning "is west". A world that does not name them gets the city's, which is what
+     * makes the city itself need no painter object at all. */
+    fogStart = (alt && alt.fogStart !== undefined) ? alt.fogStart : FOG_START;
+    fogEnd = ((alt && alt.fogEnd !== undefined) ? alt.fogEnd : FOG_END) * (1 - 0.26 * k);
+    fogSpan = fogEnd - fogStart;
+    fogPow = (alt && alt.fogPow !== undefined) ? alt.fogPow : 1.5;
+    /* ---- AERIAL PERSPECTIVE, and it is the one place the house doctrine has an exception -------
+     * The doctrine, stated three times in this file, is that distance fades to BLACK and never to
+     * grey: there is no scatter colour in the reference frames and a far facade simply stops
+     * emitting. That is true of a city at night and false of anywhere in daylight, where the one
+     * thing that tells you a mesa is eight miles off is the amount of lit air stacked in front of
+     * it — distance fades TOWARD the sky, not away from it.
+     *
+     * fog() has no hue channel and cannot be given one cheaply (it is called twenty thousand times
+     * a frame and returns a scalar), so what is added is the VALUE half of aerial perspective and
+     * not the colour half: by day a far cell settles onto a haze floor instead of going to zero,
+     * and the floor rises with how bright the sky is and how much is in the air. A far cell keeps
+     * its own swatch, which is wrong in principle and nearly invisible in practice at the lums the
+     * floor operates at — and the alternative was a second array and a second write per cell. */
+    var D = CC.Daylight;
+    /* AND NOT ON A WORLD WITH NO AIR. Aerial perspective is light scattered by the medium between
+     * here and the thing being looked at; in vacuum there is none, and the whole point of Moonwalk
+     * is that a boulder at 100 m is exactly as bright as one at 3 m. A painter says so by exporting
+     * `airless`. Measured before the guard: at the Moon's local noon the floor was adding about 4
+     * lum of 120 at 200 m — small, and wrong in the way that matters, because it is the one visual
+     * cue that would have made lunar distances judgeable. */
+    hazeFloor = (D && !(alt && alt.airless)) ? D.P.sky * (0.30 + 0.55 * wFogP) * 46 : 0;
   }
+  var fogStart = FOG_START, fogPow = 1.5, hazeFloor = 0;
   function fog(lum, dist) {
     if (!(dist === dist) || dist === Infinity) return lum;   // sky (Infinity) and NaN pass through
-    if (dist <= FOG_START) return lum;
+    if (dist <= fogStart) return lum;
     if (dist >= fogEnd) return 0;
-    var k = 1 - (dist - FOG_START) / fogSpan;
-    k = k * Math.sqrt(k);                       // pow 1.5: gentle near, hard crush past ~55 m
+    var k = 1 - (dist - fogStart) / fogSpan;
+    /* pow 1.5 in the city: gentle near, hard crush past ~55 m. The frontier asks for 1.25, where
+     * the far end of the ramp is the whole reason it is long. */
+    k = fogPow === 1.5 ? k * Math.sqrt(k) : Math.pow(k, fogPow);
     var v = lum * k;
-    return v < 4 ? 0 : v | 0;                   // crush the tail so nothing settles into grey mush
+    /* The haze floor is applied to what the distance TOOK, so a near cell is untouched and a far
+     * one is lifted by the light in the air between. Zero at night, which is the doctrine intact. */
+    if (hazeFloor > 0) v += hazeFloor * (1 - k) * (lum > 24 ? 1 : lum / 24);
+    return v < 4 ? 0 : (v > 255 ? 255 : v | 0); // crush the tail so nothing settles into grey mush
   }
 
   /* Called once at the top of the world pass, before any per-cell call. It syncs the weather
@@ -1982,13 +2236,47 @@
    * 0. The caster must use the RETURNED value rather than FOG_END: on a clear night the ramp runs
    * ten metres further than the constant and the far end of the street would otherwise be cut off
    * at exactly the distance the air stopped hiding it. */
+  /* ---- the other world -------------------------------------------------------------------------
+   * WHY THE SWITCH IS HERE AND NOT IN raycast.js. The caster reads CC.Surf four times per cell
+   * across three call sites plus a configure and a beginFrame, and every one of those reads is on
+   * the hottest path in the project. Swapping CC.Surf itself for a second object was tried and is
+   * worse than it looks: signage.js, street.js, market.js and structure.js all hold CC.Surf.cfg or
+   * CC.Surf.SHOP_OPEN, several of them captured at boot, so a swap leaves half the build reading a
+   * config block nobody is filling in any more.
+   *
+   * So there is ONE CC.Surf, it keeps owning configure(), cfg, fog() and beginFrame() — none of
+   * which is world-specific, all of which several files depend on being a single object — and only
+   * the three functions that actually paint delegate. `alt` is resolved once per frame in
+   * beginFrame rather than per cell: it is a property read and a string compare, twenty thousand
+   * times a frame, for an answer that cannot change inside one frame. */
+  /* ---- the painter registry -----------------------------------------------------------------
+   * `CC.SURFACES` is a map from world id to painter, and every painter file registers ITSELF into
+   * it at load. That is the difference between two worlds and N: the previous version of this was
+   * `id === 'west' ? CC.SurfWest : null`, a hardcoded pair, and the failure mode when a third world
+   * arrived was not an error — it was `alt = null`, which paints the new world with the CITY's
+   * facades, asphalt and neon sky and says nothing at all about it.
+   *
+   * A painter must export facade/floorTex/sky with these exact signatures, and MAY export
+   * fogStart/fogEnd/fogPow to move the depth ramp; anything it leaves out falls back to the city's
+   * value, which is why the city itself needs no entry. */
+  var alt = null;
+  if (!CC.SURFACES) CC.SURFACES = {};
+  function resolveWorld() {
+    alt = (CC.World && CC.SURFACES[CC.World.id]) || null;
+  }
+
   function beginFrame(t) {
+    resolveWorld();
+    dayAt(t === undefined ? 0 : t);
     weatherAt(t === undefined ? 0 : t);
     return fogEnd;
   }
 
   CC.Surf = {
     facade: facade, floorTex: floorTex, sky: sky, fog: fog,
+    /* Published so a caller that paints without going through the world pass — a probe, a test —
+     * can bind the world itself. raycast.js gets it for free from beginFrame(). */
+    resolveWorld: resolveWorld,
     configure: configure, cfg: CFG, beginFrame: beginFrame,
     FOG_START: FOG_START, FOG_END: FOG_END,
     /* The share of ground-floor units that are open, published because signage.js's shopSpill has

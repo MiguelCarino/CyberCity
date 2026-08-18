@@ -33,7 +33,7 @@
   var KEYS = ['rain', 'wind', 'fog', 'wet', 'storm', 'haze', 'cloud', 'steam'];
 
   /*                    rain  wind   fog   wet  storm  haze cloud steam */
-  var PRESETS = [
+  var PRESETS_CYBER = [
     { name: 'clear',    p: [0.00, 0.25, 0.08, 0.12, 0.00, 0.10, 0.08, 0.55] },
     { name: 'drizzle',  p: [0.30, 0.35, 0.22, 0.62, 0.02, 0.26, 0.45, 0.72] },
     { name: 'rain',     p: [0.65, 0.55, 0.30, 0.90, 0.12, 0.40, 0.75, 0.85] },
@@ -42,6 +42,85 @@
     { name: 'storm',    p: [0.85, 1.00, 0.44, 1.00, 1.00, 0.60, 1.00, 0.78] }
   ];
   var REF_I = 2;                       // 'rain' — the preset the pre-weather build was tuned as
+
+  /* ---- the frontier's own six ------------------------------------------------------------------
+   * SAME EIGHT DIRECTIONS, DIFFERENT SKY. The parameters above are physical rather than cyberpunk
+   * — wind is wind, haze is how far you can see, wet is how much the ground holds — so a desert
+   * does not need a second director, it needs a second table. What changes is which combinations
+   * exist: out here it is dry for weeks and then it is not, so the middle of this table is made of
+   * DUST rather than of drizzle, and the wet states are short and violent.
+   *
+   * `haze` never goes below 0.30 in any row, and that is the frontier's signature: there is always
+   * something in the air. The city's `clear` is 0.10 and reads as washed glass; a desert horizon
+   * at 0.10 reads as a cardboard cut-out, because the one thing that tells you a mesa is eight
+   * miles away rather than eight hundred metres is the amount of atmosphere stacked in front of it.
+   *
+   * WHAT rel() STILL MEANS. INV_REF below is deliberately NOT rebuilt from this table — it stays
+   * pinned to the city's 'rain' row forever. rel() is the migration contract every element was
+   * written against ("1.0 is the look that shipped"), so it has to denote the same physical
+   * quantity in both worlds; rebasing it per world would silently re-tune rain.js and every optic
+   * the moment the viewer pressed 2. These rows are therefore absolute values in the same units,
+   * and a squall out here really is 0.70 of the rain the city was tuned under. */
+  /*                       rain  wind   fog   wet  storm  haze cloud steam */
+  var PRESETS_WEST = [
+    { name: 'blazing',  p: [0.00, 0.18, 0.04, 0.04, 0.00, 0.30, 0.04, 0.24] },
+    { name: 'breeze',   p: [0.00, 0.52, 0.08, 0.04, 0.00, 0.52, 0.16, 0.20] },
+    { name: 'dust',     p: [0.00, 0.82, 0.34, 0.03, 0.10, 0.88, 0.36, 0.18] },
+    { name: 'squall',   p: [0.72, 0.72, 0.24, 0.88, 0.22, 0.38, 0.86, 0.50] },
+    { name: 'overcast', p: [0.06, 0.34, 0.26, 0.18, 0.00, 0.54, 0.94, 0.32] },
+    { name: 'thunder',  p: [0.58, 0.98, 0.38, 0.82, 1.00, 0.46, 1.00, 0.42] }
+  ];
+
+  /* Out here the sequence is a drought broken by a storm and then a long dry-out, so the strong
+   * pull is towards the top of the table and the wet states hand back to dust rather than to each
+   * other. blazing -> squall is zero: a desert cloudburst arrives on a wind, and you always see
+   * the dust come up the valley first. */
+  var NEXT_WEST = [
+    /* blazing  -> */ [0, 6, 3, 0, 2, 0],
+    /* breeze   -> */ [5, 0, 6, 1, 2, 1],
+    /* dust     -> */ [4, 6, 0, 3, 2, 2],
+    /* squall   -> */ [1, 3, 4, 0, 3, 2],
+    /* overcast -> */ [3, 4, 3, 3, 0, 3],
+    /* thunder  -> */ [0, 2, 4, 4, 3, 0]
+  ];
+
+  /* ---- and the Moon has no weather at all ---------------------------------------------------------
+   * ONE ROW, every parameter zero, and that is the honest answer rather than a placeholder. There
+   * is no air on the Moon: no rain, no wind, no fog, no cloud, nothing suspended in anything. The
+   * director still has to run — eight files read CC.Weather.P every frame and none of them should
+   * have to know which world it is in — so it runs and reports that nothing is happening.
+   *
+   * A one-row table is also what makes the rest of the machinery behave. pickNext() can only ever
+   * return row 0, the segment schedule advances through a single state forever, and the shift-digit
+   * keys collapse to one because control.js gates them on PRESETS.length rather than on a literal
+   * six. Nothing needed a special case; the data says it. */
+  /*                       rain  wind   fog   wet  storm  haze cloud steam */
+  var PRESETS_MOON = [
+    { name: 'vacuum',   p: [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00] }
+  ];
+  var NEXT_MOON = [[1]];
+
+  /* ---- the table registry ------------------------------------------------------------------------
+   * Keyed by world id. The two-way string compare this replaced meant a third world silently ran
+   * the CITY's rain schedule — which on the Moon would have been a rainstorm in vacuum.
+   *
+   * BUILT INSIDE init() AND NOT HERE, and the reason is a real bug that this file was already
+   * carrying: `var PRESETS = PRESETS_CYBER, NEXT = NEXT_CYBER;` sits ABOVE NEXT_CYBER's own
+   * declaration, so NEXT was `undefined` from load until the first init(). That was harmless while
+   * nothing read it in between; a registry literal in the same position captured the undefined and
+   * handed it to every world, and pickNext threw on the first segment. Built on demand it cannot
+   * capture anything that has not been declared. */
+  var TABLES = null;
+  function tables() {
+    if (!TABLES) TABLES = { cyber: [PRESETS_CYBER, NEXT_CYBER],
+                            west:  [PRESETS_WEST,  NEXT_WEST],
+                            moon:  [PRESETS_MOON,  NEXT_MOON] };
+    return TABLES;
+  }
+
+  /* The live tables. Reassigned by init() from CC.World, never mid-segment: a world change tears
+   * the city down and rebuilds it, and init() is part of that rebuild. */
+  var PRESETS = PRESETS_CYBER, NEXT = NEXT_CYBER;
 
   /* SIX PRESETS, FOUR LOOKS — a known and UNFIXED gap, recorded here so it is not re-derived by
    * eye. Pinning each preset from t=0 and rendering seeds 3/7/42/99 at frame 1800, 400x100, the
@@ -76,7 +155,7 @@
   /* Not every state follows every other. Sun does not come out in the middle of a downpour; it
    * dries off through rain and drizzle first. The row is the current preset, the values are the
    * relative weights of what may come next (self excluded at pick time). */
-  var NEXT = [
+  var NEXT_CYBER = [
     /* clear    -> */ [0, 5, 2, 0, 3, 0],
     /* drizzle  -> */ [4, 0, 5, 1, 3, 1],
     /* rain     -> */ [1, 5, 0, 4, 2, 3],
@@ -86,11 +165,12 @@
   ];
 
   function pickNext(prev, n) {
-    var row = NEXT[prev], tot = 0, i;
-    for (i = 0; i < 6; i++) tot += row[i];
+    var row = NEXT[prev], tot = 0, i, m = row.length;
+    for (i = 0; i < m; i++) tot += row[i];
+    if (tot <= 0) return prev;                 // a one-row table: there is nowhere else to go
     var r = hash1(n, S + 7717) * tot;
-    for (i = 0; i < 6; i++) { r -= row[i]; if (r <= 0) return i; }
-    return REF_I;
+    for (i = 0; i < m; i++) { r -= row[i]; if (r <= 0) return i; }
+    return prev;
   }
 
   function extend(tMax) {
@@ -105,7 +185,7 @@
   /* The live parameter block. Elements hold a reference to THIS object and read fields off it
    * every frame; it is never reallocated, so nothing can end up pointing at last frame's weather. */
   var W = { name: 'rain', from: 'rain', to: 'rain', blend: 1, forced: false };
-  for (var ki = 0; ki < KEYS.length; ki++) W[KEYS[ki]] = PRESETS[REF_I].p[ki];
+  for (var ki = 0; ki < KEYS.length; ki++) W[KEYS[ki]] = PRESETS_CYBER[REF_I].p[ki];
 
   function apply(a, b, f) {
     var A = PRESETS[a].p, B = PRESETS[b].p;
@@ -158,7 +238,7 @@
   var KI = {}, INV_REF = [];
   for (var kj = 0; kj < KEYS.length; kj++) {
     KI[KEYS[kj]] = kj;
-    var rv = PRESETS[REF_I].p[kj];
+    var rv = PRESETS_CYBER[REF_I].p[kj];
     INV_REF.push(rv > 1e-6 ? 1 / rv : 1);
   }
   function rel(key) {
@@ -168,7 +248,14 @@
 
   var Weather = {
     P: W,                              // the live parameter block; hold this, do not copy it
-    KEYS: KEYS, PRESETS: PRESETS, REF: PRESETS[REF_I].p,
+    KEYS: KEYS,
+    /* Getters, because these two used to be captured at load time and a world switch swaps the
+     * table underneath them — a reader holding the array it was handed at boot would be naming
+     * the city's weather while standing in a dust storm. REF stays the CITY's reference row on
+     * purpose: it is what rel() divides by, and that is a constant of the build, not of the
+     * world (see PRESETS_WEST). */
+    get PRESETS() { return PRESETS; },
+    REF: PRESETS_CYBER[REF_I].p,
     /* Takes the city and NOTHING ELSE. Callers used to hand this an rng and the parameter was
      * never referenced — the director is a pure function of (seed, t) by design, because a
      * segment schedule that depended on draw order could not be scrubbed to frame 9000 offline.
@@ -179,6 +266,12 @@
      * ignored, which is exactly what they were already. */
     init: function (city) {
       S = city && city.seed !== undefined ? (city.seed | 0) : 0;
+      /* The world's table is bound HERE and nowhere else. A world change is a rebuild — main.js
+       * drops the city and calls this again — so the schedule, the override and the live block all
+       * restart together and nothing can be left blending from a preset that no longer exists. */
+      var TB = tables();
+      var T = TB[(CC.World && CC.World.id) || 'cyber'] || TB.cyber;
+      PRESETS = T[0]; NEXT = T[1];
       segT = [0];
       /* Never open on `clear`. The first thing anyone sees should have weather in it — a dry
        * still night is the one state that reads as "nothing is implemented yet".
@@ -197,7 +290,10 @@
        * and the blend has finished. These are a function of CC.hash1, PRESETS, NEXT, DUR_MIN and
        * DUR_VAR — recompute them whenever any of those moves, as the hash change that took them
        * off 122069/9595/31019/57290 shows.) */
-      segI = [1 + ((hash1(0, S + 313) * 5) | 0)];
+      /* PRESETS.length - 1 rather than the literal 5, which was correct only because both tables
+       * happened to be exactly six rows. A one-row table indexes 1 + 0*0 = 1 and walks off the end;
+       * this makes it 0, which is the only row there is. */
+      segI = [PRESETS.length > 1 ? 1 + ((hash1(0, S + 313) * (PRESETS.length - 1)) | 0) : 0];
       forcedI = -1; forcedAt = -1e9;
       update(0, 0);
     },

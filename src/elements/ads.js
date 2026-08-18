@@ -929,6 +929,9 @@
 
   CC.ELEMENTS.push({
     name: 'ads',
+    /* CITY ONLY. See src/world.js: an element with no `world` belongs to both, and main.js
+     * filters CC.ELEMENTS on this before the layer sort. */
+    world: 'cyber',
     layer: 34,
 
     /* EXACTLY ONE rng() call, always. The stream is shared across every element and drawing a

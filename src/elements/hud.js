@@ -167,8 +167,8 @@
    * is edited. */
   var TIERS = [
     ['WASD MOVE',                        'DRAG LOOK'],
-    ['WASD MOVE  SHIFT RUN',             'DRAG LOOK  H KEYS'],
-    ['WASD MOVE  SHIFT RUN  C CROUCH',   'DRAG LOOK  1-6 SKY  N CITY  P PHOTO']
+    ['WASD MOVE  SHIFT RUN',             'DRAG LOOK  1-3 WORLD  T TIME'],
+    ['WASD MOVE  SHIFT RUN  C CROUCH',   'DRAG LOOK  1-3 WORLD  T TIME  Y HOLD  N SEED']
   ];
 
   /* THE SAME LIST FOR A DEVICE WITH NO KEYS ON IT. Every string above names a key — WASD, SHIFT,
@@ -229,6 +229,8 @@
       /* Uppercased once. CC.Weather.P.name is lower case and toUpperCase() in draw() would
        * allocate a string sixty times a second. */
       this.wnames = [];
+      /* Read through the getter, so a world whose table is one row long (the Moon's `vacuum`) caches
+       * one name rather than the previous world's six. */
       var pr = CC.Weather ? CC.Weather.PRESETS : null;
       if (pr) for (var i = 0; i < pr.length; i++) this.wnames.push(pr[i].name.toUpperCase());
       // Pre-split so the speed readout is a table lookup rather than a concatenation.
@@ -294,6 +296,46 @@
           x = text(f, this.dig[d], x, y, SLATE, kl, a);
           x = text(f, 'M/S', x, y, SLATE, kl, a) + CW;
         }
+      }
+      /* WHICH WORLD, ahead of what the sky is doing, and only when the frame is wide enough to
+       * carry both.
+       *
+       * WHAT IT COSTS THE CITY'S REFERENCE FRAMES, written down rather than discovered later, and
+       * re-measured now that a third world and a clock have been added to the same line.
+       *
+       * THIS FILE IS THE ONLY THING IN EITHER PASS THAT MOVES A NIGHT FRAME THE CITY ALREADY HAD.
+       * The mechanism is indirect and worth stating because it is not obvious: the overlay is drawn
+       * for the eight seconds it is up, optics.js's exposure pass integrates the whole frame's
+       * luminance over those frames, and a different number of lit cells in the corner lands the
+       * adaptation gain a fraction of a percent elsewhere — which then multiplies every cell in the
+       * frame, forever after.
+       *
+       * Measured at seed 42, 200x60, frame 600: with the two-world hint strings, 15 cells of 12000
+       * differed by 1 lum. With the three-world strings plus the clock readout, 331 cells differ,
+       * the largest by 8 lum. Reverting ONLY the hint strings takes it back to byte-identical, so
+       * the whole of it is the help text being correct rather than any change to what the city
+       * draws — every other file in both passes was checked against the same fixture and came back
+       * byte-identical. It is the price of the overlay saying true things, and it is worth paying. It is first because it is the larger fact and because it is the one a viewer
+       * who has just pressed a digit is looking for confirmation of; it is conditional because on
+       * a 48-column grid the status line has room for one word and that word is the weather, which
+       * changes on its own and therefore has something to say every time you look at it.
+       *
+       * Read off CC.World rather than off the city, unlike everything else in the build: this is a
+       * readout of what the VIEWER chose, and between the keypress and the rebuild those differ by
+       * one frame. Naming the old world in that frame is the one wrong answer available here. */
+      if (tier > 0 && CC.World && CC.World.name) {
+        var wn = CC.World.name;
+        if (x + textW(wn) + CW + 44 <= cols - MARGIN_X) x = text(f, wn, x, y, SLATE, kl, a) + CW;
+      }
+      /* THE HOUR, between the world and the weather, and only on the widest tier. The status line
+       * is read left to right as "where, when, what" — CYBERCITY NOON RAIN — which is the order a
+       * viewer who has just pressed a key wants the confirmation in. A frozen clock is marked with
+       * a leading dash rather than a word: Y is a hold, and a hold is best shown as the readout
+       * having stopped rather than as a second thing to read. */
+      if (tier > 1 && CC.Daylight) {
+        var dn = CC.Daylight.P.name.toUpperCase();
+        if (CC.Daylight.P.frozen) dn = '-' + dn;
+        if (x + textW(dn) + CW + 24 <= cols - MARGIN_X) x = text(f, dn, x, y, SLATE, kl, a) + CW;
       }
       var w = CC.Weather ? CC.Weather.P.name : '';
       for (var wi = 0; wi < this.wnames.length; wi++) {

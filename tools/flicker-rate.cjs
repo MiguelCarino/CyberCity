@@ -226,7 +226,11 @@ CC.reducedMotion = false;
  * which the newest flicker source in the file does nothing at all. It is pinned to `storm` by
  * default for the same reason lightning-rate.cjs is: test the worst case, not the average one.
  * `--sky=rain` reproduces the reading this tool gave before the director was wired in. */
-for (const rel of ['src/weather_state.js', 'src/city.js', 'src/surfaces.js', 'src/raycast.js',
+/* world.js, proj.js and daylight.js come first: city.js resolves the live world inside make(),
+   every world-space element holds a projector, and surfaces.js reads the hour once per frame. A
+   tool that loads the elements without them dies on the first draw. */
+for (const rel of ['src/world.js', 'src/proj.js', 'src/daylight.js',
+                   'src/weather_state.js', 'src/city.js', 'src/surfaces.js', 'src/raycast.js',
                    'src/compose.js']) {
   const p = path.join(root, rel); if (fs.existsSync(p)) require(p);
 }
@@ -248,6 +252,14 @@ function pinSky() {
 }
 const edir = path.join(root, 'src/elements');
 for (const fn of fs.readdirSync(edir).sort()) if (fn.endsWith('.js')) require(path.join(edir, fn));
+
+/* THE WORLD IS FORCED, and it has to be. This tool measures the CITY's signage fixtures against
+   the city's own weather presets, and with three worlds in the tree the registry's default is no
+   longer something to assume — the element list, the district table and the preset table all
+   follow it. It also means the elements below are filtered to the world being measured, rather
+   than the tool sorting all fifty-seven and drawing the frontier's livestock into a city frame. */
+if (CC.World) CC.World.force(CC.World.DEFAULT);
+if (CC.Daylight) CC.Daylight.set('night', 0);
 
 const SEEDS = [0, 7, 42, 555];
 /* THE LIST OF ELEMENTS THIS TOOL ACTUALLY MEASURES, and it is a hardcoded list rather than "every
@@ -337,7 +349,7 @@ for (const seed of SEEDS) {
   city_ = CC.City.make(seed);
   if (CC.Weather) { CC.Weather.init(city_, CC.mulberry(seed ^ 0x5bf03635)); pinSky(); }
   const rng = CC.mulberry(seed ^ 0x9e3779b9);
-  const els = CC.ELEMENTS.slice().sort((a, b) => (a.layer | 0) - (b.layer | 0));
+  const els = CC.ELEMENTS.filter(function (e) { return CC.inWorld(e, CC.World.id); }).sort((a, b) => (a.layer | 0) - (b.layer | 0));
   for (const el of els) if (el.init) el.init(city_, rng, { cols: COLS, rows: ROWS });
   for (const name of NAMES) {
     const r = fixture(name, seed, els, 20);
@@ -415,7 +427,7 @@ for (const seed of [0, 555]) {
   city_ = CC.City.make(seed);
   if (CC.Weather) { CC.Weather.init(city_, CC.mulberry(seed ^ 0x5bf03635)); pinSky(); }
   const rng = CC.mulberry(seed ^ 0x9e3779b9);
-  const els = CC.ELEMENTS.slice().sort((a, b) => (a.layer | 0) - (b.layer | 0));
+  const els = CC.ELEMENTS.filter(function (e) { return CC.inWorld(e, CC.World.id); }).sort((a, b) => (a.layer | 0) - (b.layer | 0));
   for (const el of els) if (el.init) el.init(city_, rng, { cols: COLS, rows: ROWS });
   for (const name of NAMES) {
     const r = fixture(name, seed, els, 12);

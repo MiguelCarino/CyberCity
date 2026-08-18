@@ -1288,6 +1288,12 @@
   function mk(name, layer, fn) {
     return {
       name: name, layer: layer,
+      /* CITY ONLY, all seven of them. Every one is a cyberpunk noun — a skybridge, a comms mast, a
+       * fire escape, a bundle of overhead cable — and the frontier's answer to the same job (a
+       * hitching rail, a water tank, a telegraph line) is a different shape drawn against a
+       * different street, so it lives in src/elements/west_*.js rather than behind a flag in here.
+       * See src/world.js for why the gate is a field on the element and not a branch in the draw. */
+      world: 'cyber',
       init: function (city, rng) { boot(city, rng); },
       draw: function (f, cam, t) {
         view(f, cam, t === undefined ? (cam.t || 0) : t);
