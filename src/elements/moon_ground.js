@@ -1087,20 +1087,40 @@
   }
 
   /* ---- the rock ------------------------------------------------------------------------------------
-   * A SPHERE WITH A REAL TERMINATOR ON IT, which is worth the eight lines it costs. Every other
-   * object in the frontier is a flat face with one normal and is lit or not; a boulder presents
-   * every normal at once, and the line where the surface turns away from the sun is the only thing
-   * that says it is round. The normal at a screen offset (u, v) inside the disc is
+   * AN ANGULAR FRAGMENT, AND EMPHATICALLY NOT A SPHERE. The first cut of this drew each boulder as a
+   * filled disc — `r2 = u*u + v*v; if (r2 > 1) continue;` — with a smooth sphere normal
+   * (u*right - v*up + sqrt(1-r2)*(-viewdir)) and a specular ring round its limb. The arithmetic was
+   * right and the object was wrong: what it produced was a small round grey body with a terminator
+   * across it and a bright rim, which is a picture of a MOON. Scattering a few hundred of them
+   * across a lunar plain read exactly as it sounds.
    *
-   *     n = u*right - v*up + sqrt(1 - u^2 - v^2) * (-viewdir)
+   * Nothing on the Moon is round. Lunar surface rocks are impact breccia and fractured basalt:
+   * they are chipped, they are faceted, and they have corners. There is also no weathering to round
+   * them off — no water, no wind, no frost — so a fragment that broke ten million years ago still
+   * has the shape it broke in. A sphere is the one silhouette that cannot occur.
    *
-   * — the first two terms are the tangent plane, the third is how far the surface bulges toward the
-   * eye — and n.sun is the whole lighting model.
+   * So the outline is a POLYGON: seven vertices at hashed radii, with straight chords between them,
+   * and the boundary radius along any ray is the exact chord intersection rather than a constant.
+   * The shading is FLAT PER FACET — one normal for each sector, held constant across it — which is
+   * what puts a hard-edged tonal step between two faces of the same rock and is the single thing
+   * that says "angular" at character resolution. The specular is on the facet that happens to face
+   * the sun rather than round a limb, because a facet catches the light and a limb is a thing
+   * spheres have.
    *
-   * WITH THE SUN BEHIND THE WALK, MOST ROCKS ARE FULLY LIT AND THE TERMINATOR IS OFF THE LIMB. That
-   * is not a bug and it is not a waste: it is exactly what down-sun Apollo photography looks like,
-   * it is why the crews were told to shoot down-sun, and it is why the shadows above have to carry
-   * the relief. Turn round and the same rocks are black cut-outs. */
+   * WITH THE SUN BEHIND THE WALK, MOST ROCKS ARE FULLY LIT AND ONLY ONE OR TWO FACETS TURN AWAY.
+   * That is not a bug and not a waste: it is what down-sun Apollo photography looks like, it is why
+   * the crews were told to shoot down-sun, and it is why the shadows above carry the relief. Turn
+   * round and the same rocks are black cut-outs with a chipped edge. */
+  var NFACET = 7, TAU_F = 6.283185307;
+  /* Facet scratch, allocated once for the life of the page: drawRock runs for every rock in the
+   * frame and this file is allocation-free in draw() by contract. */
+  var FU = new Float64Array(NFACET), FV = new Float64Array(NFACET), FB = new Float64Array(NFACET);
+
+  /* The vertex radius of facet k, 0.58-1.00 of the rock's nominal size. The spread is what stops
+   * seven equal radii from being a heptagon, which at this cell size is a circle again. */
+  function facetR(k, sd) {
+    return 0.58 + hash2(((k % NFACET) + NFACET) % NFACET, 3, sd ^ 0x5C13) * 0.42;
+  }
   function drawRock(f, px, pz, r, sX, sZ, sd) {
     if (!project(px, r, pz)) return;
     var cx = PJ.x, cy = PJ.y, d = PJ.d, w = PJ.w;
@@ -1125,7 +1145,11 @@
       if (lk < 0.25) return;
       var hs = hash2(Math.floor(px * 4), Math.floor(pz * 4), sd ^ 0x71);
       var l1 = litOf(0.55 + hs * 0.45, d, hs);
-      emit(f, Math.floor(cx), Math.floor(cy), hs < 0.4 ? G_o : G_DOT, l1.col, l1.lum * lk, d);
+      /* NOT G_o. At one cell the glyph IS the silhouette, and 'o' is a ring — the same mistake as
+       * the disc one scale up. A chip of rock under a cell across is a blob of ink, which is what
+       * '%' and '8' are and what '.' is when it is smaller still. */
+      emit(f, Math.floor(cx), Math.floor(cy), hs < 0.35 ? G_PCT : (hs < 0.7 ? G_8 : G_DOT),
+           l1.col, l1.lum * lk, d);
       return;
     }
 
@@ -1142,16 +1166,53 @@
     if (x0 + dx1 > V.cols - 1) dx1 = V.cols - 1 - x0;
     if (y0 + dy0 < 0) dy0 = -y0;
     if (y0 + dy1 > V.rows - 1) dy1 = V.rows - 1 - y0;
+    /* The seven facet normals, resolved once per rock rather than once per cell. Each is the
+     * outward direction of its own chord, tilted toward the eye by a hashed amount so no two faces
+     * of the same rock catch the light equally — which is the whole read. `nb` is how far the facet
+     * leans toward the viewer; a low value is a face seen almost edge-on and it is what makes one
+     * side of a rock go dark while the rest stays lit. */
+    var fu = FU, fv = FV, fb = FB, fk;
+    for (fk = 0; fk < NFACET; fk++) {
+      var mid = (fk + 0.5) * TAU_F / NFACET;
+      var lean = 0.34 + hash2(fk, 7, sd ^ 0x6D2) * 0.52;
+      var cxn = Math.cos(mid) * lean, cyn = Math.sin(mid) * lean;
+      var cbn = Math.sqrt(1 - lean * lean * 0.92);
+      var nn = Math.sqrt(cxn * cxn + cyn * cyn + cbn * cbn);
+      fu[fk] = cxn / nn; fv[fk] = cyn / nn; fb[fk] = cbn / nn;
+    }
+    /* Which facet is most nearly square-on to the sun; that one gets the specular, in place of the
+     * limb ring a sphere would have had. */
+    var bestF = 0, bestD = -2;
+    for (fk = 0; fk < NFACET; fk++) {
+      var bd = fu[fk] * sr - fv[fk] * su + fb[fk] * sf;
+      if (bd > bestD) { bestD = bd; bestF = fk; }
+    }
+
     for (dy = dy0; dy <= dy1; dy++) {
       for (dx = dx0; dx <= dx1; dx++) {
         var u = (x0 + dx - cx) / rw, v = (y0 + dy - cy) / rh;
         var r2 = u * u + v * v;
-        if (r2 > 1.0) continue;
-        var bulge = Math.sqrt(1 - r2);
-        /* Per-cell depth: the near face of the sphere, so the rock's own silhouette does not
-         * overwrite the ground in front of its base. */
+        if (r2 > 1.0) continue;                        // cheap reject before the polygon test
+        /* ---- THE POLYGON, and it is an exact chord intersection rather than a stepped radius.
+         * Quantising the boundary to one radius per sector gives a shape made of arcs, which is a
+         * circle with dents in it; the straight chord between two vertices is what gives a rock a
+         * flat edge and a corner. For a ray at angle t between vertices at a0 and a1 with radii r0
+         * and r1, the chord is hit at  r0*r1*sin(d) / (r0*sin(t-a0) + r1*sin(a1-t)). */
+        var ang = Math.atan2(v, u); if (ang < 0) ang += TAU_F;
+        var tt = ang * NFACET / TAU_F;
+        var kk0 = Math.floor(tt), ff = tt - kk0;
+        var a0 = kk0 * TAU_F / NFACET, dA = TAU_F / NFACET;
+        var r0 = facetR(kk0, sd), r1 = facetR(kk0 + 1, sd);
+        var den = r0 * Math.sin(ff * dA) + r1 * Math.sin(dA - ff * dA);
+        var lim = den > 1e-6 ? (r0 * r1 * Math.sin(dA)) / den : 1;
+        if (r2 > lim * lim) continue;
+
+        var fi = kk0 % NFACET;
+        /* Per-cell depth: a mild bulge, for ordering only — enough that the rock's own silhouette
+         * does not overwrite the ground in front of its base, without reintroducing a sphere. */
+        var bulge = (1 - r2) * 0.55;
         var dd = d - bulge * r;
-        var dot = u * sr - v * su + bulge * sf;
+        var dot = fu[fi] * sr - fv[fi] * su + fb[fi] * sf;
         var litK = clamp(0.5 + 3.0 * dot, 0, 1);
         /* Keyed on the rock's own surface parameterisation, not on the screen cell: the field has to
          * be welded to the rock or it crawls as the camera walks past. It is not perfect — u and v
@@ -1172,7 +1233,11 @@
          * fracture plane and is a genuine specular. About 6% of the painted cells of an object that
          * is itself a small part of the frame, which is where a slice of the print's hot budget is
          * meant to come from. */
-        if (r2 > 0.80 && hv < 0.30) {
+        /* THE SPECULAR IS ON A FACET, NOT ROUND A LIMB. `r2 > 0.80` put a bright annulus at the
+         * edge of every rock, which is the single most sphere-like mark available and was half of
+         * why these read as little moons. A fracture plane that happens to face the sun glints;
+         * that is one face of the rock, and it is a patch rather than a ring. */
+        if (fi === bestF && bestD > 0.15 && hv < 0.26) {
           var ls = specOf(0.55 + hv, d);
           emit(f, x0 + dx, y0 + dy, G_EQ, ls.col, ls.lum * soft, dd);
           continue;

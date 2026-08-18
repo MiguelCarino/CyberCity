@@ -824,7 +824,7 @@ var CC = (function () {
 
     DIST_WEST = [
       { name: 'main',     hue: P.warm,   mix: P.amber,  mixP: 0.72, accent: P.amber, styles: [0, 2, 0, 2],
-        hMin: 6.2, hMax: 10, lit: 0.20, signP: 0.66, landmark: 0.022, w: 0.21,
+        hMin: 6.2, hMax: 10, lit: 0.20, signP: 0.66, landmark: 0.012, w: 0.21,
         vacant: 0.07, butte: 0 },
       { name: 'dust',     hue: P.slate,  mix: P.white,  mixP: 0.74, accent: P.white, styles: [0, 1, 5],
         hMin: 5.0, hMax: 8.5, lit: 0.11, signP: 0.18, landmark: 0.004, w: 0.19,
@@ -837,7 +837,7 @@ var CC = (function () {
         vacant: 0.30, butte: 0.004 },
 
       { name: 'mission',  hue: P.white,  mix: P.amber,  mixP: 0.60, accent: P.spring, styles: [3, 4, 2],
-        hMin: 5.4, hMax: 9.5, lit: 0.14, signP: 0.07, landmark: 0.050, w: 0.07,
+        hMin: 5.4, hMax: 9.5, lit: 0.14, signP: 0.07, landmark: 0.022, w: 0.07,
         vacant: 0.22, butte: 0 },
       { name: 'range',    hue: P.slate,  mix: P.ember,  mixP: 0.62, accent: P.ember, styles: [4, 1, 4],
         hMin: 4.4, hMax: 7.5, lit: 0.06, signP: 0.02, landmark: 0.000, w: 0.26,
@@ -904,7 +904,8 @@ var CC = (function () {
     alleyMin: 9, alleyP: 0.52, alleyDeepMin: 10, alleyDeepP: 0.40,
     plazaP: 0.20, plazaBigP: 0.34, plazaR: 6, plazaRVar: 9,
     vacant: 0.14, setbackP: 0.68, podMin: 0, podVar: 0, falseFront: 1,
-    lmMin: 14, lmVar: 10, crownTall: 13, DG: 34, sky: 1,
+
+    lmMin: 9, lmVar: 5, crownTall: 13, DG: 34, sky: 1,
     butteMin: 9, butteVar: 23, rockStyle: 6,
     styleCh: STYLE_CH_WEST, signCh: SIGN_CH_WEST, styleBase: 0,
     setbackMode: 'falsefront', signShape: 'board', signPalette: 'painted'
@@ -3023,7 +3024,8 @@ var CC = (function () {
     var uy = v - (st.gnd + 0.52);
     var storey = Math.floor(uy / st.up);
     var sv = uy - storey * st.up;
-    if (storey >= 0 && sv > 0.55 && sv < 0.55 + st.winH) {
+
+    if (storey >= 0 && storey < 2 && sv > 0.55 && sv < 0.55 + st.winH) {
       var cw = st.winW / st.bay, c0 = 0.5 - cw * 0.5, c1 = 0.5 + cw * 0.5;
       if (fu > c0 && fu < c1) {
         var wh = hash2(bay * 7 + storey, sd, 0x8D2);
@@ -6400,6 +6402,13 @@ var CC = (function () {
     }
   }
 
+  var NFACET = 7, TAU_F = 6.283185307;
+
+  var FU = new Float64Array(NFACET), FV = new Float64Array(NFACET), FB = new Float64Array(NFACET);
+
+  function facetR(k, sd) {
+    return 0.58 + hash2(((k % NFACET) + NFACET) % NFACET, 3, sd ^ 0x5C13) * 0.42;
+  }
   function drawRock(f, px, pz, r, sX, sZ, sd) {
     if (!project(px, r, pz)) return;
     var cx = PJ.x, cy = PJ.y, d = PJ.d, w = PJ.w;
@@ -6420,7 +6429,9 @@ var CC = (function () {
       if (lk < 0.25) return;
       var hs = hash2(Math.floor(px * 4), Math.floor(pz * 4), sd ^ 0x71);
       var l1 = litOf(0.55 + hs * 0.45, d, hs);
-      emit(f, Math.floor(cx), Math.floor(cy), hs < 0.4 ? G_o : G_DOT, l1.col, l1.lum * lk, d);
+
+      emit(f, Math.floor(cx), Math.floor(cy), hs < 0.35 ? G_PCT : (hs < 0.7 ? G_8 : G_DOT),
+           l1.col, l1.lum * lk, d);
       return;
     }
 
@@ -6432,15 +6443,43 @@ var CC = (function () {
     if (x0 + dx1 > V.cols - 1) dx1 = V.cols - 1 - x0;
     if (y0 + dy0 < 0) dy0 = -y0;
     if (y0 + dy1 > V.rows - 1) dy1 = V.rows - 1 - y0;
+
+    var fu = FU, fv = FV, fb = FB, fk;
+    for (fk = 0; fk < NFACET; fk++) {
+      var mid = (fk + 0.5) * TAU_F / NFACET;
+      var lean = 0.34 + hash2(fk, 7, sd ^ 0x6D2) * 0.52;
+      var cxn = Math.cos(mid) * lean, cyn = Math.sin(mid) * lean;
+      var cbn = Math.sqrt(1 - lean * lean * 0.92);
+      var nn = Math.sqrt(cxn * cxn + cyn * cyn + cbn * cbn);
+      fu[fk] = cxn / nn; fv[fk] = cyn / nn; fb[fk] = cbn / nn;
+    }
+
+    var bestF = 0, bestD = -2;
+    for (fk = 0; fk < NFACET; fk++) {
+      var bd = fu[fk] * sr - fv[fk] * su + fb[fk] * sf;
+      if (bd > bestD) { bestD = bd; bestF = fk; }
+    }
+
     for (dy = dy0; dy <= dy1; dy++) {
       for (dx = dx0; dx <= dx1; dx++) {
         var u = (x0 + dx - cx) / rw, v = (y0 + dy - cy) / rh;
         var r2 = u * u + v * v;
         if (r2 > 1.0) continue;
-        var bulge = Math.sqrt(1 - r2);
 
+        var ang = Math.atan2(v, u); if (ang < 0) ang += TAU_F;
+        var tt = ang * NFACET / TAU_F;
+        var kk0 = Math.floor(tt), ff = tt - kk0;
+        var a0 = kk0 * TAU_F / NFACET, dA = TAU_F / NFACET;
+        var r0 = facetR(kk0, sd), r1 = facetR(kk0 + 1, sd);
+        var den = r0 * Math.sin(ff * dA) + r1 * Math.sin(dA - ff * dA);
+        var lim = den > 1e-6 ? (r0 * r1 * Math.sin(dA)) / den : 1;
+        if (r2 > lim * lim) continue;
+
+        var fi = kk0 % NFACET;
+
+        var bulge = (1 - r2) * 0.55;
         var dd = d - bulge * r;
-        var dot = u * sr - v * su + bulge * sf;
+        var dot = fu[fi] * sr - fv[fi] * su + fb[fi] * sf;
         var litK = clamp(0.5 + 3.0 * dot, 0, 1);
 
         var hv = hash2(Math.floor((u + 1.2) * 9), Math.floor((v + 1.2) * 9), sd ^ 0x72);
@@ -6453,7 +6492,7 @@ var CC = (function () {
         }
         var soft = softOf(edge);
 
-        if (r2 > 0.80 && hv < 0.30) {
+        if (fi === bestF && bestD > 0.15 && hv < 0.26) {
           var ls = specOf(0.55 + hv, d);
           emit(f, x0 + dx, y0 + dy, G_EQ, ls.col, ls.lum * soft, dd);
           continue;

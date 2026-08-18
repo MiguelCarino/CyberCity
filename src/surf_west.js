@@ -387,7 +387,17 @@
     var uy = v - (st.gnd + 0.52);
     var storey = Math.floor(uy / st.up);
     var sv = uy - storey * st.up;
-    if (storey >= 0 && sv > 0.55 && sv < 0.55 + st.winH) {
+    /* ---- TWO STOREYS OF WINDOWS AND NOT ONE MORE -------------------------------------------------
+     * This loop had no cap, so it repeated its window band all the way up whatever height city.js
+     * handed it — and city.js's `landmark` roll hands it 14-24 m. The result was an eight-storey
+     * grid of lit windows on a frontier main street: an apartment block, in 1880, and the single
+     * most wrong thing in that world.
+     *
+     * A frontier building is two storeys. What makes the tall ones tall is a FALSE FRONT or a
+     * TOWER, and both of those are blank boarded wall — which is what falling through to board()
+     * below gives, for free. The verticality that world is entitled to comes from the crowns
+     * element on the roof (a steeple, a water tank, a windmill), not from more rows of glass. */
+    if (storey >= 0 && storey < 2 && sv > 0.55 && sv < 0.55 + st.winH) {
       var cw = st.winW / st.bay, c0 = 0.5 - cw * 0.5, c1 = 0.5 + cw * 0.5;
       if (fu > c0 && fu < c1) {
         var wh = hash2(bay * 7 + storey, sd, 0x8D2);

@@ -127,9 +127,13 @@ The same machinery, told to be somewhere else. The street lattice, the walk, the
 the crowd, the cat and every optic are shared; the map generator, the texture layer, the weather
 table and about a third of the elements are the frontier's own.
 
-- **The town** is timber. False fronts — a flat board wall carried a metre and a half above the
-  building's own roofline so it looks bigger from the street — clapboard, board-and-batten, adobe
-  and fieldstone, in six quarters from the main street to the mission.
+- **The town** is timber and it is TWO STOREYS. False fronts — a flat board wall carried a metre
+  and a half above the building's own roofline so it looks bigger from the street — clapboard,
+  board-and-batten, adobe and fieldstone, in six quarters from the main street to the mission.
+  Nothing gets a third row of windows: the facade draws two and everything above them is blank
+  boarded wall, so a tall building reads as a false front or a tower rather than as a block of
+  flats. What verticality the world has comes off the roof — a steeple, a water tank, a windmill —
+  and the tallest things in it are rock.
 - **Open range.** A quarter of the ground is a district that is mostly not a district: empty lots,
   sagebrush, saguaro, and one lot in fourteen carrying a flat-topped sandstone butte.
 - **The light.** One low sun in a fixed direction, and every wall in the world is either rimmed in

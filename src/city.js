@@ -172,7 +172,7 @@
      */
     DIST_WEST = [
       { name: 'main',     hue: P.warm,   mix: P.amber,  mixP: 0.72, accent: P.amber, styles: [0, 2, 0, 2],
-        hMin: 6.2, hMax: 10, lit: 0.20, signP: 0.66, landmark: 0.022, w: 0.21,
+        hMin: 6.2, hMax: 10, lit: 0.20, signP: 0.66, landmark: 0.012, w: 0.21,
         vacant: 0.07, butte: 0 },
       { name: 'dust',     hue: P.slate,  mix: P.white,  mixP: 0.74, accent: P.white, styles: [0, 1, 5],
         hMin: 5.0, hMax: 8.5, lit: 0.11, signP: 0.18, landmark: 0.004, w: 0.19,
@@ -187,7 +187,7 @@
        * spring is the cottonwood, and it carries the church — landmark 0.05 is by far the highest
        * in either world, because a mission IS its bell tower. */
       { name: 'mission',  hue: P.white,  mix: P.amber,  mixP: 0.60, accent: P.spring, styles: [3, 4, 2],
-        hMin: 5.4, hMax: 9.5, lit: 0.14, signP: 0.07, landmark: 0.050, w: 0.07,
+        hMin: 5.4, hMax: 9.5, lit: 0.14, signP: 0.07, landmark: 0.022, w: 0.07,
         vacant: 0.22, butte: 0 },
       { name: 'range',    hue: P.slate,  mix: P.ember,  mixP: 0.62, accent: P.ember, styles: [4, 1, 4],
         hMin: 4.4, hMax: 7.5, lit: 0.06, signP: 0.02, landmark: 0.000, w: 0.26,
@@ -291,7 +291,11 @@
     alleyMin: 9, alleyP: 0.52, alleyDeepMin: 10, alleyDeepP: 0.40,
     plazaP: 0.20, plazaBigP: 0.34, plazaR: 6, plazaRVar: 9,
     vacant: 0.14, setbackP: 0.68, podMin: 0, podVar: 0, falseFront: 1,
-    lmMin: 14, lmVar: 10, crownTall: 13, DG: 34, sky: 1,
+    /* 9-14 m, down from 14-24. A "landmark" out here is a church, a hotel or a livery barn — three
+     * storeys at the outside — and the tower on top of it belongs to the crowns element rather than
+     * to the lot's own height. At 14-24 the map was emitting eight-storey buildings and surf_west's
+     * facade was dutifully drawing eight storeys of windows on them. */
+    lmMin: 9, lmVar: 5, crownTall: 13, DG: 34, sky: 1,
     butteMin: 9, butteVar: 23, rockStyle: 6,
     styleCh: STYLE_CH_WEST, signCh: SIGN_CH_WEST, styleBase: 0,
     setbackMode: 'falsefront', signShape: 'board', signPalette: 'painted'
