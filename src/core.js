@@ -3,7 +3,8 @@ var CC = (function () {
   'use strict';
 
   // Palette measured off the reference frames: two pillars (sodium amber, screen azure)
-  // and three narrow accents. Brightness is NOT baked in here — `lum` scales these.
+  // and three narrow accents, plus the eight-swatch extension below. Brightness is NOT
+  // baked in here — `lum` scales these, and the two ladders decide how far it can get.
   var PALETTE = [
     [216, 232, 74],   //  0 amber   — sodium streetlight, the first pillar
     [ 74, 168, 232],  //  1 azure   — screenlight, the second pillar
@@ -25,10 +26,52 @@ var CC = (function () {
     [255, 214, 120],  //  8 warm    — interior spill, windows with someone home
     [ 90, 240, 255],  //  9 ice     — holo, glass, rain highlight
     [255, 255, 255],  // 10 pure    — specular hits only, use sparingly
-    [ 40,  50,  66]   // 11 shadow  — occluded structure that must still read
+    [ 40,  50,  66],  // 11 shadow  — occluded structure that must still read
+    /* ---- the extension ------------------------------------------------------------------------
+     * Eight more, appended and never inserted: every swatch index in this tree is a literal in
+     * some other file (surfaces.js's L_LOW/L_LIT/L_HOT, ads.js's PEAK, signage.js's MIN_C/MIN_R
+     * are all arrays indexed by palette slot), so 0..11 are frozen and the only safe growth is
+     * off the end. They are the swatches the first twelve could not spell: there was no neutral
+     * grey at all (slate is deliberately blue and says so), no brown, no green that is not an
+     * ACCENT (spring is listed as foliage and is fitted as a district accent — it cannot carry a
+     * hedge without leading the frame), and nothing warm-metal. FIVE of the eight are SURFACES —
+     * stone, timber, sand, moss and indigo, which is what the daylight worlds are actually made
+     * of — and three are SIGNAGE: jade, rose and gold. That split is not decoration, it is the
+     * thing ladder() switches on further down; a swatch put in the wrong half blends against
+     * the wrong curve through dawn and dusk, and there is no other place that mistake shows. */
+    [156, 162, 170],  // 12 stone   — neutral mid-grey: daylight concrete, unlit rock, regolith,
+                      //              dust. The swatch slate refuses to be. Its max channel is 170
+                      //              against slate's 138, so at equal gain it prints the brighter
+                      //              of the two, which is the whole point of having it
+    [150,  98,  58],  // 13 timber  — weathered board, mud brick, dirt, leather, rust-earth. Warm
+                      //              and DARK on purpose: a board in shade must not compete with
+                      //              the same board in sun, which is `sand`
+    [216, 186, 132],  // 14 sand    — pale tan: sunlit dust, the crown of a dirt road, bone, adobe
+                      //              in sun. The desert's white, and it is a pigment rather than a
+                      //              brightness — the ladder is what keeps it under white
+    [ 26, 148, 138],  // 15 jade    — deep teal: tilework, oxidised copper, transit livery,
+                      //              planting light. Tops out at 148, so it is narrow by pigment
+                      //              before the ladder touches it
+    [238, 102, 150],  // 16 rose    — pink neon. SIGNAGE AND SCREENS ONLY, and the one swatch in
+                      //              this file that carries a prohibition: hue 337 with this
+                      //              build's bloom over it is exactly the failure that walked
+                      //              violet off magenta (see slot 4). It is licensed for small
+                      //              cells and its gain, the lowest in the table, is what makes
+                      //              "small" enforceable rather than a note
+    [240, 176,  72],  // 17 gold    — brass and gilding: sign frames, lamp housings, warm metal.
+                      //              Not a second amber — amber is a sodium DISCHARGE and peaks
+                      //              in the green (216,232,74); gold peaks in the red and reads
+                      //              as metal being lit rather than as something emitting
+    [ 92, 126,  74],  // 18 moss    — dull green: planting, algae on concrete, sage, canvas. The
+                      //              darkest pigment in the table after shadow, which is what a
+                      //              leaf in ordinary light actually is
+    [ 58,  70, 142]   // 19 indigo  — deep blue: night glass, shade with sky in it, dusk haze. The
+                      //              shade swatch for a world that has a sky in it, where `shadow`
+                      //              is the shade swatch for a world that has none
   ];
   var P = { amber:0, azure:1, ember:2, spring:3, violet:4, white:5, red:6,
-            slate:7, warm:8, ice:9, pure:10, shadow:11 };
+            slate:7, warm:8, ice:9, pure:10, shadow:11,
+            stone:12, timber:13, sand:14, jade:15, rose:16, gold:17, moss:18, indigo:19 };
 
   // Glyph table. Index 0 must stay blank — the frame is cleared to it.
   var GLYPHS = " .,:;'\"`^~-_=+*|/\\()[]{}<>!?#%&$@8OoQ0XZWMNHUVAKY".split('');
@@ -276,7 +319,19 @@ var CC = (function () {
    * The 40-point gap between the two pillars is not sloppiness, it is the correction: amber
    * paints 1.44 cells for every azure cell (see PILLAR BALANCE above), so the more numerous
    * pigment gets the lower ceiling and the two arrive at comparable presence. Both still clear
-   * the v=170 hot line, which is what "the pillars own the top of the lit range" has to mean. */
+   * the v=170 hot line, which is what "the pillars own the top of the lit range" has to mean.
+   *
+   * THE EIGHT NEW SWATCHES, measured the same way and reported to the same convention (the LUT
+   * value at lum 255 in bucket 0, times the swatch's own max channel over 255): gold 157, sand
+   * 138, jade 134, rose 131, stone 122, indigo 115, timber 111, moss 94. Not one of them reaches
+   * the lower pillar, which is the ladder rule holding: the extension added no light, it added
+   * SURFACES, and five of the eight sit in the slate-to-white band where structure belongs.
+   *
+   * A note on the convention, because the twelve figures above and the eight here were computed
+   * by different hands. Re-measuring the original twelve with the script that fitted the eight
+   * reproduces them to within one unit — amber 179 for 180, azure 219 for 220, everything else
+   * exact — the difference being where the rounding falls between the LUT and the pigment scale.
+   * The numbers are directly comparable; do not chase the unit. */
   var EXPOSURE = [
     0.50,   //  0 amber   — the first pillar, ceiling 180. The gain has a HARD FLOOR just under it
             //              and it is not a preference: at 0.44 the ceiling is 171 and at 0.42 it
@@ -360,7 +415,7 @@ var CC = (function () {
             //              is still the top of the accent tier, still reads as a glint against wet
             //              road, and takes at most 2.7% of a frame's lit energy
     0.85,   // 10 pure    — specular only; it is already at the top of the scale
-    0.80    // 11 shadow  — occluded structure must READ as occluded structure, not as a hole, and
+    0.80,   // 11 shadow  — occluded structure must READ as occluded structure, not as a hole, and
             //              this one is deliberately NOT 0.60. shadow's pigment tops out at 66, so
             //              unlike slate it was never in the inverted ladder and could not compete
             //              with a pillar at any gain; its only real fault at 2.60 was the same
@@ -374,6 +429,88 @@ var CC = (function () {
             //              28.6%. THE INVARIANT is not "gain below SHOULDER" but "the swatch's
             //              WORKING lum range times its gain stays below SHOULDER" — that is what
             //              2.00 and 2.60 broke, from lum 79 and 61 up respectively
+    0.41,   // 12 stone   — STRUCTURE, ceiling 122, and it is fitted AGAINST slate rather than in
+            //              isolation: the two are the same job in two temperatures, so the pair
+            //              has to read as one tier. slate prints 114 at gain 0.60 and stone prints
+            //              122 at 0.41, and the whole of that eight-point gap plus the whole of
+            //              the 0.19 gain gap is pigment — stone tops out at 170 against slate's
+            //              138. Rejected 0.60, which would have matched slate's gain and printed
+            //              141 — ten under white and 27 over slate. A neutral grey sitting that
+            //              close to white is the wash of mid-tone the slate entry above spends a
+            //              paragraph removing, and stone will be the most numerous swatch on the
+            //              Moon, where a wash is the one thing an airless frame cannot carry
+    0.44,   // 13 timber  — STRUCTURE, ceiling 111, and deliberately the dimmest of the surface
+            //              tier bar moss. A weathered board at night is lit by a lamp forty feet
+            //              away and is not competing with the lamp; it sits three points under
+            //              slate, which is the right order for a warm swatch against a cold one at
+            //              the same distance from the light. Rejected 0.52 (ceiling 118, above
+            //              slate): timber will carry entire frontier facades, so it is a
+            //              coverage swatch and takes a coverage swatch's ceiling. Its working
+            //              lum range times 0.44 stays under SHOULDER right up to lum 255, so the
+            //              depth fade survives across the whole of it — the fault the slate entry
+            //              two tiers up documents at 2.00
+    0.30,   // 14 sand    — STRUCTURE, ceiling 138, and it takes WHITE'S OWN GAIN. That is the
+            //              cleanest fact in the extension: sand and white are the same job (the
+            //              thing the light lands on) in two worlds, so they get the same number
+            //              and the 13-point gap between their ceilings is entirely pigment, 216
+            //              against 236. It also means sand inherits white's argument — specular
+            //              belongs to `pure`, and the desert's white is not a light source.
+            //              Rejected 0.40 (ceiling 153), which is two points OVER white: a dirt
+            //              road that outprints the render on the wall beside it makes the ground
+            //              the brightest broad surface in a night frame, which is the exact fault
+            //              white was brought down from 1.15 to fix
+    0.80,   // 15 jade    — NARROW ACCENT, ceiling 134, under both pillars. The gain is the highest
+            //              of the eight and that is pigment, not licence: jade's max channel is
+            //              148, so it cannot print above 148 at ANY gain, and 0.80 buys 134 of the
+            //              available 148. Same shape of argument as `shadow` two lines up — a dark
+            //              ink needs a large multiplier to reach a modest ceiling, and the ceiling
+            //              is what the ladder rule is about. SHOULDER bites from lum 198 up, which
+            //              is above anything tilework or a livery panel gets written at
+    0.20,   // 16 rose    — THE NARROWEST THING IN THE TABLE, ceiling 131, and the lowest gain in
+            //              either ladder — under violet's 0.34, which was the previous floor and
+            //              was set for the same reason. The README's rule is "no magenta ever" and
+            //              rose is hue 337 with a max channel of 238, so this entry is a bound and
+            //              not a taste. Rejected 0.42, which prints 173 — over the v=170 hot line,
+            //              six points under the first pillar, and a pink cell that clears the hot
+            //              line takes this build's bloom with it, which is precisely the failure
+            //              that walked violet off magenta. Rejected 0.34, violet's own gain, at
+            //              160: that is over violet AND over gold, which would make the pink tube
+            //              the brightest of the three signage swatches — precisely backwards.
+            //              The second thing 0.20 buys is worth more than the ceiling — the KNEE
+            //              bites on lum*gain/255, so at 0.20 it crushes every rose cell under
+            //              lum 96 to black (at 0.42 it would crush
+            //              only under 46). Rose can therefore exist ONLY where something wrote it
+            //              near full scale, which is the definition of a small signage cell, and
+            //              "small" stops being a note in a comment and becomes arithmetic
+    0.32,   // 17 gold    — NARROW ACCENT, ceiling 157, the brightest of the eight and still 22
+            //              points under the lower pillar. It shares warm's gain exactly, which is
+            //              the relationship to want: gilding and interior spill are both warm
+            //              metal-and-glass light at the same remove, and the 10-point ceiling gap
+            //              is gold's slightly darker pigment. Rejected 0.46 (ceiling 180, ONE
+            //              point over amber): a brass sign frame that outprints the sodium lamp
+            //              lighting it is the ladder inverted again, on a swatch invented long
+            //              after the paragraph that forbids it was written. 0.40 prints 170 and
+            //              lands exactly on the hot line, which is the wrong place to sit for a
+            //              swatch that will be painted as thin frames — a hot thin feature is the
+            //              photosensitivity failure, not just a ladder one
+    0.46,   // 18 moss    — STRUCTURE, ceiling 94, and it is the one entry that misses the 110-155
+            //              band the other four surfaces hold, on purpose and after trying. moss
+            //              tops out at 126, so a ceiling of 110 needs gain 0.69 — and 0.69 is the
+            //              trap, because the DAY table's weaker gamma (0.62 against 0.33) means a
+            //              swatch needs roughly 1.3x its night gain merely to hold its ceiling
+            //              level. At 0.69 the day entry would have to be 0.85 to stand still,
+            //              which is outside the 0.60-0.75 band a daylight surface belongs in, and
+            //              the swatch would print DARKER at noon than at midnight. 94 is also the
+            //              honest reading: a hedge at night is darker than the concrete beside it,
+            //              and moss is 20 points under slate
+    0.56    // 19 indigo  — STRUCTURE, ceiling 115, which is slate's 114 to within a unit and is
+            //              meant to be. indigo is the shade swatch for a world with a sky in it
+            //              and slate is the far-haze swatch for the same world; they are two
+            //              readings of the same cold structure and they print at the same height,
+            //              so a wall that changes from one to the other across a shadow edge
+            //              changes HUE and not brightness. Rejected 0.70 (ceiling 124): night
+            //              glass that outprints the concrete around it reads as a lit window,
+            //              which is azure's job and comes with azure's gain
   ];
   /* GAMMA and KNEE are held at the values the previous round fitted, and that is a measurement
    * rather than an omission: re-swept over the 128 frames with the new EXPOSURE in place, GAMMA
@@ -471,14 +608,82 @@ var CC = (function () {
     0.62,   //  8 warm    — sunlit timber and skin; it stops being "interior spill" at noon
     0.66,   //  9 ice     — the daylight sky, which is the largest bright surface either world has
     0.85,   // 10 pure    — specular, and specular is what a sun makes
-    0.46    // 11 shadow  — filled by the sky rather than empty; see the note above
+    0.46,   // 11 shadow  — filled by the sky rather than empty; see the note above
+    /* THE EIGHT, and the thing to understand before reading them is that a DAY ceiling and a NIGHT
+     * ceiling are not on the same scale even though they are computed the same way. GAMMA_DAY is a
+     * far weaker lift (0.62 against 0.33), so a swatch needs roughly 1.3x its night gain simply to
+     * print at the same height — slate does exactly that, 0.60 -> 0.78 for 114 -> 115. A gain that
+     * merely goes UP therefore says nothing; what says something is where the gain sits in the
+     * table's order, and the daylight frame gets its actual brightness from the lums the surfaces
+     * write, not from these numbers. That is why stone at 0.82 is "top of the structure tier" on a
+     * ceiling of 145: it is above slate and the light is above both. Measured ceilings at mix 1:
+     * sand 190, stone 145, gold 129, timber 120, jade 104, indigo 104, moss 102, rose 79. */
+    0.82,   // 12 stone   — top of the structure tier with white and sand, ceiling 145. A touch
+            //              above slate's 0.78 and not level with it, because stone is genuinely
+            //              neutral where slate is deliberately blue, and by day the neutral read
+            //              is the correct one for concrete: at noon a wall is lit by the whole
+            //              hemisphere, so the blue cast that makes slate right at night is the
+            //              thing daylight takes away. Rejected 0.92 (white's gain, ceiling 151),
+            //              which is white's own ceiling to within six points and would leave
+            //              nothing between rendered wall and raw concrete
+    0.72,   // 13 timber  — a real daylight surface, ceiling 120, and the biggest ladder move of
+            //              the eight: 0.44 -> 0.72, from the bottom of the night surface tier to
+            //              mid-table. That is sunlit board, and the ceiling barely moving (111 ->
+            //              120) while the gain moves 1.6x is the day gamma being paid for, not a
+            //              failed fit. Rejected 0.60 (ceiling 108), which is BELOW its own night
+            //              ceiling — a plank cannot be dimmer at noon than under a street lamp
+    0.90,   // 14 sand    — sunlit dust, ceiling 190, and it sits one step under white exactly as
+            //              the night table has it: same job, and white keeps the top because it is
+            //              render and cloud and bone rather than the ground. Rejected 0.92, which
+            //              is white's gain and prints 191 — one point apart is not a ladder, it is
+            //              two names for one swatch. NOTE for whoever paints with it: at 0.90 the
+            //              SHOULDER is live from lum 176 up, so sand's depth fade flattens across
+            //              the top fifth of its range. That is white's regime too (0.92, live from
+            //              172) and is shipped, but it is the fault the slate entry documents and
+            //              a sunlit road written at lum 220 is exactly where it would show
+    0.58,   // 15 jade    — signage, and it DROPS, 0.80 -> 0.58 for 134 -> 104. A teal blade sign
+            //              at noon is readable and is not a highlight, which is the whole shape of
+            //              the day table's treatment of light. It keeps more of its night gain
+            //              than azure does (0.52 of 1.00) because jade is half surface — tilework
+            //              and oxidised copper are lit by the sun, not powered by it — and a
+            //              swatch that is only sometimes a source should not go out entirely.
+            //              Rejected holding 0.80 (ceiling 124), which leaves a blade sign printing
+            //              level with amber's day ceiling — a lit sign matching a sunlit lamp
+            //              housing is the night ladder surviving into a daylight frame
+    0.18,   // 16 rose    — signage, and the lowest number in EITHER table, ceiling 79. Below
+            //              violet's 0.26 for the same reason it is below violet at night. A pink
+            //              sign at noon is a faded pink sign: the sun is broadband and the tube is
+            //              not, so the one hour rose has least licence is the brightest one.
+            //              Rejected 0.20 (ceiling 84), which is not a drop at all — the brief for
+            //              this swatch is that it drops by day the way a pillar does, and 0.20 to
+            //              0.20 with a weaker gamma under it is a swatch standing still
+    0.38,   // 17 gold    — signage and warm metal, ceiling 129, a step under amber's day ceiling
+            //              of 133. That order is deliberate and it is the right way round: at noon
+            //              both are metal and neither is a light, and a gilded frame reflects a
+            //              shade less than a sodium tube's own envelope does. Rejected 0.62
+            //              (ceiling 176), which is warm's day gain and would put brass above red,
+            //              spring, stone and BOTH pillars at noon — sixth in a table of twenty,
+            //              for a swatch that exists to edge a sign
+    0.74,   // 18 moss    — a real daylight surface, ceiling 102, and it finally passes its own
+            //              night ceiling (94) rather than falling under it — see the night entry
+            //              for the whole of why this swatch is fitted from the day side backwards.
+            //              Sage and canvas in sun. Rejected 0.60 (ceiling 91), below night again
+    0.62    // 19 indigo  — shade with the sky in it, ceiling 104, and MID is the entire brief: it
+            //              is the swatch for the part of a daylight frame that is neither lit nor
+            //              black, which is what stops a noon picture reading as a lit object cut
+            //              out of paper — the same job the shadow entry above describes, one tier
+            //              up and with an actual sky in it. Rejected 0.78 (slate's gain, ceiling
+            //              118), which puts shade level with the sunlit concrete casting it
   ];
   var GAMMA_DAY = 0.62, KNEE_DAY = 0.030;
 
   /* ---- how much of the day table is mixed in ------------------------------------------------------
-   * Quantised, and that is the whole implementation trick. The LUT is 24 KB of pow() and exp() and
+   * Quantised, and that is the whole implementation trick. The LUT is 40 KB of pow() and exp() and
    * the file has always said it is "built once at load, never allocated again"; rebuilding it every
-   * frame would put 24576 transcendental calls on the frame budget. Rebuilding it when a QUANTISED
+   * frame would put 40960 transcendental calls on the frame budget — it was 24 KB and 24576 while
+   * the palette had twelve entries, and the eight added to the end cost a third more. Nothing else
+   * in the cost model moves: the table is still rebuilt on the same schedule, and the per-cell read
+   * in tone() is one index into it however wide it is. Rebuilding it when a QUANTISED
    * mix changes puts them on one frame in every four hundred — the clock runs a 420 s cycle and
    * there are 32 steps across it, so the rebuild happens about once every thirteen seconds, costs
    * about a millisecond, and lands inside a 16 ms budget with room to spare.
@@ -501,7 +706,7 @@ var CC = (function () {
    * night and 3.20% at noon: the one hour with both neon AND a bright sky in it was the dimmest
    * frame of the three.
    *
-   * Squaring the mix for the four SOURCE swatches holds them near their night gains until the mix
+   * Squaring the mix for the SOURCE swatches holds them near their night gains until the mix
    * passes about 0.6 and then drops them quickly, which is the shape the eye expects and the shape
    * that keeps a lit sign lit through dusk. */
   function ladder(c, mix, sunMix) {
@@ -516,13 +721,28 @@ var CC = (function () {
      * printed ceiling UNDER the 170 the census counts as a highlight, so no amber cell in the frame
      * could be hot however bright it was written. The measurement said 0.38% of cells hot at dusk
      * against 8.02% at night. Squared on top, because even direct sun takes a while to beat a neon
-     * sign at close range. */
-    var src = (c === 0 || c === 1 || c === 8 || c === 9);                   // amber azure warm ice
+     * sign at close range.
+     *
+     * THE TEST FOR MEMBERSHIP IS "DOES IT EMIT", not "is it bright" and not "is it an accent". The
+     * three swatches added here are the signage half of the extension — jade is transit livery and
+     * planting light, rose is a tube, gold is the lamp housing and the lit frame around one — and
+     * they are the same physical object as amber and azure at a different hue, so they hold their
+     * gain through dusk on the same curve for the same reason. The other five are SURFACES and
+     * blend on the sky: stone, timber, sand, moss and indigo are concrete, board, dust, planting
+     * and shade, and every one of them starts being lit by the sky at first light, hours before
+     * there is a sun to lift it. Put a surface on the sun curve and it stays at its night gain
+     * through the whole of dawn — the wall goes bright only after the sky already has, which is
+     * the dusk fault above running backwards. */
+    var src = (c === 0 || c === 1 || c === 8 || c === 9 ||
+               c === 15 || c === 16 || c === 17);   // amber azure warm ice + jade rose gold
     var m = src ? sunMix * sunMix : mix;
     return EXPOSURE[c] + (EXPOSURE_DAY[c] - EXPOSURE[c]) * m;
   }
 
-  // LUT[(bucket*12 + colour)*256 + lum] -> printed lum. 24 KB, rebuilt only when the day step moves.
+  // LUT[(bucket*PALETTE.length + colour)*256 + lum] -> printed lum. 40 KB, rebuilt only when the
+  // day step moves. The stride was written out as a literal 12 and is now read off the palette,
+  // because the palette grew and a stride that disagrees with it does not fail — it silently prints
+  // every swatch through some other swatch's curve.
   var LUT = new Uint8Array(DBUCKETS * PALETTE.length * 256);
   function buildLUT(mix, sunMix) {
     var np = PALETTE.length, t = LUT;

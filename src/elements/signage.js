@@ -425,6 +425,21 @@
    * hue: the concrete quarter is where signs go to die (S_FAIL, S_BACKLIT, and very little that
    * moves), the screen district is screens and tickers, and the arcade strip is the only place
    * that can afford a chase border on every second building. */
+  /* ---- AND THREE MORE QUARTERS, because city.js's table is nine rows now ----------------------
+   * `pickStyle` reads `STYLE_W[did] || STYLE_W[0]`, so the three new districts were not failing —
+   * they were silently drawing SODIUM's weights, which is a graceful degradation and also means
+   * three quarters of the city had no sign construction of their own. Each new row is an argument
+   * about what that quarter's signs are MADE of, which is the same argument the six above make:
+   *   gilt     brass-framed tube and blade work over a teal-tiled parade. Almost no screens: this
+   *            is the oldest-money quarter in the table and its signage is glass and metal, so
+   *            TUBE and BLADE carry it and SCREEN is a 1 where the screen district has a 6
+   *   market   the noisiest, shortest signage in the city. BLOCK (stacked character signboards)
+   *            and MARQUEE (a row of letters over a door) between them take half the roll, because
+   *            a market stall's sign is a painted board and a row of bulbs and nothing else. FLAP
+   *            is high too — a departure-board split-flap is exactly a market's price list
+   *   finance  the concrete quarter's discipline with money behind it: BACKLIT above everything,
+   *            because a bank's sign is a dark panel that lights the WALL rather than the street,
+   *            plus tickers. No chase, no arrows, nothing that moves for attention */
   var STYLE_W = [
     /*            TUBE BLADE CHASE WIPE TICK BLOK FLAP FAIL BACK ARRW SCRN MARQ */
     /* sodium  */ [  6,   3,   3,   2,   1,   4,   2,   3,   2,   3,   1,   5],
@@ -432,7 +447,10 @@
     /* concrete*/ [  3,   1,   1,   1,   1,   2,   2,   6,   5,   2,   1,   3],
     /* ember   */ [  4,   2,   2,   1,   1,   2,   2,   5,   2,   5,   1,   3],
     /* spring  */ [  3,   3,   2,   2,   2,   3,   4,   2,   3,   2,   2,   3],
-    /* arcade  */ [  3,   5,   6,   4,   4,   6,   3,   2,   2,   4,   5,   2]
+    /* arcade  */ [  3,   5,   6,   4,   4,   6,   3,   2,   2,   4,   5,   2],
+    /* gilt    */ [  7,   6,   3,   1,   1,   3,   2,   2,   4,   2,   1,   4],
+    /* market  */ [  3,   3,   4,   1,   1,   7,   5,   3,   1,   2,   1,   7],
+    /* finance */ [  2,   2,   1,   2,   5,   2,   3,   3,   7,   1,   4,   3]
   ];
 
   /* HOW MUCH SCREEN A CONSTRUCTION NEEDS BEFORE IT IS A CONSTRUCTION, in cells across and cells
@@ -489,9 +507,38 @@
      * dim emissive panel and can carry it; a saturated glass tube on a near wall blooms into the
      * hot magenta the whole palette exists to avoid. */
     if (h === P.violet && style !== S_SCREEN && style !== S_TICKER) h = P.azure;
+    /* ---- ROSE, AND IT IS THE SAME GUARD FOR A DIFFERENT REASON --------------------------------
+     * Violet is diverted because a big violet fixture blooms into magenta. Rose is diverted
+     * because of AREA, and the two are not the same argument: core.js gives rose a ceiling of 131
+     * — under every pillar, under gold, under jade — so a rose fixture can never be the loudest
+     * thing in the frame however large it is. What it CAN be is a large pink SURFACE, and the
+     * house rule the swatch was licensed under is "blade signs, a bar's window tube, a strip of
+     * underlighting, and nothing with a large cell count".
+     *
+     * So rose is allowed on the two constructions that are thin BY GEOMETRY and nowhere else. A
+     * blade projects perpendicular from the facade and is read edge-on, so it is a couple of
+     * columns wide at any distance (MIN_C[S_BLADE] is 1, the narrowest in the table); a tube is a
+     * hollow rectangle, i.e. an outline with nothing painted inside it. Every other style in the
+     * file fills its box — a screen, a ticker, a character block, a marquee, a backlit panel are
+     * all fields — and a rose FIELD is the cliche the README's "no magenta ever" was written
+     * against. Diverted to amber rather than azure, because a pink tube that has been replaced is
+     * a warm sign and the sodium read is the nearer neighbour. */
+    if (h === P.rose && style !== S_BLADE && style !== S_TUBE) h = P.amber;
     /* The concrete district hands out slate and white sign panels, which are structure colours.
      * A sign is a light source and a light source is never unlit concrete. */
-    if (h === P.slate || h === P.white || h === P.shadow) h = r < 0.5 ? P.amber : P.azure;
+    /* ---- AND FOUR MORE THAT ARE NOT LIGHTS EITHER ----------------------------------------------
+     * city.js's widened table can now hand this file stone, timber, sand, moss and indigo on a
+     * sign record, and every one of them is a SURFACE swatch: core.js fits them for concrete,
+     * board, dust, planting and shade, with night ceilings of 122, 111, 138, 94 and 115. A sign
+     * painted in any of them cannot clear the muddy band's own top, so it would print as a grey
+     * smear where the brightest object in the frame is meant to be. Same divert as slate and
+     * white, and for exactly the reason the line under this one already gives. jade, rose and
+     * gold are NOT in this list and must not be: core.js's `ladder()` classes those three as
+     * SOURCES and blends them on the sun curve alongside amber and azure, which is the whole
+     * reason the extension was split into five surfaces and three signage swatches. */
+    if (h === P.slate || h === P.white || h === P.shadow ||
+        h === P.stone || h === P.timber || h === P.sand ||
+        h === P.moss || h === P.indigo) h = r < 0.5 ? P.amber : P.azure;
     return h;
   }
 

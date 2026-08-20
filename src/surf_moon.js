@@ -204,6 +204,14 @@
      * is what every element file will read to lay a shadow down, and a shadow that keeps the sun's
      * length after the sun has gone is the sort of thing nobody notices and everybody feels. */
     SUN_ALT = SUN_ALT + (EARTH_ALT - SUN_ALT) * dNight;
+
+    /* The slope-shading gain, which is 1/tan(alt) normalised at the middle of the Apollo band and
+     * clamped — see the block on SLOPE_K down in the floor section. Computed here because it is a
+     * fact about the light, it changes once a frame, and floorTex must not carry a tan() call six
+     * thousand times over. The clamp is what keeps a 5-degree sun from turning the plain into
+     * corrugated iron; the floor at 0.6 is what stops a high sun flattening it out altogether. */
+    var tg = Math.tan(SUN_ALT); if (tg < 0.02) tg = 0.02;
+    SLOPE_G = clamp(0.255 / tg, 0.6, 1.9);
   }
 
   /* ---- weather, sampled once per frame ------------------------------------------------------------
@@ -425,23 +433,51 @@
     return fset(hv < 0.03 ? G_DOT : G_COMMA, P.slate, 16 + hv * 96);
   }
 
-  /* ---- the two surfaces, and there are only two ---------------------------------------------------
-   * city.js's style 7 is regolith and style 8 is rock, and nothing else exists. They are not two
-   * materials so much as two SCALES of the same one: rock is a coherent block with fracture planes
-   * and a hard rim, regolith is the powder that block breaks down into, and the difference the eye
-   * actually reads at character resolution is the shape of the top edge — a rock has a hard one, a
-   * mound of fines does not.
+  /* ---- the three surfaces, and the third one is not an object ------------------------------------
+   * city.js's style 7 is regolith and style 8 is rock. They are not two materials so much as two
+   * SCALES of the same one: rock is a coherent block with fracture planes and a hard rim, regolith
+   * is the powder that block breaks down into, and the difference the eye actually reads at
+   * character resolution is the shape of the top edge — a rock has a hard one, a mound of fines
+   * does not.
+   *
+   * STYLE 9 IS NEITHER, AND IT IS THE ONE THE MAP ADDED. A swell lot is EMPTY: its whole height is
+   * the plain being higher than the plain beside it, so what the ray hits is not the flank of an
+   * object but a stretch of GROUND stood on end by the projection. Painted as row 7 — which is what
+   * this file did until the third row existed — every mound in the world came back with regolith's
+   * fill 0.55 and cap 0.9, i.e. as a two-metre drift of loose powder with a lit crest on it, and a
+   * plain whose every rise carries a bright edge reads as a field of spoil heaps rather than as
+   * rolling ground. So row 9 is the FLOOR's own numbers rather than a mound's: the fill matches
+   * floorTex's own 24%-coverage regime scaled for a face seen square on, the seams are gone
+   * (nothing fractures), and the cap is small enough to be a change of texture at the skyline
+   * instead of a rim.
    *
    *   pitch    the lattice the face is broken up on, in metres. Rock is fractured at half a metre;
    *            regolith is smooth and only carries the coarse lumps of a mound.
+   *   seamP    how much of the face is a black fracture slot. A swell is 0 and it has to be a
+   *            declared 0 rather than a big pitch: at a pitch past the width of a lot the whole lot
+   *            quantises to ONE seam hash, so 6% of the world's mounds would have come out entirely
+   *            unpainted — a hole in the plain rather than no joints in it.
+   *   glint    the share of a SOFT crest that flares as a specular. A drift of fines is 34% — the
+   *            crest of a heap catches the light along its whole length. A ground swell is 8%: the
+   *            top of a ground wave has no edge to flare off at all, and at 34% every rise in the
+   *            plain wore a bright line, which is the exact "spoil heap" read row 9 exists to stop.
    *   fill     how much of the lit face is painted at all. This is the DENSITY that carries the
    *            tone, and it is the whole difference between a lit basalt block (nearly solid) and a
-   *            drift of fines (half painted, and its grey comes from the holes).
+   *            drift of fines (half painted, and its grey comes from the holes). 0.44 on the swell
+   *            against regolith's 0.55: a rise in the plain must not print BRIGHTER than the plain,
+   *            or the eye reads it as a different material, and 0.44 is the value at which the two
+   *            match at the mound's foot — measured against floorTex's own near-field 0.34 density
+   *            scaled by the 1.3 the face-on geometry gains over the grazing floor.
    *   cap      the lit crest, as a fraction of one printed row — see the note on capOf below.
+   *   erode    how hard the per-column notch bites the top edge (see `top` in facade). Rock and
+   *            regolith arrive as boxes and need the full bite; a swell's silhouette is already the
+   *            smooth top of a ground wave and a deep notch turns it back into a ruin, so it takes
+   *            a third of the depth and reads as a soft, grainy horizon.
    */
   var STYLE_M = [
-    /* 7 regolith */ { pitch: 1.35, fill: 0.55, cap: 0.9, hard: 0 },
-    /* 8 rock     */ { pitch: 0.52, fill: 0.86, cap: 1.0, hard: 1 }
+    /* 7 regolith */ { pitch: 1.35, fill: 0.55, cap: 0.9, hard: 0, erode: 1.00, seamP: 0.06, glint: 0.34 },
+    /* 8 rock     */ { pitch: 0.52, fill: 0.86, cap: 1.0, hard: 1, erode: 1.00, seamP: 0.13, glint: 0.34 },
+    /* 9 swell    */ { pitch: 2.60, fill: 0.44, cap: 0.4, hard: 0, erode: 0.34, seamP: 0.00, glint: 0.08 }
   ];
 
   /* ---- THE DITHER LATTICE IS LOCKED TO THE SCREEN, NOT TO THE WORLD ------------------------------
@@ -500,7 +536,12 @@
     weatherAt(t === undefined ? 0 : t); dayAt(t === undefined ? 0 : t);
 
     var sd = seedOf(cell);
-    var st = STYLE_M[cell && (cell.style | 0) === 8 ? 1 : 0];
+    /* Three-way, and it has to be a lookup rather than the old `=== 8 ? 1 : 0` ternary: style 9
+     * fell through that to row 0 and every ground swell in the world was painted as a mound of
+     * loose fines with a lit crest. Anything the map has not got a row for still lands on 7, which
+     * is the right degradation — an unknown lunar surface is regolith. */
+    var sti = cell ? (cell.style | 0) - 7 : 0;
+    var st = STYLE_M[sti === 1 ? 1 : (sti === 2 ? 2 : 0)];
     var h = cell && cell.h ? cell.h : 2;
     var sun = sunOf(cell);
     /* No `lod` variable here, unlike both sibling facades and unlike floorTex below. qOf already
@@ -529,9 +570,16 @@
      * biting, so the silhouette has both a shape and a grain. One wavelength alone gives an edge
      * that is uniformly noisy, which reads as a dither on a straight line rather than as erosion.
      * It is also why `crest` is measured from `top` and not from `h` everywhere below — the lit rim
-     * has to sit on the eroded edge or it draws the box straight back on. */
+     * has to sit on the eroded edge or it draws the box straight back on.
+     *
+     * st.erode SCALES THE BITE and exists for style 9. A swell arrives as a box like everything
+     * else, but it is a box cut out of the GROUND, and the top of it is a ground wave that the map
+     * has already smoothstepped twice — biting a fifth of the height out of that gives a mound with
+     * a ragged crown, which reads as a spoil heap. A third of the depth leaves the notch doing its
+     * one indispensable job, breaking the flat top edge, without inventing erosion the landform
+     * does not have. */
     var top = h - h * (0.06 + 0.20 * hash2(Math.floor(u * 0.42), 0, sd ^ 0x4D78)) *
-                      hash2(Math.floor(u * 1.3), 0, sd ^ 0x4D77);
+                      hash2(Math.floor(u * 1.3), 0, sd ^ 0x4D77) * st.erode;
     var crest = top - v;                     // metres below THIS column's own eroded top
     if (crest < 0) return fset(0, P.shadow, 0);
 
@@ -583,10 +631,22 @@
     var cap = capOf(dist, st.cap);
     if (crest < cap) {
       if (st.hard)
-        return dim(specSet(crest < cap * 0.5 ? G_EQ : G_DASH, 0.55 + hv * 0.45, dist), soft);
+        /* THE GLYPH IS MIXED ON THE CELL'S OWN HASH and not chosen by depth into the cap alone.
+         * Rendered at seed 3 frame 3000 there is a run of eighteen identical '=' along the crest of
+         * a low rock ridge at fifty metres, and eighteen identical characters in a row is a RULE,
+         * which is the artefact this whole pass exists to remove. The cause is underneath this
+         * function and is written up in the report — adjacent rock lots in the ejecta and field
+         * districts land within a few tens of centimetres of each other, and at fifty metres a
+         * printed row is 0.83 m, so a real ridge with 0.4 m of relief on it genuinely does lie in
+         * one row. What this file can do about it is refuse to draw that row as one character: two
+         * glyphs at the top of the cap and two below it, dealt on the same stable hash the fill
+         * uses, so the edge reads as broken rock rather than as a drawn line. */
+        return dim(specSet(crest < cap * 0.5 ? (hv < 0.58 ? G_EQ : G_DASH)
+                                             : (hv < 0.45 ? G_DASH : G_TICK),
+                           0.55 + hv * 0.45, dist), soft);
       /* A mound of fines has no edge, so its crest is a fading-out rather than a flare: the
        * specular is dithered in at a third of the cells and the rest is ordinary lit surface. */
-      if (hv < 0.34) return dim(specSet(G_QUOTE, hv, dist), soft);
+      if (hv < st.glint) return dim(specSet(G_QUOTE, hv, dist), soft);
       return dim(litSet(G_TICK, 0.7 + hv * 0.3, dist, hv), soft);
     }
 
@@ -601,8 +661,10 @@
      * because the two faces of a joint cannot both be lit. Drawn as blanks: they cost nothing, they
      * break the mass into facets, and they are what keeps a 5 m rock from being a 5 m slab. On
      * regolith they are much rarer and shallower, because powder does not fracture. */
-    var seam = hash2(Math.floor(u / st.pitch), Math.floor(v / (st.pitch * 1.3)), sd ^ 0x4D42);
-    if (seam < (st.hard ? 0.13 : 0.06)) return fset(0, P.shadow, 0);
+    if (st.seamP > 0) {
+      var seam = hash2(Math.floor(u / st.pitch), Math.floor(v / (st.pitch * 1.3)), sd ^ 0x4D42);
+      if (seam < st.seamP) return fset(0, P.shadow, 0);
+    }
 
     if (hv > st.fill) return fset(0, P.shadow, 0);
     var k = hv / st.fill;                    /* NORMALISED BY THE FILL, per surf_west.js:659: tying
@@ -657,19 +719,450 @@
   }
   function rblank() { return rset(fset(0, P.shadow, 0)); }
 
-  /* Stride 0.72 m and a 0.32 m sole: a walking human's pitch, and the reason these are drawn at all
-   * is that they are the only thing on this ground that CONVERGES. The design brief spends a page on
-   * it and west_range.js opens with the same sentence: empty ground rendered honestly is empty, and
-   * a distance-quantised hash field with nothing straight in it does not read as a plain, it reads
-   * as television static. The prints, the two rover rails and (in moon_alsep.js) the cable run are
-   * this world's entire supply of straight lines. */
-  var STRIDE = 0.72, TRACK = 1.03;
+  /* ---- WHAT USED TO BE HERE WAS A ROAD, AND IT HAD TO GO ------------------------------------------
+   * Until this pass the first two branches of the cascade below were a bootprint TRAIL held inside
+   * 0.62 m of the street centreline and two rover RAILS at exactly 1.03 m either side of it, both
+   * running the full length of the corridor. The comment defending them said "the prints, the two
+   * rover rails and the cable run are this world's entire supply of straight lines", and the
+   * argument it made — that empty ground rendered honestly reads as television static and needs
+   * something that CONVERGES — is correct and is not what was wrong.
+   *
+   * What was wrong is that two parallel dashed rails with a churned strip down the middle of them,
+   * locked to the street lattice, receding to the vanishing point, IS A ROAD. On any world. A
+   * viewer looked at the frame and called it one, and the frame agrees with the viewer: the walk
+   * follows corridor centrelines, so the one line the camera is guaranteed to be standing on is
+   * also the one the whole lane pattern was pinned to, and the Moon came out with a carriageway
+   * down it.
+   *
+   * THE CONVERGENCE IS REPLACED RATHER THAN DELETED, in four places, and none of them is axis
+   * aligned:
+   *   the rover traverse below   a CURVE, at 36 degrees to the lattice, wandering on two octaves
+   *   the rille                  a CURVE, ten metres wide, the one real lunar landform that is one
+   *   the ejecta rays            long streaks radiating from a point somewhere off in the plain
+   *   the rolling ground itself  a horizon that undulates, which is the convergence cue the design
+   *                              brief should have asked for first — terrain, not tyre tracks
+   * and the bootprints move out of this file entirely: moon_ground.js's drawPrints already lays
+   * them on a wandering two-octave trail and now scatters them in clusters, which is what a crew
+   * that mills about a work site and detours to a boulder actually leaves. Two files drawing prints
+   * on two different paths was the other half of the road: whichever one the eye picked up, the
+   * straight one was underneath it. */
+
+  /* ---- the rolling plain, and it is the same field the map's heightmap runs on --------------------
+   * city.js now adds up to 2.8 m of relief to every non-street lot on two smoothstepped bilinear
+   * octaves of 54 m and 23 m. Those lots arrive here as facade() hits with style 9 and are painted
+   * as ground stood on end. THIS floor is what is left: the corridors, and the majority of open
+   * ground whose swell fell under the map's 0.56 threshold and is therefore exactly flat.
+   *
+   * Flat is not the same as featureless, and the two have to AGREE ABOUT SCALE or the plain reads
+   * as two unrelated fields laid over each other — mounds every fifty metres, tone varying every
+   * nine. So the octave table below opens on the map's own two wavelengths and adds a third for the
+   * metre scale the map cannot express. It cannot be the same field cell-for-cell: floorTex is
+   * handed two world coordinates and nothing else, has no seed, no block bounds and no city to ask,
+   * and the map's field is a function of all three. Matching the WAVELENGTHS is what the eye reads;
+   * matching the phase is what it cannot check.
+   *
+   * FOUR OCTAVES AND NOT TWO, and the outer one is the reason. The caster's far plane is about 90 m
+   * and the frame is 92 m deep, so a field whose longest wavelength is 54 m puts nearly two full
+   * cycles inside the picture and the whole plain comes out at one tonal frequency — even, regular,
+   * and as recognisable as a wallpaper repeat. The 128 m octave is longer than the frame, so what it
+   * contributes is that ONE SIDE of the picture is broadly lighter than the other, which is what a
+   * real plain does and what no amount of finer noise can imitate.
+   *
+   * The weights fall off with the wavelength because that is what a real surface's power spectrum
+   * does, and none of them is allowed to dominate: measured, at 0.68 on the coarse term (the map's
+   * own weighting, which is right for a HEIGHT field where the fine octaves are detail on a shape)
+   * the 128 m term alone decided the density and the plain came out as broad bands with no grain on
+   * them at all.
+   *
+   * IT ALSO RETURNS ITS GRADIENT, analytically and for about six extra multiplies, because the
+   * gradient is what buys the slope shading below and a finite difference would cost a second whole
+   * evaluation. */
+  var SW_LAT = [128.0, 54.0, 23.0, 9.0], SW_W = [0.26, 0.32, 0.26, 0.16],
+      SW_SALT = [0x4D71, 0x4D7B, 0x4D85, 0x4D8F];
+  var swVal = 0, swGX = 0, swGZ = 0;
+  function swellOf(wx, wz) {
+    var v = 0, gx = 0, gz = 0, o;
+    for (o = 0; o < 4; o++) {
+      var lat = SW_LAT[o], w = SW_W[o], sl = SW_SALT[o];
+      var qx = wx / lat, qz = wz / lat;
+      var i0 = Math.floor(qx), j0 = Math.floor(qz);
+      var fx = qx - i0, fz = qz - j0;
+      var sx = fx * fx * (3 - 2 * fx), sz = fz * fz * (3 - 2 * fz);
+      /* d/df of the smoothstep. It is what makes the gradient continuous across a lattice line —
+       * the plain lerp's gradient is not, and a discontinuous gradient prints as a 54 m grid of
+       * tonal creases, which is a straight line and is the thing this whole pass is removing. */
+      var dx = 6 * fx * (1 - fx) / lat, dz = 6 * fz * (1 - fz) / lat;
+      var a = hash2(i0, j0, sl), b = hash2(i0 + 1, j0, sl),
+          c = hash2(i0, j0 + 1, sl), d = hash2(i0 + 1, j0 + 1, sl);
+      var ab = a + (b - a) * sx, cd = c + (d - c) * sx;
+      v += w * (ab + (cd - ab) * sz);
+      gx += w * (((b - a) + ((d - c) - (b - a)) * sz) * dx);
+      gz += w * ((cd - ab) * dz);
+    }
+    swVal = v; swGX = gx; swGZ = gz;
+  }
+
+  /* ---- HOW MUCH A SLOPE IS ALLOWED TO CHANGE THE TONE ---------------------------------------------
+   * The header of the floor section says this plane does not dim at a low sun, and that is still
+   * right: regolith is violently non-Lambertian with a backscatter surge, so a flat plain viewed
+   * down-sun is nearly as bright at a 6-degree sun as at 26. A SLOPE is the other question, and it
+   * does matter, because a slope changes the incidence rather than the phase angle.
+   *
+   * The arithmetic. Tilting a surface by theta toward the sun takes the incidence from 90-alt to
+   * 90-alt-theta, so a Lambertian return changes by sin(alt+theta)/sin(alt), i.e. by about
+   * theta/tan(alt) for small theta. swellOf's gradient reaches 0.034 per metre at its extreme and
+   * the relief it stands for is the map's own 2.8 m over a unit of the field, so theta tops out
+   * near 0.095 rad — which at the middle of the Apollo altitude band (tan 0.255) would be a 37%
+   * swing on the very steepest ground the field has.
+   *
+   * A THIRD OF THAT IS WHAT GETS DRAWN. The opposition surge retires most of the incidence term at
+   * the small phase angles a down-sun camera sees, and at the full Lambert figure the plain came
+   * out looking like corrugated iron: the 9 m octave alone was throwing 25% density steps between
+   * adjacent metres of ground.
+   *
+   * WHAT SLOPE_K 3.9 ACTUALLY DELIVERS, measured over 400k uniform world samples rather than read
+   * off the endpoints — |grad| is p50 0.0098, p90 0.0183, p99 0.0257, max 0.0339, so SLOPE_K*|grad|
+   * is 0.038 / 0.071 / 0.100 / 0.132. With the altitude term at its 1.9 ceiling the extreme reaches
+   * 0.251. That is a swing of +-4% on typical ground, +-10% on the steepest one percent, and +-25%
+   * on the single worst sample in four hundred thousand — NOT the +-20% the previous version of
+   * this paragraph claimed for the whole stack, which was an endpoint sum and not a distribution.
+   *
+   * THE +-0.45 CLAMP THEREFORE NEVER FIRES, and it is kept and documented rather than deleted. It
+   * exists to hold the invariant that no single cell of the field may be driven to zero or to
+   * double — a density that reaches zero is a hole in the plain and a hole reads as a shadow with
+   * nothing casting it — and it sits 0.20 above the worst measured value so that a future octave
+   * table with more power in it cannot break the invariant silently. It is a guard, and the
+   * distribution below it is untouched.
+   *
+   * The altitude term is the 1/tan(alt) above, normalised at the band's midpoint and clamped to
+   * 0.6..1.9 so that the shading strengthens toward the ends of the clock — which is the whole
+   * reason Apollo flew at a low sun — without a 6-degree sun quadrupling it into the corrugation.
+   *
+   * IT IS NOT GATED ON THE DAY MIX AND IT RUNS AT NIGHT, at SLOPE_G 1.04 — because SUN_ALT
+   * crossfades to EARTH_ALT 0.24 and 0.255/tan(0.24) is 1.04. That is correct rather than an
+   * oversight: the night key here is EARTHSHINE, a real directional light from a disc fixed 14
+   * degrees above the horizon, and ground tilted away from it is genuinely darker. This is a
+   * LIGHTING term, not a daylight scale, so the contract's "every daylight scale is the identity at
+   * night" does not reach it. What it costs the tuned night baseline is measurable and it is
+   * nothing: seed 42 frame 900 at 213x67, SLOPE_K 3.9 against SLOPE_K 0 — night 3.8 / 1.64 / 168
+   * against 3.8 / 1.65 / 168, noon 3.3 / 2.84 / 190 against 3.3 / 2.85 / 190. The term moves
+   * coverage from one side of a swell to the other and leaves the mean alone by construction, which
+   * is exactly what a census cannot see and the eye can. */
+  var SLOPE_K = 3.9, SLOPE_G = 1;
+
+  /* ---- THE ROVER TRAVERSE -------------------------------------------------------------------------
+   * Same two ruts 2.06 m apart, and nothing else about it is the same.
+   *
+   * IT IS OBLIQUE. TRK_AZ 0.62 rad is 36 degrees off the lattice, and it is not a round fraction of
+   * anything: the corridors run along +z and +x, the walk follows them, so a traverse at 36 degrees
+   * enters the frame from one side and leaves by the other instead of running away to the vanishing
+   * point. That is the single change that stops it reading as a carriageway.
+   *
+   * IT WANDERS, on two octaves of 78 m and 29 m carrying +-13 m and +-7 m. Tens of metres, per the
+   * brief, and the ratio matters more than either number: one octave alone gives a sine wave, which
+   * is as recognisably artificial as a straight line. The second octave was +-4.5 m first and the
+   * render said it was not enough — a traverse crossing the frame at 60 m has its whole visible
+   * length inside one screen row, so a wander of four metres is invisible and what the eye gets is
+   * a rail. At +-7 m on a 29 m wavelength the same crossing visibly bows.
+   *
+   * IT RECURS, on a 128 m cross-track pitch, because one traverse in an infinite plain is one the
+   * camera almost never stands near. 128 m against the caster's ~92 m far plane means the frame
+   * usually holds one crossing and sometimes none, which is the right frequency for "a rover came
+   * through here" rather than "this is a road network". Each copy takes its own noise phase off its
+   * own index, so they are not parallel curves — parallel is a straightness cue on its own.
+   *
+   * ONLY THE NEAREST COPY IS TESTED, and that is exact rather than an approximation. trkWander's
+   * two octaves carry +-13.0 and +-7.0 (26.0 and 14.0, halved), so the wander is bounded by 20.0 m
+   * — measured over 200k samples the realised extremes are -19.32 and +18.34 — against a pitch of
+   * 128. Copy k's centreline therefore never leaves the band k*128 +- 20; a point whose cross-track
+   * coordinate rounds to k is at most 64+20 = 84 m from copy k's centre and at least 64-20 = 44 m
+   * from any other's, and the whole double rut spans under 3 m even with the resolution floor below
+   * widening it. No second copy can ever be the near one. The previous version of this paragraph
+   * wrote the bound as 17.5 m and got 81.5 / 46.5; the conclusion survives, but the arithmetic did
+   * not match trkWander and the next person to touch TRK_PITCH would have trusted it.
+   *
+   * THE RUT WIDENS WITH DISTANCE and that is the flicker gate, not an aesthetic. A ground cell's
+   * world footprint at distance d is about d/170 metres across at this grid, so past 60 m a 0.34 m
+   * rut is narrower than the sampling and the line breaks into dashes that reshuffle as the camera
+   * walks — a v-140 cell switching against a lum-0 background, which is the one thing this world
+   * cannot afford. Floored at the real 0.17 m half-width and grown at 0.0035*d, so it is physical
+   * inside 50 m and a resolution floor outside it. This is capOf's argument applied to a line
+   * instead of to a crest. */
+  var TRK_AZ = 0.62, TRK_SIN = Math.sin(TRK_AZ), TRK_COS = Math.cos(TRK_AZ);
+  var TRK_PITCH = 128.0, TRK_HALF = 1.03;
+
+  function trkWander(a, k) {
+    return (CC.vnoise(a * 0.0128 + k * 7.3, 0x4D86) - 0.5) * 26.0 +
+           (CC.vnoise(a * 0.0345 + k * 3.1, 0x4D87) - 0.5) * 14.0;
+  }
+
+  /* ---- THE RILLE ----------------------------------------------------------------------------------
+   * A sinuous rille is a collapsed lava tube: a shallow channel a few hundred metres wide on the
+   * real Moon, taken here at eleven metres because the frame is 92 m deep and a landform wider than
+   * the view is not a landform, it is a change of ground level. It is in this file for one reason
+   * beyond being real — IT IS A CURVE THAT CONVERGES. An open plain with no converging line has no
+   * perspective, the old rails were the wrong answer to that, and a channel meandering across the
+   * middle distance is the right one: it is a line, it goes somewhere, and it is not straight.
+   *
+   * IT IS PAINTED, NOT DUG. The heightmap has no negative heights and this file cannot make one, so
+   * what is drawn is what a shallow depression looks like rather than what it is: fewer fines on the
+   * floor (the walls shed their fines into it and the floor is swept coarse), a bright lip on the
+   * rim the sun is behind, and a dark one on the rim it is in front of. That is enough — at the
+   * grazing incidence this ground is seen at, a channel is a tonal band with two edges anyway.
+   *
+   * 330 m pitch, so it is in frame perhaps one walk in three, which is the right rarity for the
+   * biggest single feature the ground has. The same nearest-copy argument as the traverse holds
+   * with more room: 50 m of wander against a 165 m half-pitch. */
+  var RIL_AZ = -0.44, RIL_SIN = Math.sin(RIL_AZ), RIL_COS = Math.cos(RIL_AZ);
+  var RIL_PITCH = 330.0, RIL_HALF = 5.5;
+
+  function rilWander(a, k) {
+    return (CC.vnoise(a * 0.0048 + k * 5.7, 0x4D88) - 0.5) * 76.0 +
+           (CC.vnoise(a * 0.0135 + k * 2.9, 0x4D89) - 0.5) * 24.0;
+  }
+
+  /* ---- EJECTA RAYS --------------------------------------------------------------------------------
+   * The one pattern a mare surface carries at kilometre scale, and the cheapest large-scale tone
+   * variation available: a fresh impact throws fines out along preferred azimuths and they land as
+   * long pale streaks, brighter than the surface they land on because they are unweathered and
+   * unpacked. Tycho's are visible from Earth with the naked eye.
+   *
+   * WHY THEY ARE WORTH THE HASHES. Everything else on this floor varies at 9-54 m. Rays vary at 200,
+   * and they RADIATE, so they put a set of lines into the frame that all point at the same place —
+   * convergence, again, from terrain rather than from tyres, and this time convergence on a point
+   * that is usually off the side of the picture rather than at the vanishing point.
+   *
+   * ONE SOURCE PER 300 m CELL AND ONLY THE NEAREST IS TESTED. A point is within 212 m of its own
+   * cell's source, inside RAY_LEN, and ignoring the further sources costs nothing but a few rays
+   * that would have crossed — which is the direction to err, since crossing ray systems is what
+   * turns a plain into plaid.
+   *
+   * 300 m AND NOT THE 190 THIS WAS FIRST WRITTEN AT. Rendered as a plan over a square kilometre,
+   * 190 m put a starburst every 190 m in a visible grid of them — the lattice the whole pass exists
+   * to hide, drawn in the one feature that was supposed to be at a scale above it. At 300 m against
+   * the caster's 92 m view radius a frame holds a few rays of ONE system and never the middle of it,
+   * which is what a ray looks like from inside one: a pale streak going somewhere, not a firework.
+   *
+   * THE AZIMUTH IS A DIAMOND ANGLE AND NOT AN ATAN2. dz/(|dx|+|dz|), folded into -2..2 over the
+   * full circle, is monotone in the true bearing and costs a divide. It is not proportional to it —
+   * a ray's angular width varies by up to 11% around the circle — and nothing here can tell the
+   * difference. floorTex runs six thousand times a frame and an atan2 in it is a quarter of a
+   * millisecond for a number that only ever gets floored.
+   *
+   * THE SECTOR EDGES ARE FEATHERED, which is not decoration. A hard-edged sector is a straight line
+   * radiating from a point, i.e. exactly the artefact this pass exists to remove, and it would be a
+   * straight line whose position depends on nothing the eye can attribute. Tapered linearly to zero
+   * across the outer third of the sector on each side. */
+  var RAY_Q = 300.0, RAY_IN = 26.0, RAY_LEN = 340.0, RAY_SECT = 8.5;
+
+  /* ---- THE CRATERS, AND THEY ARE THE MOST VALUABLE THING ON THIS FLOOR ----------------------------
+   * city.js's crater branch builds the ones with a RIM you can walk round, 3 to 20 m across. It
+   * cannot build the small ones, because a 1 m crater is smaller than a lot and the heightmap has no
+   * negative heights — height 0 is the floor and the route walker requires it. But a real mare
+   * surface is saturated with them: every square metre of regolith has been turned over by impacts
+   * and the ground is pitted at every scale down to the millimetre.
+   *
+   * They matter here for a reason that is nothing to do with realism. A plain with no shadow in it
+   * has no scale, and the eye cannot tell whether the texture is two metres away or two kilometres.
+   * A bowl is a scale reference that costs four hashes and a square root, because HALF OF IT IS
+   * DARK — the inner wall on the sun's side faces away from the light and is a hole, and the far
+   * wall is in raking light and is the brightest thing on the ground. One crater tells you where the
+   * light is, which way is down, and how big a metre is.
+   *
+   * AND THEY DO NOT READ AS CIRCLES, which is worth writing down because the obvious reaction to the
+   * render is that they are not working. The ground plane is foreshortened by dist/eyeY: at 8 m one
+   * screen row spans 0.42 m of depth and one column spans 0.029 m, so a 1.5 m bowl is 50 columns
+   * wide and 4 rows tall. What lands in the frame is a wide flat band with a dark half and a pale
+   * half, not a ring — which is what a crater at boot height actually looks like, and it still does
+   * the two jobs it is here for: relief, and scale.
+   *
+   * ---- THE VISIBILITY LAW REPLACES THE OLD 22 m CUT ------------------------------------------
+   * The previous version drew craters at lod 2 only and defended the cut: "past 22 m a 1 m crater is
+   * under a screen cell across, so its lit and dark halves land in the SAME cell and that cell
+   * switches between v 150 and v 0 as the camera walks". The measurement is right; the CONSTANT is
+   * the wrong shape, because what it is really saying is that a bowl has to be big compared to a
+   * ground cell, and a ground cell grows as the square of the distance (a screen row spans
+   * dist*dist/(scale*eyeY) metres of depth, which is the badly foreshortened axis and the one the
+   * bowl's terminator lies across).
+   *
+   * So the rule is r >= dist*dist/CVIS, and CVIS 968 is chosen to REPRODUCE the old cut exactly at
+   * its own boundary: the old field's smallest crater was 0.5 m and it was drawn to 22 m, and
+   * 22*22/0.5 is 968. Inside 22 m the near field is therefore byte-identical in extent to what it
+   * was. Outside it, craters do not stop — the small ones drop out one size at a time (a 1 m bowl
+   * survives to 31 m, a 2.4 m one to 48 m) and the big lattice below carries on to 90 m and beyond.
+   * That is both the honest optics and the thing the frame was missing: a crater field that stopped
+   * dead at a fixed radius from the camera, in a world with no aerial perspective, was the one place
+   * this ground admitted it had an LOD.
+   *
+   * ---- THREE LATTICES -------------------------------------------------------------------------
+   * PITS: one candidate every 1.45 m, 38% taken, 0.28-1.1 m across, and this row exists because of
+   *   a measurement rather than a wish. The bottom third of the frame is the ground between 3.5 and
+   *   13 m, and at that range the projection is so stretched that the whole of it is a world patch
+   *   about two metres wide and six deep — at one crater candidate per 5.5 m there is a 17% chance
+   *   of ANY crater being in it, so five frames out of six had a near field with no relief in it at
+   *   all, which is the television-static failure exactly. A 1.45 m lattice puts three or four pits
+   *   in the same patch. The visibility law retires them on its own between 12 and 22 m, which is
+   *   where the next lattice up takes over, so nothing is drawn that the grid cannot resolve.
+   * SMALL: one candidate every 5.5 m, 42% taken, 0.5-2.4 m across. The pitting. Unchanged.
+   * LARGE: one every 27 m, 26% taken, 3.2-11 m across. These are the ten-metre bowls the mid field
+   *   can carry, and the visibility law is what makes them affordable: an 11 m bowl is legible to
+   *   103 m, so the middle distance now has relief in it instead of being an even speckle.
+   *   The two lattices are independent and overlap freely, which is what a saturated surface does —
+   *   small craters land inside big ones and the big one's rim is pitted.
+   *
+   * ---- CHAINS AND DOUBLETS --------------------------------------------------------------------
+   * Secondaries — debris thrown out of a primary impact, falling back at a few hundred metres a
+   * second — land in STRINGS, and a line of three or four equal bowls on a common bearing is one of
+   * the most recognisable things on the lunar surface. 22% of the small craters and 14% of the large
+   * ones are chains of four, on a bearing off a 16-entry direction table, at 2.35 radii spacing,
+   * each member independently scaled to 62-92% so the string is not a rubber stamp. The member a
+   * sample belongs to is found by rounding its projection onto the chain axis, so a chain costs one
+   * extra hash and a dot product rather than four times the work.
+   *
+   * ---- AGE ------------------------------------------------------------------------------------
+   * A crater's whole appearance is its age, and there are three:
+   *   fresh  (26%)  deep and steep, so more of it is in shadow; and it carries an EJECTA HALO —
+   *                 an annulus of unweathered fines out to 1.95 radii that is markedly paler than
+   *                 the surface around it, which is why young craters photograph as bright spots.
+   *                 The halo is a density boost handed to the fines branch, not a branch of its
+   *                 own, so it has no edge anywhere and cannot flicker.
+   *   mature (52%)  as before.
+   *   old    (22%)  slumped almost flat: the shadow line drops to where only the deepest part of
+   *                 the bowl is dark, and what is left reads as a shallow dish. This is most of
+   *                 what an old mare surface is actually covered in.
+   * and 11% of all of them, independently, have a DARK FLOOR — a bowl deep enough to hold shadow at
+   * this sun angle, or one that punched through the fines into basalt. Drawn as an absence with a
+   * few slate specks, which is what it costs.
+   *
+   * The direction table is 16 fixed unit vectors rather than a cos/sin pair per cell: this runs
+   * inside the 42%-of-cells branch, six thousand cells a frame, and a chain bearing quantised to
+   * 22.5 degrees is not something the eye can measure off a bowl string four members long. */
+  var CVIS = 968.0;
+  var CDIR_X = [], CDIR_Z = [];
+  (function () {
+    for (var i = 0; i < 16; i++) {
+      var a = i * 0.3926990817;              // 2*PI/16
+      CDIR_X.push(Math.cos(a)); CDIR_Z.push(Math.sin(a));
+    }
+  })();
+
+  /* Out-param: the ejecta-halo density boost for the cell just tested. Reset by every caller before
+   * the call, exactly like FOUT/ROUT — nothing in this file allocates inside a frame. */
+  var CR_HALO = 0;
+
+  function bowl(wx, wz, dist, q, roll, cq, rmin, rvar, take, chainP, salt) {
+    /* The cheapest reject there is, and it is EXACT rather than an LOD: the visibility law below is
+     * monotone in the radius, so a lattice whose LARGEST crater cannot be resolved at this distance
+     * cannot contribute a single cell. One compare in place of six hashes and a square root, and it
+     * retires the pit lattice at 23 m, the small one at 48 and the large one at 103 — which over a
+     * whole frame is most of the ground plane skipping most of this function. */
+    if ((rmin + rvar) * CVIS < dist * dist) return null;
+    var ci = Math.floor(wx / cq), cj = Math.floor(wz / cq);
+    var h1 = hash2(ci, cj, salt);
+    if (h1 >= take) return null;
+    var cr = rmin + rvar * (h1 / take);
+    var ccx = (ci + 0.16 + 0.68 * hash2(ci, cj, salt ^ 0x0101)) * cq;
+    var ccz = (cj + 0.16 + 0.68 * hash2(ci, cj, salt ^ 0x0202)) * cq;
+    var ddx = wx - ccx, ddz = wz - ccz;
+
+    var hc = hash2(ci, cj, salt ^ 0x0303);
+    if (hc < chainP) {
+      var di = (hc / chainP * 16) | 0; if (di > 15) di = 15;
+      var cdx = CDIR_X[di], cdz = CDIR_Z[di];
+      var step = cr * 2.35;
+      /* Four members at -1..2, so the string is not centred on the lattice cell and the lattice
+       * cannot be read off it. Clamped rather than wrapped: outside the string the sample simply
+       * belongs to the nearest end member and falls outside its radius a moment later. */
+      var j = Math.round((ddx * cdx + ddz * cdz) / step);
+      if (j < -1) j = -1; else if (j > 2) j = 2;
+      ddx -= cdx * step * j; ddz -= cdz * step * j;
+      cr *= 0.62 + 0.30 * hash2(ci * 31 + j, cj, salt ^ 0x0404);
+    }
+
+    /* The visibility law, applied AFTER the chain has scaled the radius, because a chain member is
+     * the thing that has to be legible and it is smaller than the crater it was derived from. */
+    if (cr * CVIS < dist * dist) return null;
+
+    var rd = Math.sqrt(ddx * ddx + ddz * ddz);
+    var age = hash2(ci, cj, salt ^ 0x0505);
+    if (rd > cr) {
+      /* Outside the rim: nothing to draw, but a fresh crater hands the fines branch a halo. */
+      if (age < 0.26 && rd < cr * 1.95)
+        CR_HALO = 0.62 * (1 - (rd - cr) / (cr * 0.95));
+      return null;
+    }
+
+    var fac = rd > 1e-4 ? -(ddx * SUN_X + ddz * SUN_Z) / rd : 0;
+    /* WHERE THE TERMINATOR SITS INSIDE THE BOWL IS THE SUN'S ALTITUDE, and it is one of the two
+     * places in this file where the altitude does visible work. A 6-degree sun leaves five sixths
+     * of a bowl in shadow; a 26-degree sun leaves a bit over half. That swing is the whole
+     * difference between the two ends of the clock on this world. Age shifts it: a fresh bowl is
+     * steep and holds more shadow, a slumped one barely shadows itself at all. */
+    var lip = 0.62 - 1.5 * (SUN_ALT - ALT_LO) + (age < 0.26 ? 0.12 : (age > 0.78 ? -0.44 : 0));
+    var cg = hash2(Math.floor(wx * q), Math.floor(wz * q), salt ^ 0x0606);
+    var rn = rd / cr;
+
+    /* The dark floor. Independent of age, and drawn before the terminator test so it takes the
+     * whole bowl and not half of it — the point of it is a black disc with a pale rim round it. */
+    if (rn < 0.52 && hash2(ci, cj, salt ^ 0x0707) < 0.11)
+      return (dist < 25 && cg < 0.07) ? rset(fset(G_DOT, P.slate, 16 + cg * 96)) : rblank();
+
+    if (fac < lip) {
+      /* The shadowed wall, and the near-field fill is the same slate as darkFace's for the same
+       * reason: it is a hole, but a hole two metres from your boot is not black. A grazed lip on
+       * this side was tried and taken out again: it sits astride the sweeping shadow line and so
+       * switches every cell it owns as the day turns, which is the one thing this world's
+       * background luminance makes unaffordable. */
+      return (cg < 0.07) ? rset(fset(G_DOT, P.slate, 16 + cg * 96)) : rblank();
+    }
+    /* The same ramp facade() uses, for the same measured reason: `lip` moves with the sun's
+     * altitude and `fac` with its bearing, so a bowl's shadow line sweeps across the ground as the
+     * day turns, and every cell it crosses would otherwise step the full height of a lit ground
+     * cell in one frame. A cell takes about 20 s to cross the 0.30 band. Only reached with
+     * fac >= lip, so it can never go under its own 0.24 floor. */
+    var cs = fac - lip < 0.30 ? 0.24 + 2.533 * (fac - lip) : 1;
+    /* The lit wall, and its RIM. Denser than the plain around it — a fresh bowl exposes unweathered
+     * fines and they are markedly brighter, which is why young craters photograph as pale spots —
+     * and denser again over the outer sixth, which is the raised lip of ejecta the impact piled up.
+     * `roll` is the ground's own rolling-material term, passed in rather than re-derived: a bowl
+     * sitting on a swept crest has less loose material in it to catch the light than one in a
+     * hollow, which is what "the crater field is interrupted by the crests" comes out as when it is
+     * written continuously instead of as a switch. */
+    var fillC = (age < 0.26 ? 0.92 : (age > 0.78 ? 0.52 : 0.76)) * roll;
+    if (rn > 0.84) fillC *= 1.35;
+    if (cg < fillC)
+      return rset(dim(litSet(cg < 0.3 ? G_COMMA : (cg < 0.7 ? G_TICK : G_QUOTE),
+                             0.45 + 0.55 * (cg / fillC), dist, cg), cs));
+    return rblank();
+  }
+
+  /* Ejecta rays — see the block comment above RAY_Q. Returns a density boost, 0 outside. */
+  function rayAt(wx, wz) {
+    var gi = Math.round(wx / RAY_Q), gj = Math.round(wz / RAY_Q);
+    var ox = (gi + (hash2(gi, gj, 0x4D8A) - 0.5) * 0.7) * RAY_Q;
+    var oz = (gj + (hash2(gi, gj, 0x4D8B) - 0.5) * 0.7) * RAY_Q;
+    var dx = wx - ox, dz = wz - oz;
+    var r = Math.sqrt(dx * dx + dz * dz);
+    if (r < RAY_IN || r > RAY_LEN) return 0;
+    var ax = dx < 0 ? -dx : dx, az = dz < 0 ? -dz : dz, sm = ax + az;
+    if (sm < 1e-6) return 0;
+    var oa = dz / sm;                        // the diamond angle, -1..1 in the +x half plane
+    if (dx < 0) oa = oa >= 0 ? 2 - oa : -2 - oa;
+    var sp = oa * RAY_SECT, si = Math.floor(sp), sf = sp - si;
+    if (hash2(si, gi * 131 + gj, 0x4D8C) > 0.24) return 0;
+    /* Feathered both edges. The two sectors either side of the seam at due -z both taper to zero
+     * at it, so the wrap costs nothing. */
+    var e = sf < 0.34 ? sf / 0.34 : (sf > 0.66 ? (1 - sf) / 0.34 : 1);
+    /* In off the rim, out at the end of the throw. */
+    var rk = r < RAY_IN * 2 ? (r - RAY_IN) / RAY_IN
+                            : 1 - (r - RAY_IN * 2) / (RAY_LEN - RAY_IN * 2);
+    /* Streaky along its length. A ray drawn solid is a wedge, and a wedge is a shape rather than a
+     * spray of debris; the 22 m modulation is what turns it back into one. */
+    return 0.90 * e * rk * (0.45 + 0.55 * CC.vnoise(r * 0.045 + si * 3.7, 0x4D8D));
+  }
 
   function floorTex(wx, wz, dist, t) {
     weatherAt(t === undefined ? 0 : t); dayAt(t === undefined ? 0 : t);
-    var C = cfg();
-    var lane = wx - (C ? C.streetX : 4.0);
-    var al = lane < 0 ? -lane : lane;
     var lod = dist < 22 ? 2 : (dist < 60 ? 1 : 0);
     /* THE LATTICE PITCH IS SOLVED RATHER THAN PICKED — see the block comment on qOf. The brief's
      * pitches (6.0/2.8/1.6/0.9) were measured at 400x100 and print in runs of five to eight
@@ -677,131 +1170,117 @@
      * cascade because the craters below dither on it too. */
     var q = qOf(dist);
 
-    /* ---- the trail ----------------------------------------------------------------------------
+    /* ---- the rolling plain, once, for everything below it -------------------------------------
+     * `roll` is MATERIAL: dust creeps downhill on a body with no wind and no water, so the hollows
+     * are deep in fines and the crests are swept and coarse. `slope` is LIGHT: which way this piece
+     * of ground is tilted relative to the sun. Keeping them apart is what makes the relief read —
+     * one of them says what is there and the other says how it is lit, and a single term that did
+     * both would have the crests bright on the sunward side of the world and dark on the other. */
+    swellOf(wx, wz);
+    var sw = swVal;
+    /* THE ENDPOINTS OF A SUM OF OCTAVES ARE NOT THE FIELD, AND WRITING THEM DOWN AS IF THEY WERE
+     * IS HOW THIS CONSTANT WAS GOT WRONG TWICE. `sw` is four smoothstepped bilinear octaves, so it
+     * is very nearly Gaussian: measured over 400k uniform world samples its range is 0.147..0.866
+     * but its middle 80% is only 0.356..0.642, and its standard deviation is 0.111. The previous
+     * form, 1.55 - 1.10*sw, was documented as "0.45..1.55, a factor of 3.4" — those endpoints need
+     * all four octaves at their joint extreme and are unreachable by construction. What it actually
+     * delivered was a middle 80% of 0.84..1.16, A FACTOR OF 1.37, which is narrower than the field
+     * it was brought in to replace was claimed to be, and the argument written above it — that a
+     * spread of 2 is inside the noise of a 30% dither — condemned it.
+     *
+     * So the gain is set against the MEASURED spread rather than against the nominal range. At
+     * 2.6 per unit of `sw` the delivered distribution is
+     *       p10 0.63   p50 1.00   p90 1.37   p1 0.34   p99 1.64   floor 0.15 (0.05% of samples)
+     * — a factor of 2.2 across the middle 80% and 4.8 across the middle 98%, with the mean still
+     * exactly 1 because E[sw] is exactly 0.5. That is a plain with stretches that are nearly bare
+     * and stretches that are nearly drifted, and unlike the old paragraph it is what the code does.
+     *
+     * THE FLOOR IS 0.15 AND IT IS NOT A TASTE. A coverage that reaches zero is a hole in the plain,
+     * and a hole with nothing casting it reads as a shadow that is not there. 0.15 * the 0.34 base
+     * is a coverage of 5%, which is the sparsest scatter that still says "ground" rather than
+     * "nothing". It is reached by 0.04% of samples — one in 2600 — so it is a guard and not a
+     * shaping term.
+     *
+     * THIS CHANGES THE NIGHT FRAME AND THAT IS DELIBERATE. The contract's rule is that every
+     * DAYLIGHT SCALE must be the identity at night, and this is not one: `roll` is material, it
+     * says how much dust is lying where, and dust does not move when the sun goes down. So the
+     * night picture moves with the day one and is meant to. Measured, frame 900 at 213x67, the old
+     * gain against this one — muddy(9-119) / hot(v>=170) / lit p90:
+     *       seed 42 night   4.4 / 1.66 / 159   ->   3.8 / 1.64 / 168
+     *       seed 42 noon    3.5 / 3.07 / 187   ->   3.3 / 2.84 / 190
+     *       seed 42 dusk    3.6 / 2.62 / 190   ->   3.2 / 2.47 / 193
+     *       seed  7 night  10.0 / 1.05 / 156   ->  11.2 / 1.05 / 155
+     * On seed 42 the muddy band falls at every hour and the lit p90 rises, which is the shape a
+     * wider coverage field should have: the extra tone goes into cells being present or absent
+     * rather than into cells at v 60. Seed 7's night is the other direction and is the worst case
+     * measured, at 11.2% against a 30% ceiling. The hot tail is unmoved on the seeds that were near
+     * the 3.5-5% band (seed 7 noon 4.35 -> 4.49) and drifts a tenth on the ones that were never in
+     * it. */
+    var roll = 1 + (0.5 - sw) * 2.6; if (roll < 0.15) roll = 0.15;
+    var slope = -(swGX * SUN_X + swGZ * SUN_Z) * SLOPE_K * SLOPE_G;
+    if (slope < -0.45) slope = -0.45; else if (slope > 0.45) slope = 0.45;
+
+    /* ---- the rover traverse -------------------------------------------------------------------
      * DRAWN PALER THAN THE GROUND AROUND IT, which is the way round that surprised the frontier too
      * and then did not: churned fines are unpacked and porous, and unpacked powder backscatters
      * more than the packed surface it was lifted out of. Drawn darker they read as two cracks;
      * drawn paler they read as tracks. Every Apollo pan shows them as the bright thing.
      *
-     * PAST 22 m THE DISCRETE PRINTS BECOME A CONTINUOUS STRIP, and that is a photosensitivity fix
-     * rather than an LOD one. At 60 m one screen row spans about 1.4 m of ground and a 0.32 m sole
-     * lands inside a cell or does not depending on sub-metre camera position — so a walking camera
-     * would switch a v-130 cell on and off against a lum-0 background several times a second, which
-     * is precisely the failure west_town.js records its windmill failing tools/west-flicker.cjs on.
-     * Anything that MOVES ACROSS a bright/dark boundary in this world has to be continuous, so the
-     * far trail is a strip that is always painted and only its texture changes. */
-    if (al < 0.62) {
-      var sp = wz / STRIDE, si = Math.floor(sp), fsp = sp - si;
-      var hb = hash2(si, 0, 0x4D51);
-      var foot = (si & 1) ? 0.17 : -0.17;
-      var off = lane - foot; if (off < 0) off = -off;
-      if (lod === 2) {
-        if (fsp < 0.46 && off < 0.14)
-          /* The sole. ':' and ';' because a Apollo boot sole is a lugged waffle and at one cell
-           * across, two stacked dots is what a waffle prints as. */
-          return rset(litSet(hb < 0.5 ? G_COLON : G_SEMI, 0.72 + hb * 0.28, dist, hb));
-        /* The spray thrown forward out of each print, which is what makes a footprint on a body
-         * with no air look the way it does: the ejecta lands in a sharp fan and stays exactly where
-         * it landed, for a million years. */
-        if (fsp < 0.72 && off < 0.30 && hash2(Math.floor(wx * 6), Math.floor(wz * 6), 0x4D52) < 0.16)
-          return rset(litSet(G_DOT, 0.3, dist, hb));
-        return rblank();
-      }
-      if (al < 0.34) {
-        var hf = hash2(Math.floor(wx * 2.2), Math.floor(wz * 2.2), 0x4D53);
-        if (hf < 0.62) return rset(litSet(hf < 0.3 ? G_COLON : G_DOT, 0.6 + hf * 0.4, dist, hf));
-      }
-      return rblank();
+     * CONTINUOUS AT EVERY DISTANCE — always painted, with the chevron tread carried by WHICH glyph
+     * it is rather than by whether there is one. That is the property the old rails had and the one
+     * thing about them worth keeping: a line that is only sometimes painted switches cells on and
+     * off against a lum-0 background as the camera walks, which is the hazard west_town.js's
+     * windmill failed tools/west-flicker.cjs on. */
+    var ta = wx * TRK_SIN + wz * TRK_COS;    // along the traverse
+    var tp = wx * TRK_COS - wz * TRK_SIN;    // across it
+    var tk = Math.round(tp / TRK_PITCH);
+    var to = tp - (tk * TRK_PITCH + trkWander(ta, tk));
+    var tr = (to < 0 ? -to : to) - TRK_HALF; if (tr < 0) tr = -tr;
+    var trw = 0.17 + dist * 0.0035;          // the resolution floor; see the block comment
+    if (tr < trw) {
+      /* THE TREAD IS A TEXTURE AND NOT AN ALTERNATION. The old rails carried their chevron as
+       * `(floor(wz/0.34) & 1) ? '=' : '-'`, and a 0.34 m period is under one screen column past
+       * 60 m: what that prints is runs of six or eight identical characters lying in ranks, which
+       * is the corduroy failure qOf exists to prevent, and on a straight line it reads as a
+       * painted road marking rather than as churned ground. Hashed on the screen-solved lattice
+       * instead, so the run length stays between one and three columns at every distance, and
+       * drawn from four glyphs rather than two so the eye reads a disturbed surface. The line is
+       * still CONTINUOUS — every cell inside the rut is painted, always — which is the one
+       * property of the old rails worth keeping. */
+      var hr = hash2(Math.floor(ta * q), Math.floor(to * 6), 0x4D54);
+      return rset(litSet(hr < 0.32 ? G_EQ : (hr < 0.58 ? G_DASH : (hr < 0.82 ? G_COMMA : G_COLON)),
+                         0.40 + hr * 0.45, dist, hr));
     }
 
-    /* ---- the rover rails ----------------------------------------------------------------------
-     * 2.06 m wheelbase, so 1.03 m either side of the centreline, and a 0.23 m chevron tread. These
-     * are drawn as CONTINUOUS lines at every distance — a rail that is always painted, with the
-     * chevron carried by which glyph it is rather than by whether there is one. Same reasoning as
-     * the trail above, and it costs nothing because a line of alternating '=' and '-' reads as a
-     * tread pattern anyway. */
-    var tr = al - TRACK; if (tr < 0) tr = -tr;
-    if (tr < 0.15) {
-      var ch = (Math.floor(wz / 0.34) & 1) ? G_EQ : G_DASH;
-      var hr = hash2(Math.floor(wz * 3), (al * 2) | 0, 0x4D54);
-      return rset(litSet(ch, 0.35 + hr * 0.45, dist, hr));
+    /* ---- the rille ----------------------------------------------------------------------------
+     * A tonal cross-section rather than a hole: sparse on the floor, one wall bright and the other
+     * nearly blank. RIL_SUN is which of the two walls the sun is behind — the cross-channel axis
+     * dotted into the key direction, computed here because it turns with the clock. */
+    var rla = wx * RIL_SIN + wz * RIL_COS, rlp = wx * RIL_COS - wz * RIL_SIN;
+    var rk2 = Math.round(rlp / RIL_PITCH);
+    var ro = rlp - (rk2 * RIL_PITCH + rilWander(rla, rk2));
+    var rw = RIL_HALF * (0.72 + 0.56 * CC.vnoise(rla * 0.019, 0x4D8E));
+    var ar = ro < 0 ? -ro : ro;
+    if (ar < rw) {
+      var rt = ar / rw;                      // 0 on the axis, 1 at the rim
+      var wl = (ro > 0 ? 1 : -1) * -(RIL_COS * SUN_X - RIL_SIN * SUN_Z);
+      /* Floor swept to 45% of the plain's coverage, walls climbing back to it, and the wall the sun
+       * is behind carrying up to 1.8x while the other falls to 0.2x. The break in slope at the rim
+       * is left as a hard edge on purpose: a rille rim IS a break in slope, and it is a CURVE, which
+       * is the whole reason this landform is in the file. */
+      roll *= (0.45 + 0.55 * rt) * (1 + 0.80 * wl * rt);
     }
 
-    /* ---- THE SMALL CRATERS, and they are the most valuable thing on this floor -----------------
-     * city.js's crater branch builds the ones with a RIM you can walk round, 3 to 20 m across. It
-     * cannot build the small ones, because a 1 m crater is smaller than a lot and the heightmap has
-     * no negative heights — height 0 is the floor and the route walker requires it. But a real mare
-     * surface is saturated with them: every square metre of regolith has been turned over by
-     * impacts and the ground is pitted at every scale down to the millimetre.
-     *
-     * They matter here for a reason that is nothing to do with realism. The first render of this
-     * file was an even speckle from the bottom of the frame to the horizon with no relief in it
-     * anywhere, which is design-brief failure (c) exactly: a plain with no shadow in it has no
-     * scale, and the eye cannot tell whether the texture is two metres away or two kilometres. A
-     * bowl is a scale reference that costs four hashes and a square root, because HALF OF IT IS
-     * DARK — the inner
-     * wall on the sun's side of the bowl faces away from the light and is a hole, and the far wall
-     * is in raking light and is the brightest thing on the ground. One crater tells you where the
-     * light is, which way is down, and how big a metre is.
-     *
-     * NEAR FIELD ONLY (lod 2, i.e. inside 22 m), and that is the flicker gate rather than an LOD
-     * saving. Past 22 m a 1 m crater is under a screen cell across, so its lit and dark halves land
-     * in the SAME cell and that cell switches between v 150 and v 0 as the camera walks — a
-     * 60%-of-full-scale step at walking pace, which is exactly the hazard west_town.js's windmill
-     * failed on. Inside 22 m the smallest of them is three cells across and every cell it owns
-     * stays owned.
-     *
-     * AND THEY DO NOT READ AS CIRCLES, which is worth writing down because the obvious reaction to
-     * the render is that they are not working. The ground plane is foreshortened by a factor of
-     * dist/eyeY: at 8 m one screen row spans 0.42 m of depth and one column spans 0.029 m, so a
-     * 1.5 m bowl is 50 columns wide and 4 rows tall. What lands in the frame is a wide flat band
-     * with a dark half and a pale half, not a ring — which is what a crater at boot height actually
-     * looks like, and it still does the two jobs it is here for: relief, and scale. */
-    if (lod === 2) {
-      var CQ = 5.5;                          // one candidate every 5.5 m, 42% of them taken, radii
-                                             // 0.5-2.4 m: about 8% of the ground ends up inside one
-      var ci = Math.floor(wx / CQ), cj = Math.floor(wz / CQ);
-      var ch1 = hash2(ci, cj, 0x4D61);
-      if (ch1 < 0.42) {
-        var ccx = (ci + 0.18 + 0.64 * hash2(ci, cj, 0x4D62)) * CQ;
-        var ccz = (cj + 0.18 + 0.64 * hash2(ci, cj, 0x4D63)) * CQ;
-        var ddx = wx - ccx, ddz = wz - ccz;
-        var cr = 0.5 + 1.9 * (ch1 / 0.42);   // 0.5 to 2.4 m across the rim
-        var rd = Math.sqrt(ddx * ddx + ddz * ddz);
-        if (rd < cr) {
-          /* Which way this piece of the bowl faces. The inward normal points at the centre, so a
-           * point on the sun's side of the bowl has its wall turned away from the sun. */
-          var fac = rd > 1e-4 ? -(ddx * SUN_X + ddz * SUN_Z) / rd : 0;
-          /* WHERE THE TERMINATOR SITS INSIDE THE BOWL IS THE SUN'S ALTITUDE, and it is the one
-           * place in this file where the altitude does visible work. A 6-degree sun leaves five
-           * sixths of a bowl in shadow; a 26-degree sun leaves a bit over half. That swing is the
-           * whole difference between the two ends of the clock on this world. */
-          var lip = 0.62 - 1.5 * (SUN_ALT - ALT_LO);
-          var cg = hash2(Math.floor(wx * q), Math.floor(wz * q), 0x4D64);
-          if (fac < lip) {
-            /* The shadowed wall, and the near-field fill is the same slate as darkFace's for the
-             * same reason: it is a hole, but a hole two metres from your boot is not black. A
-             * grazed lip on this side was tried and taken out again: it sits astride the sweeping
-             * shadow line and so switches every cell it owns as the day turns, which is the one
-             * thing this world's background luminance makes unaffordable. */
-            return cg < 0.07 ? rset(fset(G_DOT, P.slate, 16 + cg * 96)) : rblank();
-          }
-          /* The same ramp facade() uses, for the same measured reason: `lip` moves with the sun's
-           * altitude and `fac` with its bearing, so a bowl's shadow line sweeps across the ground
-           * as the day turns, and every cell it crosses would otherwise step the full height of a
-           * lit ground cell in one frame. A cell takes about 20 s to cross the 0.30 band. Only
-           * reached with fac >= lip, so it can never go under its own 0.24 floor. */
-          var cs = fac - lip < 0.30 ? 0.24 + 2.533 * (fac - lip) : 1;
-          /* The lit wall. Denser than the plain around it — a fresh bowl exposes unweathered fines
-           * and they are markedly brighter, which is why young craters photograph as pale spots. */
-          if (cg < 0.62)
-            return rset(dim(litSet(cg < 0.3 ? G_COMMA : (cg < 0.7 ? G_TICK : G_QUOTE),
-                                   0.45 + 0.55 * (cg / 0.62), dist, cg), cs));
-          return rblank();
-        }
-      }
-    }
-
+    /* ---- the craters --------------------------------------------------------------------------- */
+    CR_HALO = 0;
+    /* Finest first, because a metre-scale pit sitting inside a ten-metre bowl is a pit and not a
+     * bowl — the later impact is the one on top. */
+    var cout = bowl(wx, wz, dist, q, roll, 1.45, 0.14, 0.41, 0.38, 0.18, 0x4D6F);
+    if (cout) return cout;
+    cout = bowl(wx, wz, dist, q, roll, 5.5, 0.5, 1.9, 0.42, 0.22, 0x4D61);
+    if (cout) return cout;
+    cout = bowl(wx, wz, dist, q, roll, 27.0, 3.2, 7.8, 0.26, 0.14, 0x4D68);
+    if (cout) return cout;
 
     /* ---- the fines ----------------------------------------------------------------------------
      * A SPARSE FIELD WHOSE DENSITY CARRIES THE TONE. 24% coverage, and the 76% that is not painted
@@ -810,26 +1289,38 @@
      * at lum 40-100 in slate is the single fatal mistake available in this world; it would put a
      * third of the frame in the band core.js is trying to hold under 30%, and no setting of GAMMA,
      * KNEE or SHOULDER can rescue it, because a knee can delete a shadow but never create a
-     * highlight. */
+     * highlight.
+     *
+     * THE MEAN IS UNCHANGED AND ONLY THE SPREAD HAS MOVED. The old field was one 9 m octave on a
+     * lattice shorter than a stride — which is to say it varied at a scale the projection destroys
+     * and by an amount the dither hides. It is now the product of four terms each centred on 1, and
+     * they are quoted here as MEASURED DISTRIBUTIONS rather than as nominal endpoints, because the
+     * endpoints of a sum of octaves are unreachable and quoting them is how the last two versions
+     * of this paragraph came to describe a field the code did not have:
+     *     roll        p10 0.63  p50 1.00  p90 1.37,  p1 0.34, p99 1.64   (four octaves to 128 m)
+     *     1 + slope   p10 0.96  p50 1.00  p90 1.04 at the band midpoint; p10 0.93 p90 1.08 and
+     *                 extremes 0.78..1.24 with the altitude term at its 1.9 ceiling
+     *     ray boost   1..1.9 where an ejecta ray crosses, and exactly 1 everywhere else
+     *     1 + CR_HALO 1..1.62 in the ejecta apron of a crater, 1 everywhere else
+     * So a hollow with a ray over it runs at three times the mean and a swept crest on the shaded
+     * side of a swell at a third of it, against a mean that is still exactly what it was. That is what buys a plain that
+     * undulates: nothing in it is brighter than it was, there is simply somewhere for the eye to
+     * find an edge. Note which term does the work — `roll` is the wide one and the slope term is
+     * deliberately narrow, because one of them says what is on the ground and the other only says
+     * how it is lit. */
     var dens = 0.34 * (lod === 2 ? 1 : (lod === 1 ? 0.80 : 0.55));
     dens *= 0.94 + 0.5 * wFines;             // levitated fines settle out; see weatherAt
-    /* THE SWELL. A mare surface is not flat, it undulates on a scale of five to fifteen metres, and
-     * an even field of grit from the bottom of the frame to the horizon is design-brief failure (c)
-     * in its purest form: television static, with no way to tell whether the texture is two metres
-     * off or two kilometres. There is no geometry available for it — city.js owns the heightmap and
-     * a street cell is height 0 by construction — so the swell is carried by DENSITY instead, which
-     * is the same trick the tone is carried by. Bilinear over a 9 m lattice rather than a hard cell,
-     * because a hard cell gives the plain visible 9 m tiles; four hashes and three lerps buys a
-     * surface that reads as gently rolling. 0.55 to 1.45 is a factor of 2.6 in coverage, which at
-     * this density is the difference between bare ground and a drift. */
-    var sxq = wx / 9.0, szq = wz / 9.0;
-    var s0 = Math.floor(sxq), s1 = Math.floor(szq);
-    var fx = sxq - s0, fz = szq - s1;
-    fx = fx * fx * (3 - 2 * fx); fz = fz * fz * (3 - 2 * fz);
-    var n00 = hash2(s0, s1, 0x4D71), n10 = hash2(s0 + 1, s1, 0x4D71);
-    var n01 = hash2(s0, s1 + 1, 0x4D71), n11 = hash2(s0 + 1, s1 + 1, 0x4D71);
-    var sw = (n00 + (n10 - n00) * fx) + ((n01 + (n11 - n01) * fx) - (n00 + (n10 - n00) * fx)) * fz;
-    dens *= 0.55 + 0.90 * sw;
+    dens *= roll * (1 + slope) * (1 + CR_HALO);
+    if (dist < RAY_LEN) dens *= 1 + rayAt(wx, wz);
+    /* THE CEILING, and it is the one guard the whole product needs. Four terms centred on 1 can in
+     * principle multiply out past 4, and 0.34 * 4 is a coverage over 1 — a solid white patch of
+     * ground, which is not a drift of fines, it is a hole in the picture where the black should be.
+     * 0.62 is the densest the eye still reads as a granular surface rather than as a fill; measured
+     * over 210k ground samples at 400x100, three hours by six yaws, it is reached by 0.008% of them,
+     * so the clamp is a guard rather than a shaping term and the distribution below it is untouched.
+     * It is rarer than it looks because the far LOD scales the base to 0.187 and most ground samples
+     * in a frame are far. */
+    if (dens > 0.62) dens = 0.62;
     var d1 = hash2(Math.floor(wx * q), Math.floor(wz * q), 0x4D01);
     if (d1 < dens) {
       var k1 = d1 / dens;                    // normalised, for the reason litSet's callers all are
@@ -839,18 +1330,19 @@
        * about 2.7% of ground cells, which with the ground at 40% of the frame is 1.1% hot from the
        * floor. Measured at 400x100 seed 42 the whole frame runs 2.1-2.4% hot against the build's
        * 3.5-5% target, and the shortfall is deliberate: the remainder is meant to come from the LM
-       * foil, the SWC foil, the crew suit and Earth, none of which exist yet. If those land and the
-       * census overshoots, this threshold is the first thing to move back. */
+       * foil, the SWC foil, the crew suit and Earth. */
       if (k1 > 0.92) return rset(specSet(G_STAR, (k1 - 0.92) / 0.08, dist));
       return rset(litSet(k1 < 0.34 ? G_DOT : (k1 < 0.68 ? G_COMMA : G_TICK), k1, dist, d1));
     }
     /* A pebble, and the one blank down-sun of it that is its shadow. Rare, near field only, and the
      * only object on this floor with an edge — which is the whole point of it: a 3 cm stone with a
      * 20 cm shadow is a scale reference, and an open plain with no scale reference in it has no
-     * size. The shadow is drawn as an absence because on this world that is exactly what it is. */
+     * size. The shadow is drawn as an absence because on this world that is exactly what it is.
+     * The rate rides the CREST rather than being flat: the coarse fraction is what is left where
+     * the fines have crept away, so stones come out of the swept tops and not out of the drifts. */
     if (lod === 2) {
       var d2 = hash2(Math.floor(wx * q * 0.5), Math.floor(wz * q * 0.5), 0x4D03);
-      if (d2 < 0.010) return rset(litSet(G_o, 0.9, dist, d2));
+      if (d2 < 0.010 * (1.9 - roll)) return rset(litSet(G_o, 0.9, dist, d2));
     }
     return rblank();
   }
@@ -989,12 +1481,13 @@
    * edit to surfaces.js — which matters, because surfaces.js is shared with two worlds that are
    * already tuned.
    *
-   * ONE THING THIS DOES NOT FIX, recorded because it is in somebody else's file. refog() also lifts
-   * far cells onto a haze floor of `Daylight.P.sky * (0.30 + 0.55*fog) * 46`, which is aerial
-   * perspective — the one thing this world does not have. It only bites past fogStart, so on the
-   * Moon it touches the two screen rows between 150 m and the horizon and is close to invisible;
-   * the correct fix is for daylight.js to publish sky 0 in a vacuum world, and that is in the report
-   * rather than worked around here. */
+   * AND THE HAZE FLOOR IS ALREADY DEALT WITH, four lines below this one. refog() used to lift far
+   * cells onto a floor of `Daylight.P.sky * (0.30 + 0.55*fog) * 46`, which is aerial perspective —
+   * the one thing this world does not have. surfaces.js:2728 now reads
+   * `hazeFloor = (D && !(alt && alt.airless)) ? ... : 0`, so the `airless: 1` exported below turns
+   * it off on this world and there is nothing left to work around. The previous version of this
+   * paragraph escalated it as an open cross-file defect and asked another lane to fix something
+   * that was already fixed, four lines above the flag that fixes it. */
   var FOG_START_M = 150.0, FOG_END_M = 240.0, FOG_POW_M = 0.45;
 
   CC.SurfMoon = {

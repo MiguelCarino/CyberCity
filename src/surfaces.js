@@ -145,12 +145,46 @@
    *   dSun  direct sun, 0 through the whole of twilight. Only things that need a SHADOW read this.
    */
   var dT = 1 / 0, dSky = 0, dLamp = 1, dSun = 0, dWarm = 0;
+  /* The sun's bearing, as a unit vector in the project's convention (yaw 0 faces +z). The city
+   * never needed one — its light comes off the street and every face is the same — and by day
+   * that stopped being true: a canyon at noon has a lit wall and a shaded wall, and which is
+   * which is the only modelling a daylight facade gets. Refreshed on the same cache key as the
+   * rest of the hour, so it costs one sin and one cos per FRAME. */
+  var SUNX = 0, SUNZ = 1, SUN_ALT = 0;
   function dayAt(t) {
     if (t === dT) return;
     dT = t;
     var D = CC.Daylight;
     if (!D) return;                      // standalone require: hold the tuned night
     dSky = D.P.sky; dLamp = D.P.lamp; dSun = D.P.sun; dWarm = D.P.warm;
+    SUNX = Math.sin(D.P.az); SUNZ = Math.cos(D.P.az); SUN_ALT = D.P.alt;
+    /* The depth ramp reads the HOUR as well as the weather, and refog() was only ever called from
+     * weatherAt(). Exactly ONE of refog's outputs is hour-dependent and it is hazeFloor, which
+     * multiplies D.P.sky; fogPow is a constant and fogStart/fogEnd are the weather's. So this call
+     * is worth one thing and one thing only: without it the haze floor lags the clock by a frame
+     * on the frames where the weather did not also change. That is invisible, and it is still
+     * worth the call, because both cache on `t` — one extra call per frame, never per cell — and
+     * whichever of the two runs second leaves the pair consistent. Do not delete it on the grounds
+     * that fogPow is constant: it is, and that is not why this is here. */
+    refog();
+  }
+  /* How square-on to the sun this wall is, 0 (facing away) .. 1 (facing it). The frontier's
+   * sunOf() is the model and this is the cheap half of it: no ambient floor, no sqrt, because
+   * this number only ever picks a SWATCH here — the lums are the day lift's own.
+   *
+   * The split collapses toward noon exactly as surf_west's does and for the same reason: at 54
+   * degrees up the light arrives from above, so both walls of a street catch it and the
+   * difference between them is small. Without that term a noon canyon has one wall in full sun
+   * and one in near-shade, which is a low-sun picture drawn at the wrong hour.
+   *
+   * A cell with no face (the standalone harness, a probe) returns 0.5, i.e. neither — which is
+   * what the city looked like before there was a sun in it at all. */
+  function sunFace(cell) {
+    if (!cell || cell.faceX === undefined) return 0.5;
+    /* The face crossed by a ray stepping +side has its outward normal pointing -side. */
+    var d = cell.faceX ? -cell.side * SUNX : -cell.side * SUNZ;
+    var split = 1 - 0.62 * clamp(SUN_ALT / 0.95, 0, 1);
+    return clamp(0.5 + 0.70 * d * split, 0, 1);
   }
 
   var wT = 1 / 0, wWet = 1, wRain = 1, wWind = 1, wFogP = 0.30;
@@ -249,6 +283,151 @@
    * night look is the tuned baseline and a daylight cycle may not move it by a cell. */
   var FOUT = { ch: 0, col: 0, lum: 0 };
   var fU = 0, fV = 0, fSd = 0;
+  /* ---- WHAT THE DAY LIFT IS LIFTING, and it used to be one thing ------------------------------
+   * The lift moved every unlit cell onto P.white as the sky came up, and it is why a noon city
+   * had no colour in it: measured at seed 42 frame 300, 200x60, noon, white took 73.0% of ALL the
+   * frame's energy and 82.2% of its LIT energy — one swatch, over three quarters of the picture.
+   * That is not a grey concrete canyon, it is a monochrome.
+   *
+   * Three facts about a daylight facade were being collapsed into one swatch, and each of them
+   * now carries its own:
+   *   fGrain  THE WALL ITSELF — the coverage dither that fills the blank cells between the
+   *           painted detail. That is the concrete, and concrete is `stone`: the swatch slate
+   *           refuses to be. It is also the one place stone can be spent for nothing, see below
+   *   fMat 1  GLASS — the dead bays and the unlit panes. At noon a glazed wall is DARKER than the
+   *           concrete round it and it is blue, which is `indigo` (day ceiling 104) and is the
+   *           whole of the README's "a grey concrete canyon with dark glass in it"
+   *   fSun    WHICH WALL — as a GAIN and never as a swatch. A face square to the sun is a stop
+   *           and a half brighter than one in shade; it is not made of a different material, and
+   *           the version of this file that said it was is what finding 2 of the review is about
+   * All three are the identity at dSky 0, which is the rule the whole feature is built on. */
+  var fMat = 0, fSun = 0.5, fUp = 0, fGrain = 0, dayG = 1;
+  /* ---- UP-FACING CELLS, AND THEY ARE WHERE A SHADED CANYON GETS ITS HIGHLIGHTS ----------------
+   * fSun answers "how square to the sun is this WALL", which is the right question for the ninety
+   * per cent of a facade that is vertical and the wrong one for the coping on top of a parapet and
+   * the weathering of a belt course. Those are horizontal slabs, and a horizontal slab at local
+   * noon takes the sun whichever way the building faces.
+   *
+   * It matters because a roofline is the silhouette the whole picture is composed around, and a
+   * coping drawn at the wall's own bearing goes out at exactly the hour there is most light.
+   * Measured at seed 42 frame 300 noon — a canyon whose two walls both happen to face away from
+   * the sun — a coping on fSun prints v 96 against v 209 on upFace(), which is the difference
+   * between a roofline and a smudge. It is worth saying what this is NOT worth, because the
+   * version of this comment that shipped claimed it: sweeping the edge tier's gain 0.7 -> 1.3
+   * over twelve noon seed/frame pairs moved the frame's hot tail 1.93% -> 2.14%, i.e. the copings
+   * and belt courses are too few to be a census term. They are a composition term.
+   *
+   * The blend is 35% of the wall's own bearing and 65% of the sun's ALTITUDE, so a coping is
+   * nearly fully lit at noon, tracks the walls at a low sun (when a horizontal surface really does
+   * get very little), and is 0 at night like everything else here. */
+  function upFace() {
+    var alt = clamp(SUN_ALT / 0.95, 0, 1);
+    return fSun * 0.35 + 0.65 * (0.45 + 0.55 * alt);
+  }
+  /* Which swatch this cell takes at full daylight, and the gain that holds its PRINT where white's
+   * was. The gains are not decoration: stone's day ceiling is 145 and indigo's 104 against white's
+   * 209, so writing the same lum through them would hand the noon city a stop and a half of
+   * darkness that nobody asked for. Measured on the day ladder (mix 1, sun 1, near bucket):
+   * white lum 120 prints v 138; stone needs lum 186 for v 119 and CANNOT reach 138 at any lum,
+   * which is right — a concrete wall is not as bright as the sky above it, and that gap is the
+   * modelling the old single-swatch lift had none of.
+   *
+   * ---- WHICH SWATCHES ARE ALLOWED TO BE A HIGHLIGHT AT ALL, and this governs the whole file ----
+   * tools/metrics.py classifies a cell by what it ACTUALLY prints, `max(r,g,b) * lum/255`. So a
+   * swatch's PIGMENT is a hard ceiling on the census that no exposure, gain or lum can lift:
+   *   stone 170  timber 150  jade 148  indigo 142  slate 138  moss 126  shadow 66
+   * against the hot line at 170. stone touches it exactly and only at printed lum 255, which the
+   * day ladder never reaches (it tops out at 217 in the near bucket), so a stone cell prints v 145
+   * at best and is NEVER hot. The swatches that can carry a daylight highlight are white (236 →
+   * 209), sand (216 → 190), ice, pure and red — and that is the whole list.
+   *
+   * The consequence, and it is finding 2 of the review: the version of this function that shipped
+   * used stone as its SHADE tier, so a camera facing two shaded walls had no highlight anywhere in
+   * the frame by construction. Measured over twelve seed/frame pairs at noon, 200x60, against the
+   * pre-pass tree: hot 2.59% -> 2.11%, worse on nine of twelve, and on seed 99 frame 1800 — where
+   * the facade came out 4564 cells of stone and not one white cell — 3.18% -> 0.57%.
+   *
+   * What replaces it is the distinction the old code was missing. The SWATCH is the material and
+   * the SUN is the gain: stone moves onto the GRAIN, which is where a wall's concrete actually is,
+   * and the painted mass keeps a material that can be a highlight on BOTH sides of the street.
+   * Stone costs nothing there, and that is arithmetic rather than luck: a grain cell's lum tops
+   * out at 108 before the gain, so it could not reach the hot line on white either. Measured, same
+   * twelve pairs: hot 2.11% -> 3.97% (core.js's band is 3.5-5, and the pre-pass tree was 2.59%),
+   * muddy 65.5% -> 58.0% against the pre-pass 58.4%, and stone still takes 50-69% of the frame's
+   * lit energy against white's 14-31 — so the colour was not paid back to buy the census. */
+  function dayMat(dK) {
+    /* ---- TWILIGHT, WHICH IS A THIRD MATERIAL AND NOT A HALF-LIT DAY ------------------------
+     * Under the handover the cell used to stay on P.slate, and the consequence was measurable: at
+     * the dusk stop, seed 42 frame 1800, slate took 35.4% of ALL the frame's energy — one blue-
+     * grey swatch over a third of the picture at the one hour the file elsewhere calls the city's
+     * best. That is the far field being "uniformly slate", which is precisely what `indigo` was
+     * added to the palette to stop.
+     *
+     * The swap is free. core.js fits indigo's night ceiling at 115 against slate's 114 ON PURPOSE
+     * — "two readings of the same cold structure ... so a wall that changes from one to the other
+     * across a shadow edge changes HUE and not brightness" — so this moves no lums, no census
+     * band and no pillar. What it moves is that dusk shade now has a sky in it.
+     *
+     * dK > 0.06 is dSky > 0.245, i.e. the second half of civil twilight. Below that there is not
+     * enough sky for shade to have a colour and the swatch stays slate, which keeps the first
+     * minutes either side of night continuous with the night itself. */
+    if (dK < 0.50) { dayG = 1; return dK > 0.06 ? P.indigo : P.slate; }
+    /* THE COSINE, AND IT IS NOW THE WHOLE OF THE SHADING. A wall square to the sun is a stop and a
+     * half brighter than one edge-on to it, and that is a difference in LIGHT, not in material —
+     * which is why the sunlit/shaded STEP that used to sit under this line is gone. The step was
+     * what made a frame's hot tail a coin toss: every wall in view lands on one side of one
+     * threshold, so seed 555 frame 1800 (all sunlit) printed 7.6% hot while seed 99 frame 1800
+     * (all shaded) printed 0.57%, against a band of 3.5-5. A continuous ramp cannot do that.
+     *
+     * 0.85 + 1.10*sn, i.e. 1.10..1.70 across fSun's noon swing of 0.23..0.77 and 0.85..1.95 across
+     * a low sun's full swing — the same 1.55x between the two sides of a street the old
+     * 0.62 + 0.76*sn had, carrying the 1.4x that the retired tier multipliers (1.26 sunlit, 1.95
+     * shaded) used to supply. Swept over twelve noon seed/frame pairs, hot / muddy:
+     *   0.78 + 1.05  3.43 / 60.3      0.80 + 1.10  3.72 / 59.3
+     *   0.85 + 1.10  3.97 / 58.0      0.95 + 0.95  4.12 / 57.2 but the two sides converge
+     * 0.85 + 1.10 is the pair that is best on both numbers at once; past it the ramp flattens and
+     * the street stops having a lit side, which is the fault this term exists to prevent. */
+    var sn = fUp ? upFace() : fSun;
+    var s = 0.85 + 1.10 * sn;
+    /* Glass. Darker than the concrete round it at every hour of the day, and blue, because what a
+     * dead pane is showing you is the sky. A sunlit pane is not brighter GLASS, it is the same
+     * glass with a sky reflection in it, which is why it rides `s` and never changes swatch.
+     * 0.90 and not the 1.25 it carried before, because `s` itself went up by 1.4x and indigo's day
+     * ceiling is 104: at 1.25 the whole glazed wall clipped to a flat 104 and the dead bays lost
+     * the modelling that makes them read as glass. 0.90 * 1.40 reproduces the old 1.25 at mid
+     * swing to within a printed unit. */
+    if (fMat === 1) { dayG = 0.90 * s; return P.indigo; }
+    /* THE GRAIN — the coverage dither that fills a daylight wall between its painted detail, and
+     * the largest single population in the frame. This is the concrete itself, so it is `stone`,
+     * and stone is free HERE in a way it is not anywhere else: the dither writes lum 26-108 before
+     * the gain, and 108 cannot reach the hot line through white (which needs 176) let alone
+     * through stone. Putting the frame's grey mass where it cannot cost a highlight is the whole
+     * trick, and it is what lets the mass below stay on a swatch that can be one.
+     *
+     * 1.95, kept from the shaded tier it replaces but now riding the bigger `s`, so the grain runs
+     * 2.15..3.32 and about two cells in five clip at stone's 145. Swept, muddy over the twelve
+     * pairs: 1.30 -> 65.5, 1.60 -> 62.5, 1.95 -> 58.0, 2.30 -> 54.6. The hot tail does not move at
+     * any of them (3.94-4.04), which is the point above restated as a measurement. 2.30 reads
+     * better on the census and worse on the wall — it clips more than half the grain to one value
+     * and the concrete goes flat — so 1.95, which lands muddy on the pre-pass tree's own 58.4%. */
+    if (fGrain) { dayG = 1.95 * s; return P.stone; }
+    /* THE PAINTED MASS — spandrel, mullion, parapet, coping, belt course. It takes the BUILDING'S
+     * material, one roll, both sides of the street, because a wall in shade is not made of
+     * something else. Two in eight take `sand`: warm render, stock brick, travertine, the things a
+     * real street is faced in that are not grey concrete. Its day ceiling is 190 against white's
+     * 209, so this is a HUE change and not much of a brightness one, and the roll is on the
+     * BUILDING SEED rather than on the cell, so a facade is one material from top to bottom.
+     * The bit test is deliberate rather than lazy: fSd is already the output of a hash, so its low
+     * bits are as uniform as another hash2 would be, and this runs once per painted cell.
+     *
+     * Two and not three. At three in eight the twelve-pair hot mean is 3.29% against 3.97%,
+     * because sand's ceiling is 19 printed units under white's and a frame that happens to face a
+     * sand building loses most of its highlight budget — seed 99 frame 1800 is exactly that frame
+     * and it went to 0.57% under the shipped roll. Two keeps the hue and stops it deciding the
+     * census. */
+    dayG = s;
+    return (fSd & 7) < 2 ? P.sand : P.white;
+  }
   function fset(ch, col, lum) {
     if (dSky > 0.02) {
       /* SQUARED, and it is the same argument the print ladder makes one file over: a wall does
@@ -261,14 +440,56 @@
       var dK = dSky * dSky;
       if (ch === 0 || lum <= 0) {
         var hb = hash2(Math.floor(fU * 2.6), Math.floor(fV * 2.6), (fSd ^ 0x7D13) | 0);
-        if (hb < 0.14 + 0.50 * dK) {
+        /* HOW SOLID A DAYLIT WALL IS, and it is the only thing that decides how much continuous
+         * surface the frame gets. At 0.64 coverage the noon city was 32.7% pure black, which is a
+         * night budget being spent at midday, and the black was scattered through the wall as
+         * holes rather than massed as shadow. At 0.86 the wall is solid where it is lit and the
+         * frame's black goes back to being the dark blocks, the glazing and the sky slot, which
+         * are the things that are meant to carry it.
+         *
+         * WHAT IT COSTS, because the version that shipped stated only the half that it bought and
+         * finding 4 of the review is exactly that omission: coverage is a trade of black for the
+         * MUDDY band and nothing else. Measured over twelve noon seed/frame pairs, 200x60, gate
+         * 0.50 -> 0.72: black 27.8% -> 19.4% and muddy 55.5% -> 58.1%, with the hot tail unmoved
+         * (4.02 -> 4.15). Eight points of black for two and a half of muddy is the trade, it is
+         * taken deliberately, and by day the hot tail is the census core.js says to watch.
+         *
+         * AND DUSK DOES NOT PAY FOR IT. The shipped form was 0.14 + 0.72*dK, which is a linear
+         * ramp through a quadratic dK, so twilight got a coverage it was never tuned for: the dusk
+         * stop ran 58.0% muddy against 54.2% for the pre-pass tree, and nobody was tuning dusk.
+         * The cubic term is zero everywhere but the top of the day — 0.14 + 0.50*dK is the shipped
+         * curve exactly, and 0.22*dK^3 adds the solidity only where it was argued for. At noon
+         * dK is 1 and this is the same 0.86 as before, to the digit. Measured, muddy: dusk 58.0
+         * -> 55.6, dawn 55.4 -> 53.1, morning 58.4 -> 57.6, noon 58.08 -> 58.08.
+         * The night is untouched: dK is 0 and the branch is not entered. */
+        if (hb < 0.14 + 0.50 * dK + 0.22 * dK * dK * dK) {
           ch = hb < 0.34 ? G_DASH : (hb < 0.62 ? G_COLON : G_QUOTE);
-          col = dK > 0.55 ? P.white : P.slate;
           lum = (26 + hb * 96) * dK;
+          /* The gain rides in with the swatch and not before it: under the handover dayMat()
+           * returns the twilight tier at dayG 1, i.e. the shipped lum, which is what keeps the
+           * transition continuous.
+           * fGrain is the ONE flag dayMat cannot infer for itself — everything else it reads
+           * (fMat, fSun, fUp, fSd) is set by the painter, and which fset branch called it is not.
+           * Cleared on the way out rather than at the top of fset so that a painter which returns
+           * early through some other branch cannot leave it set for the next cell. */
+          fGrain = 1; col = dayMat(dK); lum *= dayG; fGrain = 0;
         }
       } else if (col === P.shadow) {
-        col = dK > 0.48 ? P.white : P.slate;
         lum = lum * (1 + 2.6 * dK) + 62 * dK;
+        col = dayMat(dK); lum *= dayG;
+      } else if (col === P.slate) {
+        /* AND THE SLATE TIER, WHICH THE LIFT USED TO WALK STRAIGHT PAST. The coping, the corner
+         * rib, the belt course, the downpipe and the plant boxes are all written on P.slate at
+         * lum 9-46 — chosen against a NIGHT curve, where slate is the cold-structure swatch and
+         * that range prints v 10-63. At noon those are the only hard EDGES a facade has, and
+         * every one of them was still being drawn at its midnight value while the wall behind it
+         * lifted by a factor of four: measured at seed 42 noon, a parapet coping printed v 30
+         * against v 138 for the spandrel two rows under it, so the roofline — the silhouette the
+         * whole picture is composed around — went out at exactly the hour there is most light.
+         * Same swatch rule as the mass beside it, and a slightly harder lift because these are
+         * proud edges catching more sky than the flat they stand on. */
+        lum = lum * (1 + 3.4 * dK) + 66 * dK;
+        col = dayMat(dK); lum *= dayG;
       } else if (col === P.warm || col === P.amber || col === P.azure || col === P.ice) {
         /* KEYED ON THE SUN, NOT ON THE SKY, and the difference is the whole of dusk. A lamp behind
          * glass loses its advantage over the wall when there is DIRECT light on that wall — not
@@ -311,6 +532,14 @@
      * one without changing a signature that twenty-five call sites use. Three stores per cell on a
      * path that already does a dozen. */
     fU = u; fV = v; fSd = sd;
+    /* Which material the day lift is about to be handed, and which way this wall faces. Both are
+     * per-CELL rather than per-call, so they are set once here and the two dozen fset() call sites
+     * below only have to move fMat when they are painting glass rather than concrete. Reset to
+     * structure on every entry: a stale 1 left by the previous cell would paint a parapet as a
+     * window. sunFace() costs two multiplies and a clamp and is skipped outright at night, where
+     * there is no sun to face. */
+    fMat = 0; fUp = 0;
+    fSun = dSky > 0.02 ? sunFace(cell) : 0.5;
 
     var wu = Math.floor(u / st.pu), wv = Math.floor(v / st.pv);
     var fu = u / st.pu - wu, fv = v / st.pv - wv;
@@ -350,9 +579,14 @@
     var bh = cell && typeof cell.h === 'number' ? cell.h : 0;
     if (bh > 6 && v > bh - 2.35) {
       var pu2 = Math.floor(u / 1.9);
-      if (v > bh - 0.42)                      // coping, jointed every 1.9 m like real precast
+      if (v > bh - 0.42) {                    // coping, jointed every 1.9 m like real precast
+        /* THE ONE UP-FACING SURFACE IN THE WHOLE FACADE, and the one that makes a roofline read.
+         * A coping is a horizontal precast slab; at noon it takes the sun whatever the wall under
+         * it is doing. See upFace(). At night this is one store and no change. */
+        fUp = 1;
         return fset((u - pu2 * 1.9) < 0.16 ? G_PIPE : G_EQ, P.slate,
                     24 + hash2(pu2, 0, sd ^ 0x2A1) * 22);
+      }
       if (v > bh - 1.85) {
         var pg = hash2(pu2, Math.floor(v * 2.2), sd ^ 0x2A2);
         return pg < 0.32 ? fset(DIMGL[(pg * DIMGL_N * 3.1) | 0], P.shadow, 14 + pg * 34)
@@ -401,6 +635,11 @@
     }
     /* Floor band every few storeys — a belt course, the only strong horizontal on the wall. */
     if (fv < 0.11 && (wv % st.band) === 0 && hash2(wu, wv, sd ^ 0xB2) < 0.72) {
+      /* Up-facing too: a belt course oversails the wall, so what the street sees of it is its
+       * WEATHERING — the top slope that throws the rain clear — and that is a horizontal catching
+       * the sky. It is also the only strong horizontal a wall has between the ground band and the
+       * parapet, so it is where a shaded facade gets its second highlight. */
+      fUp = 1;
       return fset(G_EQ, P.slate, 12 + hash2(wu, wv, sd ^ 0xB1) * 16);
     }
 
@@ -591,6 +830,10 @@
     }
 
     if (!lit) {
+      /* EVERYTHING BELOW THIS LINE IS GLAZING, so the day lift is told so once here rather than at
+       * each of the four returns. At night it changes nothing — fMat is only ever read inside
+       * fset's `dSky > 0.02` branch. */
+      fMat = 1;
       /* Dead: the glass is gone. One unlit bay in twenty, and it is the state that costs nothing —
        * a broken window is mostly a hole, so this SUBTRACTS coverage rather than adding it, which
        * is how a facade pays for the parapet and the pipework above. */
@@ -691,6 +934,45 @@
    * spring leans screen — with the quarter's own colour surviving as a minority tenant so the
    * district still reads as itself. Warm is two slots in every district: someone's counter lamp,
    * a garnish, never a third pillar. */
+  /* ---- AND FOUR NEW QUARTERS, WHICH IS WHY THIS TABLE IS TWENTY ROWS AND NO LONGER MASKED -----
+   * city.js's district table now leads on stone, jade, moss and indigo as well as the four this
+   * roll knew about, and `& 15` did not fail on them — it MISROUTED them, which is worse, because
+   * nothing throws. rose(16) folded onto row 0, gold(17) onto 1, moss(18) onto 2 and indigo(19)
+   * onto 3, so an indigo tower quarter was handed the SPRING shopfront parade and the district
+   * system quietly stopped meaning anything in four quarters out of nine. The mask is gone and
+   * the table is the palette's own length; a hue past the end still lands on `neutral`, which is
+   * the contract seedOf/styleOf/litOf keep.
+   *
+   * THE NEW ROWS ARE PILLARS ONLY, AND THAT IS NOT TIMIDITY — IT IS THE LADDER. This is the one
+   * table in the file that decides what COLOUR a light is, and a light that cannot print above the
+   * hot line is not a light, it is a stain. metrics.py scores a cell as `max(r,g,b) * lum/255`, so
+   * a swatch's pigment is a hard ceiling nothing downstream can lift: jade 148, moss 126, indigo
+   * 142, timber 150 — every one of them under the 170 the census calls a highlight, at any lum, on
+   * any ladder. gold reaches 240 as a pigment but core.js's night ladder caps it at a printed 157,
+   * which is the same answer.
+   *
+   * It was tried the other way, and finding 1 of the review is the bill. Two slots of jade in the
+   * stone and indigo parades and five plus two of gold in the jade one — 2/16 and 7/16 of the
+   * largest lit surface in the near frame — cost a district-heavy NIGHT frame this, measured
+   * against the pre-pass tree at seed 555 frame 600: muddy 30.2 -> 33.5%, hot 2.53 -> 1.08%, lit
+   * p90 161 -> 151, and azure 33.1 -> 15.5% of the frame's lit energy while jade took 17.2. Over
+   * twelve night frames the hot mean went 4.36 -> 3.25 and three frames fell out of the 3.5-5
+   * band. This is exactly the fault the P.ice paragraph above records, committed again with a
+   * darker swatch: the band is v < 8 m, it fills most of the near frame, and anything holding a
+   * tenth of this roll is a PILLAR whether it can carry the job or not.
+   *
+   * So the new quarters lean, and do not tint. The lean is real district character and costs the
+   * census nothing:
+   *   stone   structure, and structure is not a light. It takes the neutral parade outright
+   *   jade    leans SCREEN — a teal quarter's tubes are cold sources, and azure is the cold source
+   *           this print has. The teal itself survives where it belongs, on the tiled plinth
+   *           course and the pharmacy cross, which are FITTINGS: a handful of cells each, written
+   *           at L_LOW, and sized by the L_LOW table's own note on what jade can and cannot do
+   *   moss    leans SODIUM. A market quarter is lit by tungsten under canvas
+   *   indigo  leans SCREEN and hardest of the four: a finance tower's ground floor is a lit lobby
+   *           behind dark glass, so this parade is ten slots of azure
+   * timber and sand are frontier swatches and never lead a city lot; they are listed so that a
+   * shared record cannot fall through, and both take neutral. */
   var SHOP = (function () {
     var t = [], i;
     function fill(hue, list) { t[hue] = list; }
@@ -700,12 +982,19 @@
     fill(P.ember,  [P.ember,P.ember,P.ember,P.ember,P.ember, A,A,A,A,A,A,A, Z,Z, W,W]);
     fill(P.spring, [P.spring,P.spring,P.spring,P.spring,P.spring, Z,Z,Z,Z,Z,Z,Z, A,A, W,W]);
     var neutral =  [A,A,A,A,A,A,A, Z,Z,Z,Z,Z,Z,Z, W,W];
-    /* Sixteen rows, not twelve, so the lookup can be indexed with `& 15` and is TOTAL: a cell
-     * record carrying a hue this file has never heard of gets the neutral parade instead of an
-     * exception, which is the same contract seedOf/styleOf/litOf keep. */
-    for (i = 0; i < 16; i++) if (!t[i]) t[i] = neutral;
+    fill(P.stone,  neutral);
+    fill(P.jade,   [Z,Z,Z,Z,Z,Z,Z,Z,Z,Z, A,A,A,A, W,W]);
+    fill(P.moss,   [A,A,A,A,A,A,A,A,A,A, Z,Z,Z,Z, W,W]);
+    fill(P.indigo, [Z,Z,Z,Z,Z,Z,Z,Z,Z,Z, A,A,A,A, W,W]);
+    for (i = 0; i < CC.PALETTE.length; i++) if (!t[i]) t[i] = neutral;
     return t;
   })();
+  /* The roll is 16 slots wide and the table is the palette's length; a hue index past the end
+   * gets neutral rather than an exception. Written once here so the two call sites cannot drift. */
+  function shopRoll(cell, sd) {
+    var h = hueOf(cell, sd);
+    return SHOP[h >= 0 && h < SHOP.length ? h : 0] || SHOP[0];
+  }
 
   /* ---- STORE TYPES --------------------------------------------------------------------------
    * Every open unit used to be the same shop — fascia, awning, sign band, plinth, mullioned
@@ -765,9 +1054,35 @@
    * slate and shadow are absent from every interior on purpose: their ceilings are v 114 and v 60,
    * so they CANNOT clear the muddy band at any lum, and the 255s in their slots are unreachable
    * placeholders that keep these three arrays indexable by palette index rather than sparse. */
-  var L_LOW = [103,  52, 135, 133, 154, 165,  71, 255, 124, 110,  47, 255];
-  var L_LIT = [157,  79, 206, 206, 239, 254, 109, 255, 190, 169,  72, 255];
-  var L_HOT = [240, 120, 255, 255, 255, 255, 165, 255, 255, 255, 109, 255];
+  /* ---- AND EIGHT MORE ROWS, IN THE SAME EDIT AS SHOP ABOVE, WHICH IS NOT A STYLE POINT ---------
+   * These three arrays are indexed by `lite`, and `lite` only ever comes out of SHOP. They were
+   * SAFE at twelve entries for exactly as long as SHOP could only ever return amber/azure/ember/
+   * spring/warm; the moment the row above hands back jade or gold they read `undefined`, every
+   * lum in the shopfront band goes NaN, and CC.put writes `NaN | 0` — which is 0 — so the entire
+   * ground floor of the city silently goes black with no error anywhere. Widening SHOP without
+   * widening these is the one change in this file that fails invisibly.
+   *
+   * Re-measured on core.js's live NIGHT curve by the method the paragraph above describes (lum
+   * swept 0..255, v = max(r,g,b)*printed/255 in the near bucket, first lum reaching the target):
+   *   L_LOW  v~128     L_LIT  v~150     L_HOT  v~175
+   * The eight new entries and what they mean for whoever paints with them:
+   *   stone 122, timber 111, moss 94, indigo 115 — CEILINGS UNDER 128, so all three tiers are 255
+   *     and the swatch saturates at its own ceiling instead. That is not a placeholder, it is the
+   *     honest answer: these four are the SURFACE half of the extension and they physically cannot
+   *     clear the muddy band at night, which is why none of them appears in an interior below.
+   *     They are here so the array is total, exactly as slate and shadow already were
+   *   sand 138, jade 134, rose 131, gold 157 — these four CAN light an interior, and only jade,
+   *     rose and gold are used as one. jade reaches v 128 at lum 215 and 134 at full scale, so a
+   *     tile course or a pharmacy cross written at L_LOW is at the very top of what teal can do
+   *     and cannot glare. rose reaches v 128 only at lum 238 and TOPS OUT AT 131 — it can never
+   *     be hot at any lum, which is what makes "small signage cells only" arithmetic rather than
+   *     a note. gold is the one of the three with real range: L_LOW 146, L_LIT 222 */
+  var L_LOW = [103,  52, 135, 133, 154, 165,  71, 255, 124, 110,  47, 255,
+               255, 255, 206, 215, 238, 146, 255, 255];
+  var L_LIT = [157,  79, 206, 206, 239, 254, 109, 255, 190, 169,  72, 255,
+               255, 255, 255, 255, 255, 222, 255, 255];
+  var L_HOT = [240, 120, 255, 255, 255, 255, 165, 255, 255, 255, 109, 255,
+               255, 255, 255, 255, 255, 255, 255, 255];
 
   var T_NOODLE = 0, T_CONV = 1, T_LAUNDRY = 2, T_BAR = 3,
       T_ARCADE = 4, T_HARD = 5, T_PHARM = 6, T_BARBER = 7;
@@ -945,6 +1260,29 @@
         return fset(0, P.shadow, 0);
       }
       if (v > 1.06 && v < 1.20) return fset(G_DASH, lite, L_LOW[lite]);   // the counter lip
+      /* ---- THE PINK TUBE, and it is the narrowest thing this file paints -------------------
+       * A bent-glass tube in a bar window is the single most genre-defining object in the
+       * reference, and `rose` is the swatch that exists for it and for nothing else. The licence
+       * is deliberately tight, so the shape is taken from the licence rather than the other way
+       * round:
+       *   ONE unit in four that is a bar, and a bar is 12% of the frontage, so this is 3% of the
+       *     parade — about one tube in a frame, occasionally two, which is the rate that reads as
+       *     "there is a bar down there" rather than as a colour scheme
+       *   ONE COURSE tall, at 1.86-2.00 m, i.e. where a window tube actually hangs — above the
+       *     bottles and below the head of the glazing
+       *   CONTINUOUS along the unit, with only the glyph varying. A tube that switched on and off
+       *     cell by cell as the camera walked past it is precisely the thin-bright-feature failure
+       *     the photosensitivity gate exists for, and it is also not what a tube looks like
+       * THE BRIGHTNESS IS NOT NEGOTIABLE UPWARDS. core.js gives rose the lowest gain in either
+       * ladder (0.20) with a knee that crushes every rose cell under lum 96 to black, so the tube
+       * has to be written near full scale to exist at all — L_LOW[rose] is 238 — and it still
+       * cannot print above v 131. It is arithmetically impossible for it to reach the hot line or
+       * to take the bloom with it, which is the whole reason the swatch is licensed at all. */
+      if (v > 1.86 && v < 2.00 && hash2(su, 71, sd ^ 0x9FB7) < 0.25) {
+        h = hash2((u * 5.4) | 0, 0, sd ^ 0x9FB9);
+        return fset(h < 0.34 ? G_UNDER : (h < 0.72 ? G_DASH : G_TILDE), P.rose,
+                    L_LOW[P.rose] * (0.94 + h * 0.10));
+      }
       return fset(0, P.shadow, 0);
 
     case T_ARCADE:
@@ -1007,8 +1345,20 @@
        * so the one white object on the street cannot glare. */
       a = xm - 1.27; if (a < 0) a = -a;
       b = v - (gTop - 0.90); if (b < 0) b = -b;
-      if ((a < 0.15 && b < 0.52) || (b < 0.15 && a < 0.52))
-        return fset(a < 0.15 && b < 0.15 ? G_8 : G_HASH, P.white, L_LIT[P.white]);
+      if ((a < 0.15 && b < 0.52) || (b < 0.15 && a < 0.52)) {
+        /* THE CROSS IS GREEN ON HALF OF THEM, and both readings are real: a white cross is the
+         * international one and a GREEN cross is the pharmacy sign over most of Europe and much
+         * of Asia, which is the reference this city is drawn from. Rolled per unit so a clinic
+         * keeps its colour as you walk past it, and split evenly so neither reads as the odd one.
+         *
+         * jade is the swatch's own listed job — "the green of a pharmacy cross" — and it is the
+         * cheapest place in the file to spend it: a cross is about forty cells, it is the only
+         * object in its own unit, and jade's ceiling of 134 sits under white's 151, so swapping
+         * one for the other cannot move the frame's highlight balance. L_LIT[jade] is 255 and
+         * saturates at 134, which is the honest reading of a lit sign in a small ceiling. */
+        var pxc = hash2(su, 83, sd ^ 0x9FC7) < 0.50 ? P.jade : P.white;
+        return fset(a < 0.15 && b < 0.15 ? G_8 : G_HASH, pxc, L_LIT[pxc]);
+      }
       /* A QUIET ZONE round the cross, and it is the whole difference between a cross and a
        * coincidence: drawn straight onto the lit field the arms were the same brightness as the
        * blocks either side of them and the shape disappeared — looked at, on the flat probe, and
@@ -1069,7 +1419,7 @@
      * around two-fifths of all facade energy, so whatever colour it is, the FRAME is: a parade
      * of sodium shopfronts on its own turns a two-pillar city into a yellow one. */
     var cr = hash2(su, 3, sd ^ 0x1D7);
-    var roll = SHOP[hueOf(cell, sd) & 15];
+    var roll = shopRoll(cell, sd);
     var lite = roll[(cr * 16) | 0];
     /* The unit's SECOND fitting, drawn from the same district roll on an unrelated hash. One unit
      * of frontage is 2.55 m, and the camera passes within two metres of a wall: at that range a
@@ -1190,6 +1540,54 @@
        * sign in the city was sitting a quarter of the way past the hot line while its amber
        * neighbour was under it. L_HOT lands both at v~175. */
       if (v > st.gnd - 1.55) {
+        /* ---- THE BRASS FRAME, and it is what makes a lit sign look MADE rather than emitted ----
+         * Every sign in this band was a floating rectangle of light with no edge and no fixings,
+         * which is what a sign looks like if you have never seen one switched off. A real fascia
+         * sign is a box: a channel along the bottom that the tubes sit in, and an upright at each
+         * end of the unit that carries it. Both are METAL catching the sign's own light, which is
+         * the entire brief for `gold` — it "peaks in the red and reads as metal being lit rather
+         * than as something emitting", against amber's sodium discharge peaking in the green.
+         *
+         * IT IS A THIN CONTINUOUS FEATURE, so it is drawn as one: the channel is one course of
+         * cells that is ALWAYS painted for the full width of an open unit, with the texture (the
+         * glyph and a 12% lum jitter) varying rather than the presence. A frame that appeared and
+         * disappeared bay by bay as the camera walked is the classic photosensitivity failure this
+         * project's gates exist to catch, and a bright one-cell horizontal is exactly the feature
+         * that produces it. Nothing here reads `t`.
+         *
+         * THE BUDGET. gold's night ceiling is 157 — twenty-two points under the lower pillar and
+         * well under the sign band's own L_HOT — so the frame can never out-print the sign it
+         * frames, which is the ladder the right way round. L_LOW[gold] is 146 and prints v 128,
+         * just clear of the muddy band's top. Two courses of one cell each per 2.55 m unit is
+         * about 4% of the band's cells, which is a frame and not a surface. */
+        /* THREE UNITS IN FIVE, not all of them, and the rate is a census fix rather than taste.
+         * At every open unit the frame took 2.2% of the frame's LIT energy and pulled azure from
+         * 36.7% to 34.4% (seed 42, frame 300, night, 200x60) — outside the +-1.5 the pillar census
+         * allows, because a continuous course along every shopfront in the city is one of the
+         * longest lines in the picture and this one was eating sign cells to get there. At 0.62,
+         * with the uprights narrowed 0.115 -> 0.085, gold lands at 1.3% on that frame and both
+         * pillars are back inside their band. A frame on some of the signs and not others is also
+         * simply what a parade looks like: half the boxes are older than the other half.
+         *
+         * THE RANGE, and not one frame, because one frame is what the last pass reported and the
+         * review was right about it. Over twelve night seed/frame pairs gold takes 0.0-12.4% of
+         * lit energy, median 1.5: it is 1-2% on a street frame and it is 12.4% on seed 17 frame
+         * 900, which is a rooftop looking down a parade of forty lit shopfronts end-on. That frame
+         * costs the census almost nothing anyway — hot 2.61% against 2.68% for the pre-pass tree,
+         * muddy 24.7 against 24.2 — because gold at L_LOW prints v 128, one unit clear of the
+         * muddy band and nowhere near the hot line, so it displaces energy without moving a band.
+         * Dropping the rate to 0.40 was measured and NOT taken: it moves that frame's gold 12.4 ->
+         * 12.3% and its hot tail not at all — whatever that frame is looking at, the rate is not
+         * the handle on it — while it thins the gilding on an ordinary street frame from 1.3% to
+         * 0.3%, which is the feature not being there. */
+        if (hash2(su, 91, sd ^ 0x519) < 0.62) {
+          if (v < st.gnd - 1.44)                          // the channel the tubes sit in
+            return fset(G_UNDER, P.gold,
+                        L_LOW[P.gold] * (0.94 + hash2((u * 3.6) | 0, 1, sd ^ 0x51A) * 0.14));
+          if (fs < 0.085 || fs > 0.915)                   // the uprights carrying it, one per end
+            return fset(G_PIPE, P.gold,
+                        L_LOW[P.gold] * (0.90 + hash2(su, (v * 4.2) | 0, sd ^ 0x51B) * 0.16));
+        }
         var sp = u / SIGN_PITCH[ty];
         var sg = hash2(sp | 0, su, sd ^ 0x515);
         if (sg > SIGN_FILL[ty]) return fset(0, P.shadow, 0);
@@ -1210,9 +1608,34 @@
          * able to reach the top of the lit range or nothing in the picture is a highlight. */
         return fset(FILL[((sg / SIGN_FILL[ty]) * FILL_N) | 0], sc, L_HOT[sc] * (1.00 + sg * 0.14));
       }
-      if (v < 0.62)                                       // plinth, in its own shadow
+      if (v < 0.62) {
+        /* ---- THE TILED PLINTH ---------------------------------------------------------------
+         * The stall-riser under a shopfront window — the 600 mm of wall between the pavement and
+         * the glass. Every one of them was black, and it is the strip nearest the camera in the
+         * whole picture: at a 1.8 m pavement the walk passes within two metres of it.
+         *
+         * A third of open units get a TILE COURSE in it, and the swatch is `jade` because that is
+         * the swatch's own brief — "tilework, oxidised copper" — and because a glazed tile is the
+         * one thing at street level that is neither a light nor concrete. It is lit by the shop
+         * above it, so it is written at L_LOW: jade's night ceiling is 134 and L_LOW[jade] is 215,
+         * which prints v 128 — the top of what teal can do and physically incapable of glare.
+         *
+         * ONE COURSE, NOT A FIELD. The tiles run 0.30-0.48 m, i.e. about a fifth of the plinth's
+         * height and a single cell at most working distances, with the rest left black in its own
+         * shadow exactly as before. That is a line of colour along the base of the parade rather
+         * than a green wall, and it is the same discipline the sign band's brass frame keeps two
+         * dozen lines up: thin, continuous, low.
+         *
+         * Continuous, again on purpose — the joint pattern varies along `u`, the PRESENCE does
+         * not, so a walking camera never switches it. */
+        if (v > 0.30 && v < 0.48 && hash2(su, 59, sd ^ 0x3B7) < 0.34) {
+          var tl = u / 0.21; tl -= Math.floor(tl);
+          return fset(tl < 0.30 ? G_PIPE : G_EQ, P.jade,
+                      L_LOW[P.jade] * (0.86 + hash2((u * 4.8) | 0, 0, sd ^ 0x3B8) * 0.20));
+        }
         return hash2(su, Math.floor(v * 6), sd ^ 0x3) < 0.5 ? fset(G_UNDER, P.shadow, 14)
                                                             : fset(0, P.shadow, 0);
+      }
       /* Glazing. Mullion every 0.85 m first, and it is BLACK: it used to be P.slate at lum 9,
        * which its own comment correctly said prints v 5 — and then called that "a division the eye
        * reads as an edge ... [that] costs the print nothing". Half of that is right. It costs the
@@ -1377,8 +1800,55 @@
   /* Set once at the top of floorTex and read back out by every rset() below, so the twenty-odd
    * early returns in the cascade do not each have to carry the water with them. */
   var mirNow = 0, ripNow = 0, wchNow = 0, bounceNow = 0;
+  /* ---- THE STREET BY DAY, and it is the same repair the facade's fset() carries ---------------
+   * Everything below writes the carriageway, the kerb face, the pavement slabs, the joints and
+   * every piece of ironwork on P.slate at lum 6-40. Those numbers were fitted against a NIGHT
+   * curve where slate is the cold-structure swatch and that range prints v 7-56 — a dark road
+   * under a sodium lamp, which is correct and is most of what makes the night frame work.
+   *
+   * Nothing took them to daylight. Measured at seed 42 noon, 200x60: the floor was 14.6% of the
+   * frame and the tarmac in it printed v 10-56 at LOCAL NOON, i.e. the road was as dark at midday
+   * as at midnight while the walls above it lifted by a factor of four. The lower third of a
+   * daylight frame was a hole.
+   *
+   * TWO THINGS CHANGE AND BOTH ARE THE IDENTITY AT dSky 0:
+   *   the SWATCH. slate is deliberately blue — core.js says so at length, and it is right at
+   *     night, where the only thing lighting a road is a discharge lamp and a screen. By day the
+   *     road is lit by the whole hemisphere and it is NEUTRAL, which is `stone`, the swatch slate
+   *     refuses to be. P.shadow, the swatch for occluded structure in a world with no sky in it,
+   *     becomes `indigo`, which is its counterpart for a world that has one
+   *   the LEVEL. Squared on dSky for the same reason fset squares it: a road starts catching
+   *     skylight at first light but does not become the subject of the frame until the sky is
+   *     genuinely bright, and a linear ramp put the tarmac up level with the neon through the
+   *     whole of dusk — the hour the signs are supposed to own
+   * The lift is DELIBERATELY MEANER THAN THE WALL'S (2.2 against 2.6, and stone's ceiling of 145
+   * caps it anyway): asphalt has an albedo around 0.10 against concrete's 0.35, so a road that
+   * printed level with the wall over it would be the one surface in the picture lit wrongly. */
+  function rday(col, lum) {
+    if (dSky <= 0.02) return lum;
+    var dK = dSky * dSky;
+    /* Three tiers, on the same two thresholds dayMat() uses and for the same reasons: slate while
+     * there is not yet enough sky for the ground to have a colour, INDIGO through twilight (a wet
+     * road at dusk is the sky lying on the tarmac, and indigo prints at slate's own height so this
+     * costs no lums), and stone once it is properly day. It does NOT follow dayMat onto the
+     * material roll, and the reason is albedo rather than tidiness: a wall may be pale render but
+     * asphalt is never anything but grey, so the road stays on stone and accepts that stone's
+     * ceiling of 145 keeps it out of the hot tail. Measured at seed 42 frame 300 noon, that costs
+     * the frame 92 hot floor cells against 74 — eighteen cells, and the alternative is a white
+     * road. */
+    if (col === P.slate) {
+      RCOL = dK > 0.50 ? P.stone : (dK > 0.06 ? P.indigo : P.slate);
+      return lum * (1 + 2.2 * dK) + 26 * dK;
+    }
+    if (col === P.shadow) { RCOL = dK > 0.50 ? P.indigo : P.shadow; return lum * (1 + 1.8 * dK); }
+    RCOL = col;
+    return lum;
+  }
+  var RCOL = 0;
   function rset(ch, col, lum) {
-    ROUT.ch = ch; ROUT.col = col;
+    RCOL = col;
+    if (dSky > 0.02 && ch !== 0) lum = rday(col, lum);
+    ROUT.ch = ch; ROUT.col = RCOL;
     ROUT.lum = lum < 0 ? 0 : (lum > 255 ? 255 : lum | 0);
     ROUT.mir = mirNow > bounceNow ? mirNow : bounceNow;
     ROUT.rip = ripNow; ROUT.wch = wchNow;
@@ -1676,9 +2146,28 @@
          * sodium lamp and nothing else in the picture is lit so unambiguously; by day it is
          * concrete lit by the sky, which is white, and its rhythm comes from the sky rather than
          * from the lamp spacing that lampK carries. */
+        /* SAND BY DAY, not white, and it is the single cheapest piece of colour in the lower
+         * third. This is the longest continuous line in the frame and by day it is a precast
+         * concrete kerb catching the sun square on — which is warm, not blue. white is render and
+         * cloud; `sand` is "the crown of a dirt road, adobe in sun", i.e. a pale surface with the
+         * sun's own colour on it, and its day gain (0.90) is one step under white's for exactly
+         * this kind of job. It also gives the noon road SOMETHING that is not grey: measured over
+         * the whole floor at seed 42 noon, sand takes about 3% of the frame's energy on its own
+         * and it is all in one converging line, which is where the eye reads perspective. */
         return dSky > 0.45
-          ? rset(G_UNDER, P.white, (96 + kw * 30 + mirNow * 26) * (0.7 + 0.7 * dSky))
+          ? rset(G_UNDER, P.sand, (96 + kw * 30 + mirNow * 26) * (0.7 + 0.7 * dSky))
           : rset(G_UNDER, P.amber, 124 + kw * 34 + lampK * 74 + mirNow * 30);
+      /* The kerb FACE, which is in its own shadow and never catches the sun — so it stays on the
+       * structure swatch and takes the ordinary day lift, and the contrast between it and the
+       * arris above is what makes the kerb read as a thickness rather than as a painted line.
+       * ALGAE. The bottom of a kerb face is permanently damp, and in a city that means a green-
+       * black stain along the gutter line — which is `moss` by name ("algae on concrete"). It is
+       * a DAY feature only: moss's night ceiling is 94, inside the muddy band's own top, so at
+       * night it could only ever be a grey veil on the longest line in the picture. By day its
+       * ceiling is 102 against the kerb face's stone at 145, so the stain reads as a stain. A
+       * third of the face, keyed on world z, so it is a patchy run and not a painted stripe. */
+      if (dSky > 0.45 && hash2(Math.floor(wz * 1.7), 0, 0x3C1) < 0.34)
+        return rset(G_EQ, P.moss, (44 + kw * 30) * (0.6 + 0.8 * dSky));
       return rset(G_EQ, P.slate, 10 + kw * 12);
     }
 
@@ -1691,7 +2180,12 @@
        * texture of its own rather than a grid of joints. */
       if (CFG.xn > 0 && xd > xh - 0.2 && xd < xh + 2.4 && al < half + 2.2) {
         var tp = hash2(Math.floor(wx * 3.4), Math.floor(wz * 3.4), 0x2D3);
-        if (tp < 0.38) return rset(G_oo, P.slate, 15 + tp * 34);
+        /* Buff by day. Tactile paving is specified in a contrasting colour precisely so that it
+         * is visible, and the contrasting colour it is actually laid in is buff — which is `sand`.
+         * At night it stays slate: nothing at ankle height is colour-legible under a sodium lamp,
+         * and the shipped night frame is the tuned baseline. */
+        if (tp < 0.38) return rset(G_oo, dSky > 0.45 ? P.sand : P.slate,
+                                   dSky > 0.45 ? (34 + tp * 44) * (0.6 + 0.8 * dSky) : 15 + tp * 34);
         return rset(0, P.shadow, 0);
       }
       /* Cable and service ducts run parallel to the kerb under every real pavement, and their
@@ -2192,6 +2686,24 @@
     fogStart = (alt && alt.fogStart !== undefined) ? alt.fogStart : FOG_START;
     fogEnd = ((alt && alt.fogEnd !== undefined) ? alt.fogEnd : FOG_END) * (1 - 0.26 * k);
     fogSpan = fogEnd - fogStart;
+    /* 1.5 is a NIGHT number — fog()'s own comment says "gentle near, hard crush past ~55 m", which
+     * buys the black the print wants out of a canyon lit only at its near end — and a daylight
+     * frame does pay for it. THE ARITHMETIC, because the version of this comment that shipped got
+     * it wrong and sent the next reader at a frozen file: at 40 m, k = 1 - 28/113 = 0.752 and
+     * k*sqrt(k) = 0.652, so a spandrel written at lum 205 arrives at the print at 134 (141 once
+     * the haze floor puts back what the ramp took). That crush is THIS file's, right here, on this
+     * line. It is not core.js's depth buckets: measured through the live day LUT, white prints
+     * v 209 at 3 m and v 207 at 40 m, and at lum 180 it is v 179 against v 175 — four units, not
+     * fifty. Rebuilding core.js with the bucket retirement removed altogether (gm = GM) moves the
+     * twelve-pair noon hot tail 4.15% -> 4.44%, i.e. three tenths of a point, and it is not worth
+     * unfreezing a file for.
+     *
+     * Flattening the exponent to 1.05 by day was tried and MEASURED, and it is not kept: it moved
+     * seed 42 frame 300's hot tail 0.78% -> 0.86% for a Math.pow on every one of twenty thousand
+     * cells a frame. Both of those are tenths. The lever that was actually worth something was
+     * local and one function away — see dayMat(), where taking the shaded tier off `stone` moved
+     * the same twelve pairs 2.11% -> 3.97%. Left at 1.5 with the arithmetic written down so the
+     * next person does not spend the same hour on it, or the wrong hour on core.js. */
     fogPow = (alt && alt.fogPow !== undefined) ? alt.fogPow : 1.5;
     /* ---- AERIAL PERSPECTIVE, and it is the one place the house doctrine has an exception -------
      * The doctrine, stated three times in this file, is that distance fades to BLACK and never to

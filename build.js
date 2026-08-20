@@ -98,11 +98,46 @@ const IDENT = /[A-Za-z0-9_$]/;
  * literal and every comment after it ships. */
 const DIV_AFTER = /[A-Za-z0-9_$)\]]/;
 
+/* ---- indent folding -------------------------------------------------------------------------
+ * Two spaces of indent per level become one, and ONLY at the start of a line the scanner reached
+ * through the code path — never inside a string, because a template literal's newline is emitted
+ * by the string branch below and the fold only ever fires immediately after the fallthrough or the
+ * block-comment branch has written a '\n' itself. Multi-line templates are therefore safe by
+ * construction rather than by inspection, which matters: there are none in src/ today and this has
+ * to keep being true when there are.
+ *
+ * WHY IT HAPPENED, and it is a raise refused rather than a tidy. The 560 KB budget below is a
+ * commitment with a whole essay attached saying the next pass over the line must CUT before it
+ * moves the number. This pass went over — three worlds' worth of texture and colour work landed at
+ * 575.5 KB — and the two things the essay names as cuttable are content (wrong way round; that is
+ * the deliverable) and indentation, which it refuses on the grounds that stripping it turns a
+ * viewable page source into a wall.
+ *
+ * Both of the numbers that refusal rests on are now false, and that is the finding. The note under
+ * the return below says indentation costs "~6 KB"; the budget essay says "about 25 KB". MEASURED on
+ * the bundle this pass produces: 84,232 bytes of leading whitespace over 16,505 lines, 14.3% of the
+ * file. It stopped being a rounding error two worlds ago and nobody re-measured it.
+ *
+ * So the fold is the middle answer neither note considered: HALVE it, do not strip it. Every line
+ * keeps its indentation and its structure, at one space per level instead of two, and the page
+ * source is still a nested document rather than a wall — which is the thing the refusal was
+ * actually protecting. Worth 42,134 bytes, taking the bundle to 534.4 KB with 25.6 KB of headroom
+ * under a line that does not move. Rejected: stripping indentation outright (worth 84 KB and it is
+ * the wall the note refuses), and stripping the blank line decomment leaves between paragraphs
+ * (2.4 KB, and it is the only thing left separating one thought from the next). */
+function foldIndent(src, i) {
+  let w = 0;
+  while (i < src.length && (src[i] === ' ' || src[i] === '\t')) { w++; i++; }
+  return { text: w > 1 ? ' '.repeat(w >> 1) : '', i: i };
+}
+
 function decomment(src) {
   let out = '', i = 0, prev = '', word = '';
   const n = src.length;
   /* ...except after a keyword, where `return /re/` is a regex even though `n` is an ident char. */
   const regexAllowed = () => prev === '' || !DIV_AFTER.test(prev) || REGEX_OK_WORDS.has(word);
+
+  { const f = foldIndent(src, 0); out += f.text; i = f.i; }   // the file's own first line
 
   while (i < n) {
     const c = src[i];
@@ -118,7 +153,10 @@ function decomment(src) {
       /* A comment sits BETWEEN two tokens, so it cannot vanish without leaving a separator behind
        * or an inline one welds its two neighbours into a single identifier. A multi-line one
        * collapses to a newline instead, so ASI keeps behaving exactly as it did in src/. */
-      out += src.slice(start, i).indexOf('\n') >= 0 ? '\n' : ' ';
+      if (src.slice(start, i).indexOf('\n') >= 0) {
+        out += '\n';
+        const f = foldIndent(src, i); out += f.text; i = f.i;
+      } else out += ' ';
       continue;
     }
     if (c === '"' || c === "'" || c === '`') {
@@ -145,13 +183,15 @@ function decomment(src) {
     }
 
     out += c; i++;
+    if (c === '\n') { const f = foldIndent(src, i); out += f.text; i = f.i; continue; }
     if (!/\s/.test(c)) {
       prev = c;
       word = IDENT.test(c) ? word + c : '';
     }
   }
-  /* Trailing whitespace and the blank lines the comments left behind. Indentation stays — it costs
-   * ~6 KB and it is the difference between a viewable page source and a wall. */
+  /* Trailing whitespace and the blank lines the comments left behind. Indentation is HALVED rather
+   * than kept whole or stripped — see foldIndent above for the measurement that changed the answer
+   * and the 84,232 bytes it was hiding. */
   return out.replace(/[ \t]+$/gm, '').replace(/\n{2,}/g, '\n\n').trim();
 }
 
@@ -342,7 +382,28 @@ console.log('index.html  ' + bytes + ' bytes  (' + (bytes / 1024).toFixed(1) + '
  * There is now an obvious place to find room that did not exist before — the frontier and the city
  * do not need to be in the same response, and splitting them is a real answer that costs the
  * "one self-contained file" property. Spend that only when it is the last option, and write down
- * that you did. */
+ * that you did.
+ *
+ * ---- AND THE PASS AFTER THAT WENT OVER AND THE LINE DID NOT MOVE. 560 KB HELD, AT 534.4. ----
+ * Fourth time at this line, first time it has held under pressure, and the paragraph two above
+ * asking for a cut is the one that got answered.
+ *
+ * WHAT LANDED: a colour pass across all three worlds — eight swatches appended to the palette with
+ * a night and a day rung each, a daylight fill for the frontier's walls, road and dome, a widened
+ * district table and a longer crowd for the city, and relief on the Moon in place of straight
+ * lattice edges. Sixteen files, +4413 lines of src/, and 49.6 KB of stripped bundle. That put the
+ * build at 589,337 bytes — 575.5 KB, 15.5 over — and it failed here, which is the gate working.
+ *
+ * WHAT WAS CUT: nothing anybody can see. 42,018 bytes of leading whitespace, by halving the indent
+ * in decomment() rather than stripping it; the reasoning and the rejected alternatives are written
+ * out at foldIndent(). The short version is that this line's own essay named indentation as worth
+ * "about 25 KB" and refused it as a wall, and both halves of that are wrong now: it is 84,232
+ * bytes, and halving is not stripping. 534.4 KB, 25.6 KB under.
+ *
+ * WHAT THAT BUYS THE NEXT PASS, honestly: 25.5 KB is about a third of a world, so this is not a
+ * reprieve. The next pass over the line has the same three options and one fewer of them — the
+ * whitespace is spent now — and the two that remain are the two the essay above already refuses.
+ * Splitting the payload is still the escape hatch and it is still the last one. */
 if (bytes > 560 * 1024) {
   console.error('build: index.html is over the 560 KB budget');
   process.exit(1);

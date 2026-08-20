@@ -308,6 +308,11 @@
    * falls to raw 100 (v 127) and azure 92 to raw 61 (v 137), and one step further down the fade
    * both are in the muddy band. */
   var HEAD_AMBER = 152, HEAD_AZURE = 92, TAIL_RED = 118, UNDER_AMBER = 132, BEACON_RED = 138;
+  /* The transit livery lamp — see the roll in the draw. 236 prints v 128 on jade's night curve,
+   * which is the top of what that pigment can do (ceiling 134) and thirty points under the amber
+   * head it sits beside. It is a MARKER and not a headlamp, so being the dimmest of the three is
+   * the whole point rather than a compromise. */
+  var HEAD_JADE = 236;
   var MIN_SCALE = 0.66;
   /* The lamp fade with range: full out to 90 m, MIN_SCALE at W_MAX. It is a visibility term, not
    * an inverse square — at ASCII resolution a distant lamp loses SIZE, not brightness, and a real
@@ -711,9 +716,25 @@
          * printed the single unattached specks the review could not tell from stars. Two lamps
          * bracketing a visible body is the signature; nothing here draws less than that. */
         var dot = dirx * FWX + dirz * FWZ;          // > 0 means it is running away from the eye
+        /* ---- ONE VEHICLE IN TWELVE IS LIVERIED, and it is a jade running lamp -----------------
+         * The lane traffic is amber and azure and nothing else, which is right for a headlamp —
+         * that is what a headlamp IS — and it is also why a lane reads as one repeated vehicle. A
+         * transit unit has a running lamp in its OPERATOR'S colour rather than a headlamp colour,
+         * and `jade` is that swatch by name ("transit livery").
+         *
+         * 8% and not more, for two measured reasons. This is the highest object in the frame and
+         * the only lit thing above the roofline, so its colour census reads far above its cell
+         * count. And jade's ceiling is 134 against amber's 179 and azure's 219 — so a jade lamp is
+         * DIMMER than either headlamp at any lum, which is correct for a marker light and is also
+         * what keeps it from becoming the thing the eye tracks across the sky. Written at 236,
+         * which prints v 128: just clear of the muddy band's top and thirty points under the
+         * amber head beside it.
+         *
+         * The pillar split is untouched: the 8% is taken evenly off both, 0.52 -> 0.48 for amber
+         * and the tail from 1.00 -> 0.92 for azure. */
         var hue = hash2(idx, ky, S + SALT_HUE);
-        var headC = hue < 0.52 ? P.amber : P.azure;
-        var headL = (hue < 0.52 ? HEAD_AMBER : HEAD_AZURE) * scale;
+        var headC = hue < 0.48 ? P.amber : (hue < 0.92 ? P.azure : P.jade);
+        var headL = (hue < 0.48 ? HEAD_AMBER : (hue < 0.92 ? HEAD_AZURE : HEAD_JADE)) * scale;
 
         if (dot > 0.55) {
           // Receding: tail lamps only, and this is the line of red converging on the slot.

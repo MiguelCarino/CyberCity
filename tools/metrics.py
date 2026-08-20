@@ -15,7 +15,13 @@ rather than fixing it; the fix is the two lines below and a kind breakdown for f
 """
 import sys, json
 
-NAMES = ['amber','azure','ember','spring','violet','white','red','slate','warm','ice','pure','shadow']
+# Must stay in step with core.js's PALETTE, in order and in length. The energy split indexes
+# `ci % len(NAMES)` and the pigment lookup indexes `ci % len(pal)`, so a NAMES list shorter than
+# the palette does not raise -- it wraps, and every stone cell in the frame is reported as amber.
+# Eight swatches were appended to the palette (12..19) and this line is the whole of what that
+# cost the census.
+NAMES = ['amber','azure','ember','spring','violet','white','red','slate','warm','ice','pure','shadow',
+         'stone','timber','sand','jade','rose','gold','moss','indigo']
 KINDS = ['sky', 'facade', 'floor', 'element']
 
 def load(src):

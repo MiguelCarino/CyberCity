@@ -244,6 +244,25 @@
        * "something is there and it is occluding" — same coverage, printed to a value the eye reads
        * as mass rather than as light. */
       var base = 26 + 16 * W_CLOUD;
+      /* ---- AND THE DECK IS NOT shadow ONCE THERE IS A SKY BEHIND IT --------------------------
+       * The argument above is entirely right about a NIGHT deck: shadow is the swatch for
+       * "something is there and it is occluding", it cannot blow out, and slate at EXPOSURE 2.00
+       * made seven hundred cloud cells the brightest flat area in a dark street. None of that
+       * survives sunrise. shadow's DAY ceiling is 40 — the lowest number in either ladder — so an
+       * overcast at noon was printing at a sixth of the brightness of the wall under it, and the
+       * one thing an overcast sky is, is brighter than the street.
+       *
+       * Two tiers, the same pair surfaces.js's dayMat() uses and for the same reasons:
+       *   indigo through twilight. It is the palette's "shade with sky in it" and its night
+       *     ceiling of 115 is slate's 114 to within a unit BY DESIGN, so this cannot re-brighten
+       *     the deck the paragraph above spent its budget darkening — it changes the hue of a
+       *     dusk cloud base and nothing else
+       *   stone once the sky is properly up. Neutral grey, day ceiling 145, which is what an
+       *     overcast actually is, and it sits one step under the sunlit render on the towers
+       * Both are gated on dSky and the night frame is byte-identical: at D_SKY 0 this is shadow at
+       * the same lum it always had. */
+      var deckC = D_SKY > 0.50 ? P.stone : (D_SKY > 0.16 ? P.indigo : P.shadow);
+      var deckK = 1 + 2.6 * D_SKY * D_SKY;
       /* Where the sodium underglow is allowed: the bottom sixth of the sky, near the rooftops,
        * where ten thousand streetlights are actually pointing. */
       var lowRow = CB.horizon - CB.rows * 0.17;
@@ -272,8 +291,8 @@
            * crawl with the camera while the cloud shape stayed put. */
           if (hash2((nx * 190) | 0, (ny * 260) | 0, 0x71C3) > dens * (0.30 + 1.2 * v)) continue;
           gl = v > 0.62 ? G_TILDE : (v > 0.3 ? G_DASH : G_TICK);
-          lum = base * (0.55 + 0.75 * v);
-          hue = P.shadow;
+          lum = base * (0.55 + 0.75 * v) * deckK;
+          hue = deckC;
           /* The underside of a city's cloud base is lit by the city, and that is the whole reason
            * the sky over a town is orange. It is a MINORITY of the low cells and not a band: a
            * continuous amber strip along the rooftops is a sunset, and this is one in the morning

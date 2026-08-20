@@ -104,7 +104,8 @@
       G_DOT = CC.g('.'), G_COLON = CC.g(':'), G_STAR = CC.g('*'), G_PLUS = CC.g('+'),
       G_HASH = CC.g('#'), G_PCT = CC.g('%'),
       G_8 = CC.g('8'), G_O = CC.g('O'), G_o = CC.g('o'), G_0 = CC.g('0'),
-      G_SLASH = CC.g('/'), G_BACK = CC.g('\\'), G_CARET = CC.g('^');
+      G_SLASH = CC.g('/'), G_BACK = CC.g('\\'), G_CARET = CC.g('^'),
+      G_COMMA = CC.g(','), G_QUOTE = CC.g("'"), G_TICK = CC.g('`');
 
   var CITY = null, BASE = 0, MOON = null;
 
@@ -207,6 +208,9 @@
     if (CITY === BOOTED) return;
     BOOTED = CITY;
     BASE = CITY ? ((Math.imul(CITY.seed | 0, 19391) >>> 6) & 0x3fffff) : 0;
+    /* The layout bearing, resolved once per rebuild — see the block above. -0.5 is daylight.js's
+     * own AZ_NOON and is only the fallback for a standalone require() with no director loaded. */
+    LAY_AZ = Math.PI + (CC.Daylight ? CC.Daylight.AZ_NOON : -0.5);
     sN = 0;
     if (CITY) siteScan(CITY);
   }
@@ -225,6 +229,48 @@
    * into earthshine, which surf_moon runs as a crossfade rather than a flag because on a world whose
    * background is lum 0 a bright cell that switches is a step of 90% of full scale. */
   var KX = 0, KZ = 1, KALT = 0.25, KNIGHT = 0, KDAY = 1, KMIX = 0;
+
+  /* ---- THE BEARING EVERYTHING WAS LAID OUT ON, AND IT DOES NOT TURN -----------------------------
+   * Every object in this file is placed relative to its site anchor on a bearing, and every one of
+   * those bearings used to be `Math.atan2(KX, KZ)` — the LIVE sun. The intent is right and is worth
+   * keeping: the crews put the flag where the television camera would see it, parked the rover
+   * down-sun, and set the LM down with the crew compartment toward the light, so the layout of a
+   * landing site genuinely is oriented on the sun. What is wrong is the tense. The sun that decided
+   * where a flag was planted is the sun of the moment it was planted, and it is over and done with;
+   * reading the live one makes the entire site — LM, flag, rover, ALSEP, retroreflector, television
+   * camera and every wheel track — SLOWLY ROTATE about its anchor for the whole seven-minute day.
+   *
+   * That is wrong as a picture and it is much worse than that as a photosensitivity hazard, which
+   * is how it was found. Rotating the hardware moves every face by a fraction of a cell each frame,
+   * and quad()'s terminator dither is keyed on position along the face — so the dither RE-DEALS
+   * continuously and cells of gold foil at printed v 190 alternate against a lum-0 sky. Measured
+   * with the camera pinned and the daylight clock RUNNING (which is the thing the shipped gate does
+   * not do — see the note below), seed 42, 120x40: the LM alone produced a worst cell making 33
+   * big steps a second against the project's 1.0/s ceiling, and 6.3% in the 3-20 Hz band against
+   * 2%. With the layout bearing frozen it is 0.00/s and 0.8%, which is the world pass's own floor.
+   *
+   * THE FROZEN BEARING IS THE SUN'S BEARING AT LOCAL NOON, AND IT IS NOT PI. AZ_OFFSET is an
+   * offset ADDED to the director's azimuth, not the answer: surf_moon.js computes SUN_AZ from
+   * D.P.az + AZ_OFFSET, and daylight.js's az is AZ_NOON + AZ_SWING * -cos(...), which at the noon
+   * stop is exactly AZ_NOON = -0.5. So noon on the Moon is PI - 0.5 = 2.6416, and PI corresponds
+   * to D.P.az = 0 — a phase the clock passes through between the noon and afternoon stops and
+   * never stops at. Measured at the six stops, SUN_AZ runs 1.302 (dawn), 1.601 (morning), 2.642
+   * (noon), -2.601 (afternoon), -2.302 (dusk). The previous round froze this at PI and wrote "PI
+   * is the sun's noon bearing" next to it, which laid every site out 0.50 rad — 29 degrees — off
+   * the composition the paragraph claimed. Freezing it is still right, and the arithmetic for
+   * WHERE now matches what it says.
+   *
+   * WHAT STILL READS THE LIVE SUN, and must: faceSun (which face is lit), shadowPatch (where a
+   * shadow lies), and drawRetro's `saz` (where a corner cube throws its flare). Those are lighting,
+   * and lighting is the present tense.
+   *
+   * IT IS DERIVED AND NOT WRITTEN DOWN, because the last time it was written down it went stale.
+   * AZ_NOON is read off the director; the PI is surf_moon.js's AZ_OFFSET, which that file does not
+   * export, so it is the one number here that is a copy — and if it ever stops being PI over there
+   * this line is where the site quietly rotates. Refreshed in boot() rather than at module load,
+   * because element files are evaluated before anything has been initialised and a `CC.Daylight`
+   * captured at load time is whatever the script order happened to leave. */
+  var LAY_AZ = Math.PI - 0.5;
 
   function key() {
     if (!MOON) MOON = CC.SurfMoon || (CC.SURFACES ? CC.SURFACES.moon : null);
@@ -647,6 +693,121 @@
 
   var LM_HW = 2.11;                       // half the descent stage across the flats
   var LM_D0 = 1.50, LM_D1 = 4.73;         // descent stage: floor 1.5 m up, 3.23 m tall
+  /* ---- THE BLAST SCOUR ---------------------------------------------------------------------------
+   * The one mark on this world that only a landing makes. A descent engine at touchdown is a
+   * 45 kN rocket a metre and a half off the ground with no air to spread its plume, so it does not
+   * dig a crater — it SWEEPS, radially and almost horizontally, and it blows the loose upper fines
+   * clean off a disc twenty metres across. What is left is the packed, unweathered material
+   * underneath, which is markedly paler than the surface around it, striated along the radials the
+   * gas went out on, and it is the first thing you see in every Apollo photograph taken from the
+   * ladder: a bright halo with the vehicle's own black shadow lying across it.
+   *
+   * surf_moon.js's header names this as the one item of the design it could not do: "blast scour
+   * keyed to a `site` lot anchor cannot be drawn by floorTex, which is handed nothing but two world
+   * coordinates. moon_lm.js has the anchor and should draw its own scour." This is that.
+   *
+   * IT IS A DENSITY, NOT A FILL. Everything on this ground carries its tone in coverage rather than
+   * in luminance, and the scour is the same: it raises the fines density and leaves the swatch and
+   * the luminance alone. Drawn as a fill it would be a white disc on a grey plain, which is a
+   * searchlight; drawn as a density it is the same regolith with less of it missing.
+   *
+   * IT HAS NO EDGE. The coverage tapers as (1 - r/R) squared all the way to zero at the rim, so
+   * there is no radius at which anything switches — which is both what a scour looks like (the
+   * plume ran out of momentum, it did not stop) and what keeps a 20 m disc of raised luminance off
+   * the flicker census entirely.
+   *
+   * THE STRIATIONS use the same diamond-angle trick as surf_moon.js's ejecta rays and for the same
+   * reason: this runs over a few hundred ground cells and an atan2 in it buys a number that is
+   * immediately floored into one of thirty-odd sectors. They are feathered at the sector edges, so
+   * the scour has radial STRUCTURE without radial LINES.
+   *
+   * It writes kind 2, not kind 3, so the LM's own shadow — drawn immediately after — still lands on
+   * it. A scour with the vehicle's shadow missing from it is the one way to get this wrong. */
+  var SCOUR_R = 11.5;
+
+  /* The ground's own swatch, which is surf_moon.js's litSet written out a third time. THAT IS A
+   * DEFECT AND IT IS IN THE REPORT — moon_ground.js carries the second copy and says so — but what
+   * the copy has to preserve is the finding rather than the code: core.js's tone() retires its
+   * gamma lift across eight depth buckets on FOG_START 12 / FOG_END 125 whatever world is drawing,
+   * so with no fog to hide it a `white` cell loses 65% of its print by 120 m and a `pure` cell 34%.
+   * Near field white, far field pure with a ramp that cancels the bucket, crossover dithered so the
+   * eye sees drifting texture rather than a ring, and azure at a twelfth of the drive at night. */
+  var SC = { col: 0, lum: 0 };
+  function fineOf(base, dist, hv) {
+    var far = dist >= 40 || (dist > 24 && hv > (40 - dist) / 16);
+    var dark = KNIGHT > 0.5 || (KNIGHT > 0 && hv < KNIGHT);
+    if (!far) {
+      if (dark) { SC.col = base > 0.72 ? P.pure : P.azure; SC.lum = (base > 0.72 ? 52 : 44) + 26 * base; }
+      else { SC.col = P.white; SC.lum = (150 + 62 * base) * (1 - 0.20 * KMIX); }
+      return SC;
+    }
+    SC.col = dark ? P.azure : P.pure;
+    SC.lum = (dark ? (dist < 125 ? 70 + dist * 0.62 : 60) : (dist < 125 ? 96 + dist * 0.62 : 88)) *
+             (0.90 + 0.26 * base);
+    return SC;
+  }
+
+  function blastScour(f, cx, cz, salt) {
+    var w0 = seeAt(cx, cz, 1.0);
+    if (!w0) return;
+    /* Screen bounding box from eight points round the rim. Same treatment as shadowPatch: a point
+     * that fails to project is off-frame in its own direction rather than a reason to drop the
+     * whole patch, because the near rim of a scour the camera is standing in is behind the eye. */
+    var bx0 = 1e9, bx1 = -1e9, by0 = 1e9, by1 = -1e9, k, hit = 0;
+    for (k = 0; k < 8; k++) {
+      var a = k * 0.7853981634;
+      if (!project(cx + Math.sin(a) * SCOUR_R, 0, cz + Math.cos(a) * SCOUR_R)) continue;
+      hit = 1;
+      if (PJ.x < bx0) bx0 = PJ.x;
+      if (PJ.x > bx1) bx1 = PJ.x;
+      if (PJ.y < by0) by0 = PJ.y;
+      if (PJ.y > by1) by1 = PJ.y;
+    }
+    if (!hit) return;
+    var x0 = Math.floor(bx0) - 1, x1 = Math.ceil(bx1) + 1;
+    var y0 = Math.floor(by0) - 1, y1 = Math.ceil(by1) + 1;
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x1 >= V.cols) x1 = V.cols - 1;
+    if (y1 >= V.rows) y1 = V.rows - 1;
+    var top = Math.ceil(V.horizon) + 1;
+    if (y0 < top) y0 = top;
+
+    for (var r = y0; r <= y1; r++) {
+      var w = V.eyeY * V.scale / ((r + 0.5) - V.horizon);
+      if (w <= 0 || w > V.far) continue;
+      for (var x = x0; x <= x1; x++) {
+        var i = r * V.cols + x;
+        if (f.kind[i] !== 2) continue;                // not floor: hardware, a rock, the sky
+        if (f.dist[i] > 1e5) continue;                // the caster's parallel-ray blank
+        var sp = ((x + 0.5) - V.colMid) / V.colK;
+        var px = V.ox + (V.fwx + V.rgx * sp) * w, pz = V.oz + (V.fwz + V.rgz * sp) * w;
+        var qx = px - cx, qz = pz - cz;
+        var rr = Math.sqrt(qx * qx + qz * qz);
+        /* Inside the footpad circle there is nothing to draw: that ground is under the descent
+         * stage and is about to be black anyway. */
+        if (rr < 2.6 || rr > SCOUR_R) continue;
+        var kf = 1 - (rr - 2.6) / (SCOUR_R - 2.6);
+        kf = kf * kf;
+        var ax = qx < 0 ? -qx : qx, az = qz < 0 ? -qz : qz, sm = ax + az;
+        if (sm < 1e-6) continue;
+        var oa = qz / sm; if (qx < 0) oa = oa >= 0 ? 2 - oa : -2 - oa;
+        var sf = oa * 9.0, si = Math.floor(sf); sf -= si;
+        var e = hash2(si, 0, salt + 0x11) < 0.42
+              ? (sf < 0.3 ? sf / 0.3 : (sf > 0.7 ? (1 - sf) / 0.3 : 1)) : 0;
+        var dens = 0.30 * kf * (0.55 + 1.25 * e);
+        var q = qOf(w);
+        var hv = hash2(Math.floor(px * q), Math.floor(pz * q), salt);
+        if (hv >= dens) continue;
+        var d = w * Math.sqrt(1 + sp * sp) * 0.99;
+        if (!(d < f.dist[i])) continue;
+        var lf = fineOf(0.62 + 0.38 * (hv / dens), d, hv);
+        put(f, x, r, hv < 0.34 ? G_DOT : (hv < 0.68 ? G_COMMA : G_QUOTE),
+            lf.col, lf.lum | 0, d, 2);
+      }
+    }
+  }
+
   var LM_A1 = 6.55;                       // top of the crew compartment
   var LM_AHW = 1.17;                      // half the 2.34 m crew compartment
   var LM_PAD = 4.70;                      // footpad centre, metres out from the axis
@@ -670,10 +831,13 @@
      * roughly up-sun. That is not decoration: the LM's windows and its ladder are on the same face,
      * the crews photographed the vehicle down-sun almost without exception, and it means the face
      * the walk is looking at is the lit one rather than a black rectangle. */
-    var head = Math.atan2(KX, KZ) + (hash2(k, 1, BASE + 0x81) - 0.5) * 1.5;
+    var head = LAY_AZ + (hash2(k, 1, BASE + 0x81) - 0.5) * 1.5;
     var fx = Math.sin(head), fz = Math.cos(head);     // forward: the crew compartment faces this way
     var rx = Math.cos(head), rz = -Math.sin(head);    // right
 
+    /* The scour first, then the shadow on top of it: the vehicle's own black lying across its own
+     * bright halo is the whole read, and drawn the other way round the shadow is scrubbed out. */
+    blastScour(f, cx, cz, BASE + 0x83);
     shadowPatch(f, cx, cz, 4.9, 1.7, LM_A1, BASE + 0x82);
 
     /* ---- the descent stage, four faces ---------------------------------------------------------
@@ -944,7 +1108,7 @@
     var cx = sX[k], cz = sZ[k];
     /* Beside the LM and a little forward of it, which is where every one of them was actually
      * planted — in shot from the LM's own television camera. */
-    var b = Math.atan2(KX, KZ) + 1.15 + hash2(k, 2, BASE + 0xB0) * 0.5;
+    var b = LAY_AZ + 1.15 + hash2(k, 2, BASE + 0xB0) * 0.5;
     var px = cx + Math.sin(b) * 9.6, pz = cz + Math.cos(b) * 9.6;
     var w = seeAt(px, pz, 1.0);
     if (!w) return;
@@ -952,7 +1116,7 @@
     /* Which way it faces. Square to the sun, because a flag edge-on is a line and the crossbar means
      * it cannot turn: the crew set it where it would photograph, and photographing on this world
      * means down-sun. */
-    var fb = Math.atan2(KX, KZ) + Math.PI * 0.5;
+    var fb = LAY_AZ + Math.PI * 0.5;
     var ex = Math.sin(fb), ez = Math.cos(fb);
 
     shadowPatch(f, px, pz, 0.5, 0.9, FLAG_POLE, BASE + 0xB1);
@@ -1026,9 +1190,12 @@
    * THE TRACKS ARE WORTH MORE THAN THE VEHICLE. The design brief spends a page on it and
    * west_range.js opens with the same sentence — empty ground rendered honestly is empty — and a
    * pair of rails running away across the regolith is the only converging line this part of the
-   * plain has. surf_moon.js draws a pair down the route centreline for the same reason; these are
-   * the ones that go somewhere else, and two sets of rails crossing at an angle is what turns a
-   * plain into a place that has been driven across.
+   * plain has. It is now the ONLY pair of rails in this world and that is deliberate: surf_moon.js
+   * used to draw a second pair down the route centreline, and because the walk follows corridor
+   * centrelines that pair was always dead ahead and always straight, which is what made a viewer
+   * call this plain a road. Those are gone; the painter's replacement is an oblique traverse that
+   * wanders, and it draws no rails at all. These are the rover's own, they belong to a vehicle the
+   * frame can see, and they stop at it.
    * ============================================================================================= */
 
   var RV_LEN = 3.05, RV_TRK = 1.03, RV_WH = 0.41, RV_DECK = 0.62, RV_SEAT = 1.14;
@@ -1037,7 +1204,7 @@
 
   function drawRover(f, k) {
     var cx = sX[k], cz = sZ[k];
-    var b = Math.atan2(KX, KZ) - 0.85 - hash2(k, 4, BASE + 0xC1) * 0.6;
+    var b = LAY_AZ - 0.85 - hash2(k, 4, BASE + 0xC1) * 0.6;
     var px = cx + Math.sin(b) * 24.0, pz = cz + Math.cos(b) * 24.0;
     var w = seeAt(px, pz, 1.0);
     if (!w) return;
@@ -1046,7 +1213,7 @@
      * — the dish has to be aimed at Earth and the seats have to be reachable — and which also means
      * the vehicle presents its long side to a walk that has the sun behind it. A rover seen end-on
      * is 1.8 m of nothing. */
-    var hd = Math.atan2(KX, KZ) + 1.35 + (hash2(k, 5, BASE + 0xC2) - 0.5) * 0.7;
+    var hd = LAY_AZ + 1.35 + (hash2(k, 5, BASE + 0xC2) - 0.5) * 0.7;
     var fx = Math.sin(hd), fz = Math.cos(hd);
     var rx = Math.cos(hd), rz = -Math.sin(hd);
 
@@ -1170,10 +1337,10 @@
           for (var qq = 1; qq < st; qq++) {
             var tq = qq / st;
             /* The chevron tread, carried by WHICH GLYPH it is rather than by whether there is one.
-             * surf_moon.js draws its own rails the same way and says why: a rail that is only
-             * sometimes painted switches cells on and off against a lum-0 background as the camera
-             * walks, which is the hazard the windmill failed on. A continuous line of alternating
-             * '=' and '-' reads as a tread pattern anyway. */
+             * surf_moon.js's rover traverse carries its own tread the same way and says why: a line
+             * that is only sometimes painted switches cells on and off against a lum-0 background as
+             * the camera walks, which is the hazard the windmill failed on. A continuous line of
+             * alternating '=' and '-' reads as a tread pattern anyway. */
             emit(f, lx + Math.round(ddx * tq), ly + Math.round(ddy * tq),
                  (qq & 1) ? G_EQ : G_DASH, col, lum, ld + (d - ld) * tq);
           }
@@ -1181,6 +1348,89 @@
         emit(f, x, r, G_EQ, col, lum, d);
         lx = x; ly = r; ld = d;
       }
+    }
+  }
+
+  /* ================================================================================ 6. THE WORK ===
+   * WHAT A CREW LEAVES ON THE GROUND WHEN THEY ARE WORKING, and it is the smallest content in this
+   * world and the only content in it that is a PERSON rather than a machine.
+   *
+   * Everything else on this site is a vehicle or an experiment: big, symmetrical, deployed. What
+   * makes an Apollo surface photograph read as a place somebody stood is the litter — a gnomon
+   * planted next to a rock so the photograph has a scale and a colour reference in it, two sample
+   * bags dropped where they were filled, a core tube standing in the ground where it was driven, a
+   * film magazine tossed aside because there was nowhere to put it. None of these is bigger than a
+   * forearm.
+   *
+   * ---- WHY THEY ARE WORTH DRAWING AT ALL ------------------------------------------------------
+   * Not for themselves — a 0.3 m object at 24 m is one cell — but for their SHADOWS. The design
+   * brief's failure (c) is a page on it and drawBoulders opens with the same sentence: an open
+   * plain with nothing of known size in it has no scale. A gnomon is 0.46 m of vertical rod, which
+   * at the Apollo sun throws between one and five metres of jet black; that shadow is a RULER lying
+   * on the ground, and it is the one on this world whose length the viewer can actually calibrate
+   * against, because everybody knows how tall a walking stick is and nobody knows how big a lunar
+   * module is.
+   *
+   * ---- AND THE GNOMON IS THE ONE PLACE THIS FILE IS ALLOWED A SECOND COLOUR --------------------
+   * surf_moon.js's header lists the exceptions to the greyscale rule and names them: "the only
+   * saturated objects in the entire frame are man-made (gold Kapton, the flag, a red-striped
+   * gnomon)". The real gnomon's leg carries a photometric chart in grey steps and in blue, orange
+   * and green. It is drawn here as ONE cell of ember at the foot of the rod, inside 22 m only,
+   * because at 22 m the whole leg is under two rows and the chart and the rod are the same cell —
+   * and a coloured cell that appears when the walk crosses a radius is a step this world cannot
+   * afford, so it is faded in over 22-30 m rather than switched at 22. The flag is the world's red;
+   * this is a single pixel of it, once per site.
+   *
+   * ---- PLACEMENT ------------------------------------------------------------------------------
+   * A work station is 12-22 m from the anchor on the LAY_AZ family of bearings, like everything
+   * else here, and the four objects are scattered inside three metres of it on their own hashes.
+   * They are drawn at every distance the site is (no LOD gate on the objects themselves) because
+   * they are one or two cells and a gate on one bright cell against a lum-0 background is exactly
+   * the hazard the ALSEP petals record above. */
+  function drawStation(f, k) {
+    var cx = sX[k], cz = sZ[k];
+    var b = LAY_AZ - 1.42 + (hash2(k, 12, BASE + 0xF0) - 0.5) * 0.8;
+    var rng = 12 + hash2(k, 13, BASE + 0xF1) * 10;
+    var wx = cx + Math.sin(b) * rng, wz = cz + Math.cos(b) * rng;
+    var w = seeAt(wx, wz, 0.6);
+    if (!w) return;
+    var rx = Math.cos(b), rz = -Math.sin(b), fx = Math.sin(b), fz = Math.cos(b);
+
+    /* ---- the gnomon ---------------------------------------------------------------------------
+     * A gimballed rod that hangs vertical whatever the ground does, on a tripod. Drawn as its rod
+     * and its shadow and nothing else: the tripod legs are 0.3 m and there is no distance at which
+     * three of them are more than the one cell the rod already owns. */
+    shadowPatch(f, wx, wz, 0.16, 0.30, 0.46, BASE + 0xF2);
+    column(f, wx, wz, 0.06, 0.46, G_PIPE, P.pure, rimLum(0.9), 0);
+    /* The photometric chart, faded in over 30-22 m rather than switched — see the block comment. */
+    if (w < 30 && project(wx, 0.10, wz)) {
+      var kc = w < 22 ? 1 : (30 - w) / 8;
+      emit(f, Math.floor(PJ.x), Math.floor(PJ.y), G_UNDER, P.ember,
+           (KDAY * 176 + KNIGHT * 76) * kc, PJ.d);
+    }
+
+    /* ---- the core tube, driven and left standing ------------------------------------------------
+     * Aluminium, 0.4 m proud of the ground and leaning the way it was hammered. Its own shadow is
+     * what says it is standing up rather than lying down. */
+    var tx = wx + rx * 1.9 - fx * 0.7, tz = wz + rz * 1.9 - fz * 0.7;
+    shadowPatch(f, tx, tz, 0.10, 0.22, 0.40, BASE + 0xF3);
+    column(f, tx, tz, 0.0, 0.40, G_PIPE, P.pure, rimLum(0.6), 0);
+
+    /* ---- two sample bags, and one film magazine -------------------------------------------------
+     * Teflon bags of dirt, dropped where they were filled, and a magazine of exposed film that came
+     * off the camera and did not go back on. They are one cell each and they are white — the only
+     * white objects on a grey plain — with a blank down-sun of each, which is the entire reason to
+     * draw an object 0.2 m across at all: the pairing of a pale cell and a dark one is a THING,
+     * and a pale cell on its own is a grain of regolith. */
+    var s, sx2, sz2;
+    for (s = 0; s < 3; s++) {
+      var ha = hash2(k * 5 + s, 14, BASE + 0xF4), hb = hash2(k * 5 + s, 15, BASE + 0xF5);
+      sx2 = wx + (ha - 0.5) * 5.2 + rx * 0.6;
+      sz2 = wz + (hb - 0.5) * 5.2 + rz * 0.6;
+      if (project(sx2, 0.11, sz2))
+        emit(f, Math.floor(PJ.x), Math.floor(PJ.y), s === 2 ? G_o : G_8,
+             P.pure, rimLum(0.3 + 0.5 * ha), PJ.d);
+      shadowPatch(f, sx2, sz2, 0.09, 0.16, 0.20, BASE + 0xF6 + s);
     }
   }
 
@@ -1212,7 +1462,7 @@
     var cx = sX[k], cz = sZ[k];
     /* Down-sun of the LM and off to one side, which is where they went: the crew walked away from
      * the vehicle with the sun behind them so they could see the ground they were putting it on. */
-    var b = Math.atan2(KX, KZ) + Math.PI + 0.55 + (hash2(k, 7, BASE + 0xD0) - 0.5) * 0.9;
+    var b = LAY_AZ + Math.PI + 0.55 + (hash2(k, 7, BASE + 0xD0) - 0.5) * 0.9;
     var rng = 34 + hash2(k, 8, BASE + 0xD1) * 18;
     var stx = cx + Math.sin(b) * rng, stz = cz + Math.cos(b) * rng;
 
@@ -1305,7 +1555,7 @@
    * The kk*kk shapes the ramp so that most of the nine seconds is spent dark and the flare is a
    * sharp event at the end of it, which is what a corner-cube array does. */
   function drawRetro(f, k, cx, cz) {
-    var b = Math.atan2(KX, KZ) + 2.35 + (hash2(k, 10, BASE + 0xE0) - 0.5) * 0.7;
+    var b = LAY_AZ + 2.35 + (hash2(k, 10, BASE + 0xE0) - 0.5) * 0.7;
     var px = cx + Math.sin(b) * 17.0, pz = cz + Math.cos(b) * 17.0;
     var w = seeAt(px, pz, 1.0);
     if (!w) return;
@@ -1333,7 +1583,7 @@
    * FURNITURE in the world — everything else here is either a spacecraft or knee-high — and it is
    * what tells the eye how big the LM behind it is. */
   function drawTV(f, k, cx, cz) {
-    var b = Math.atan2(KX, KZ) - 1.9 + (hash2(k, 11, BASE + 0xE8) - 0.5) * 0.6;
+    var b = LAY_AZ - 1.9 + (hash2(k, 11, BASE + 0xE8) - 0.5) * 0.6;
     var px = cx + Math.sin(b) * 14.0, pz = cz + Math.cos(b) * 14.0;
     var w = seeAt(px, pz, 1.0);
     if (!w) return;
@@ -1394,6 +1644,7 @@
     };
   }
 
+  CC.ELEMENTS.push(mk('moon-station', 18, drawStation));
   CC.ELEMENTS.push(mk('moon-alsep', 19, drawALSEP));
   CC.ELEMENTS.push(mk('moon-flag', 20, drawFlag));
   CC.ELEMENTS.push(mk('moon-rover', 21, function (f, k) { if (hasRover(k)) drawRover(f, k); }));

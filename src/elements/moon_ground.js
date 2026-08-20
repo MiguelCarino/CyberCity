@@ -839,7 +839,32 @@
    * the +x one) and `off` is how far this cell is from the trail's centreline; everything below is
    * in those two coordinates and knows nothing about which traverse it belongs to. `salt` separates
    * the two hash streams so the two trails do not print the same sequence of prints. */
+  /* ---- A CREW DOES NOT MARCH ------------------------------------------------------------------
+   * The trail as it stood was continuous from one end of the frame to the other: an unbroken double
+   * line of prints, every stride accounted for, running the whole 72 m of PRINT_FAR. That is a
+   * procession, and it was the other half of what made this world read as having a ROAD — the eye
+   * does not care that the line curves if it never stops.
+   *
+   * What an EVA actually leaves is intermittent. The crew walk somewhere, mill about while one of
+   * them photographs, detour to a rock, come back on a slightly different line, and cross forty
+   * metres of untouched ground on the way to the next station. So the trail is cut into 9.4 m
+   * segments and 58% of them carry prints; the rest are ground nobody stepped on.
+   *
+   * 9.4 m IS THIRTEEN STRIDES and the number matters. At 4 m the trail reads as a dashed line,
+   * which is a road marking and worse than what it replaced. At 30 m the gaps are longer than the
+   * part of the trail the frame can hold and the whole thing is present or absent per walk. Thirteen
+   * strides is long enough to read as a stretch of walking and short enough that a single frame
+   * usually holds two of them with a gap between.
+   *
+   * A GAP IS SAFE, which is the thing to check before cutting anything on this world. The mask is a
+   * function of world position and the seed alone — no camera, no time — so a cell either is or is
+   * not inside a walked segment for as long as the map exists. Nothing switches. */
+  function walked(along, salt) {
+    return hash2(Math.floor(along / 9.4), 0, BASE + salt + 0x0A) < 0.58;
+  }
+
   function printAt(f, x, y, d, along, off, salt) {
+    if (!walked(along, salt)) return;
     if (d > PRINT_NEAR) {
       /* The continuous far strip. Always painted, so no cell it owns can ever switch. */
       if (off < -0.34 || off > 0.34) return;
@@ -904,9 +929,52 @@
         var o1 = GP.wx - trailX(GP.wz);
         if (o1 > -0.8 && o1 < 0.8) { printAt(f, x, y, d, GP.wz, o1, 0x50); continue; }
         var o2 = GP.wz - trailZ(GP.wx);
-        if (o2 > -0.8 && o2 < 0.8) printAt(f, x, y, d, GP.wx, o2, 0x60);
+        if (o2 > -0.8 && o2 < 0.8) { printAt(f, x, y, d, GP.wx, o2, 0x60); continue; }
+        millAt(f, x, y, d, GP.wx, GP.wz);
       }
     }
+  }
+
+  /* ---- THE MILLING PATCHES ---------------------------------------------------------------------
+   * The other thing a crew leaves, and the one that says most about what they were doing: a ROUND
+   * patch of churned ground three or four metres across, with no line to it, where somebody stood
+   * and turned round and set a camera down and picked it up again. Every Apollo station photograph
+   * has one and it is the most human mark on the surface — a trail says a route, a milling patch
+   * says a person.
+   *
+   * On a 34 m lattice at 26% occupancy, radius 1.6-4.4 m, jittered off the lattice cell so the
+   * spacing does not read. Inside one, prints are scattered on a 2D hash rather than laid out on a
+   * stride: nobody walks in a circle, they shuffle. Coverage falls off toward the rim (the middle is
+   * where the boots were) so the patch has no edge, which is both what it looks like and what keeps
+   * it off the flicker census — an edgeless world-locked feature has nothing to switch.
+   *
+   * NEAR FIELD ONLY, at PRINT_NEAR. A milling patch past 20 m is a handful of cells that the strip
+   * treatment cannot help, because it has no length to be continuous ALONG. */
+  var MILL_LAT = 34.0;
+
+  function millAt(f, x, y, d, wx, wz) {
+    if (d > PRINT_NEAR) return;
+    var mi = Math.floor(wx / MILL_LAT), mj = Math.floor(wz / MILL_LAT);
+    var hm = hash2(mi, mj, BASE + 0x70);
+    if (hm > 0.26) return;
+    var cx = (mi + 0.2 + 0.6 * hash2(mi, mj, BASE + 0x72)) * MILL_LAT;
+    var cz = (mj + 0.2 + 0.6 * hash2(mi, mj, BASE + 0x73)) * MILL_LAT;
+    var rr = 1.6 + 2.8 * (hm / 0.26);
+    var dx = wx - cx, dz = wz - cz;
+    var rd = Math.sqrt(dx * dx + dz * dz);
+    if (rd > rr) return;
+    var k = 1 - rd / rr;                     // 1 at the centre, 0 at the rim
+    var hp = hash2(Math.floor(wx * 7), Math.floor(wz * 7), BASE + 0x74);
+    if (hp > 0.30 + 0.40 * k) return;
+    /* Same object as one print of the trail and drawn the same way round: a compacted dark core
+     * with a bright collar. Here the two are dithered against each other rather than laid out,
+     * because at 14 cm of lattice a shuffled patch has no stride to hang them on. */
+    if (hp < 0.09) {
+      emit(f, x, y, hp < 0.03 ? G_DOT : 0, P.slate, hp < 0.03 ? 20 + hp * 300 : 0, d * 0.996);
+      return;
+    }
+    var lm = litOf(0.72 + hp * 0.28, d, hp);
+    emit(f, x, y, hp < 0.19 ? G_UNDER : (hp < 0.26 ? G_COLON : G_DOT), lm.col, lm.lum, d * 0.996);
   }
 
   /* ============================================================================= 6. BOULDERS ===
@@ -951,6 +1019,21 @@
    * walk goes, which is what a much-driven landing site looks like. */
   var BLD_LAT = 4.2, BLD_R = 92.0, BLD_P = 0.46;
 
+  /* The block-field modulation. Bilinear over nine boulder-lattice cells, i.e. 37.8 m, smoothstepped
+   * on both axes so the field has no crease anywhere and no visible tile. Returns 0.20..1.80 with a
+   * mean of 1, so the boulder count over any large patch is exactly what it was and only its
+   * DISTRIBUTION has changed. */
+  function bldField(i, j) {
+    var qx = i / 9, qz = j / 9;
+    var i0 = Math.floor(qx), j0 = Math.floor(qz);
+    var fx = qx - i0, fz = qz - j0;
+    fx = fx * fx * (3 - 2 * fx); fz = fz * fz * (3 - 2 * fz);
+    var a = hash2(i0, j0, BASE + 0x6D), b = hash2(i0 + 1, j0, BASE + 0x6D),
+        c = hash2(i0, j0 + 1, BASE + 0x6D), d = hash2(i0 + 1, j0 + 1, BASE + 0x6D);
+    var ab = a + (b - a) * fx;
+    return 0.20 + 1.60 * (ab + ((c + (d - c) * fx) - ab) * fz);
+  }
+
   function drawBoulders(f) {
     if (!CITY) return;
     var lo0 = Math.floor((V.ox - BLD_R) / BLD_LAT), hi0 = Math.floor((V.ox + BLD_R) / BLD_LAT);
@@ -963,7 +1046,18 @@
     for (j = lo1; j <= hi1; j++) {
       for (i = lo0; i <= hi0; i++) {
         var h = hash2(i, j, BASE + 0x61);
-        if (h > BLD_P) continue;
+        /* ---- AND THEY COME IN FIELDS ----------------------------------------------------------
+         * A flat 46% over a 4.2 m lattice is a boulder every nine square metres EVERYWHERE, which
+         * is a gravel bed, not a mare surface. Real ejecta lies in patches: a block field round the
+         * rim of the crater that threw it, and bare regolith between the fields. So the occupancy
+         * is modulated by a bilinear field on a 9-cell (38 m) lattice, running 0.20 to 1.80 of the
+         * nominal rate — bare stretches at 9% and block fields at 83%, mean unchanged at 46%.
+         *
+         * 38 m and not the swell's 54: the two must NOT be commensurate, or every block field
+         * lands on the same crest as every drift of fines and the whole plain acquires one
+         * frequency. Bilinear rather than per-cell for the reason every other lattice in this
+         * project is — a hard cell puts visible 38 m tiles on the ground. */
+        if (h > BLD_P * bldField(i, j)) continue;
         var px = (i + 0.12 + 0.76 * hash2(i, j, BASE + 0x62)) * BLD_LAT;
         var pz = (j + 0.12 + 0.76 * hash2(i, j, BASE + 0x63)) * BLD_LAT;
         /* Behind the eye plane or out past the field radius: the cheapest two rejects, first. */
@@ -982,6 +1076,28 @@
         if (da < clr) continue;
         var dc = pz - (CITY.crossZ(kc) + 0.5); if (dc < 0) dc = -dc;
         if (dc < clr) continue;
+        /* ---- THE EDGE OF THE CLEARED LANE IS FEATHERED, AND ONLY OUTWARD ----------------------
+         * The two tests above are exact rectangles centred on the route lattice, so what they leave
+         * on the ground is a swept corridor with a DEAD STRAIGHT EDGE running the length of every
+         * avenue and every cross street in the world. On a plain with nothing else straight in it
+         * that reads as a kerb — a line of absence is as much a line as a line of paint, and this
+         * one is axis-aligned and infinite. It is the last surviving artefact of the street lattice
+         * on this world and it is the thing the map spent a whole pass hiding.
+         *
+         * The repair is a probabilistic taper outside the hard clearance: a boulder between clr and
+         * clr+fw survives with probability (da-clr)/fw, so the field thins into the lane over four
+         * metres or so instead of stopping at a line. The width itself wanders on a 44 m noise, so
+         * the OUTER edge of the taper is not straight either.
+         *
+         * IT CAN ONLY EVER REMOVE A BOULDER. The hard clearance above is untouched and is still the
+         * thing that keeps a three-metre rock out of the camera's path; this runs after it and
+         * subtracts. A version that let the wobble push the clearance inward was written first and
+         * thrown away — the whole safety argument for that constant is that it is a floor. */
+        var fh = hash2(i, j, BASE + 0x6C);
+        var fw = 4.2 * (0.45 + 1.1 * CC.vnoise(pz * 0.023, BASE + 0x6A));
+        if (da < clr + fw && fh > (da - clr) / fw) continue;
+        fw = 4.2 * (0.45 + 1.1 * CC.vnoise(px * 0.023, BASE + 0x6B));
+        if (dc < clr + fw && fh > (dc - clr) / fw) continue;
 
         var sd = (BASE + i * 7919 + j * 104729) & 0x3fffff;
         drawShadow(f, px, pz, r, sX, sZ, tanA, sinA, sd);
@@ -1255,8 +1371,282 @@
     }
   }
 
+  /* =========================================================== 7. THE SHADOWS THE GROUND CASTS ===
+   * THE SINGLE LARGEST LEGIBILITY LEVER ON THIS WORLD, and until this pass nothing drew it.
+   *
+   * Every Apollo landing was flown at a sun between 5 and 25 degrees, and the reason is one
+   * sentence: with no air, no aerial perspective and no vegetation, THE ONLY WAY TO READ RELIEF ON
+   * A REGOLITH PLAIN IS THE LENGTH OF ITS SHADOWS. A crew standing on a rise at local noon cannot
+   * tell it is on a rise. surf_moon.js's floor already knows this — it is why the whole file exists
+   * in shades of coverage rather than of luminance — but it is handed two world coordinates and
+   * cannot see a metre in any direction, so the one thing it can never draw is the shadow of
+   * something ELSE.
+   *
+   * This element can, because it has the map. city.js puts up to 2.8 m of rolling relief on every
+   * non-street lot on the Moon, plus rock piles to 5.4 m and crater rims.
+   *
+   * ---- HOW ------------------------------------------------------------------------------------
+   * For each floor cell the caster has already painted, inverse-project it (groundAt, which recovers
+   * the caster's own forward depth out of the depth buffer and is therefore exact), then march the
+   * SUN RAY back from that point: at u metres toward the sun the ray is u*tan(alt) above the ground,
+   * so any terrain higher than that blocks it. What comes out is `k`, a coverage in 0..1 — how much
+   * of this cell's regolith the terrain up-sun of it has taken.
+   *
+   * ---- THE BLOCKER FIELD IS NOT city.height, AND THAT IS THE PHOTOSENSITIVITY FIX --------------
+   * The first cut of this pass read CITY.height directly at each sample, and it was the largest
+   * in-band flicker source on the world. The mechanism is worth writing out because it is not
+   * obvious and it is general.
+   *
+   * CITY.height is PIECEWISE CONSTANT: it floors its arguments to a metre and a whole lot shares
+   * one slab. The march's sample points are `s * reach / n` metres along (sX,sZ), and BOTH of those
+   * move continuously with the clock — `reach` off the altitude, (sX,sZ) off the bearing. So the
+   * sample points slide across the lattice, and a max over samples of a piecewise-constant field is
+   * a STEP FUNCTION OF TIME. Worse, it is a non-monotonic one: as one sample leaves a slab and the
+   * next enters it, `best` falls and rises again, so a cell does not switch once as a shadow edge
+   * passes over it — it chatters. Measured with the camera pinned and the clock RUNNING — which is
+   * the thing tools/west-flicker.cjs does NOT do, see the note at the registration block — the pass
+   * alone ran to 2.80% in the 3-20 Hz band and 0.75 big steps a second, against gates of 2% and
+   * 1.0/s, on a background of lum 0 where every step is most of full scale. The dithered edge below
+   * is no defence: it spreads the SPATIAL handover, and gives nothing at all when `best` jumps
+   * across zero and takes every cell of an edge in one frame.
+   *
+   * So the march reads bgSample: a BILINEAR interpolation over a 2 m lattice whose nodes are the
+   * max of the four metre cells under them. Bilinear over any lattice is continuous, so the sampled
+   * height is a continuous function of position, `best` is a continuous function of the clock, and
+   * a sample crossing a lot boundary ramps over the 2 m it takes to cross instead of jumping. The
+   * node max rather than a point sample because a lot is 7-16 m across but a crater rim is not:
+   * point-sampling a 2 m lattice can step over a rim ring, and a max cannot. The cost of the max is
+   * that every blocker is dilated by up to 2 m, which lengthens its shadow by 2 m in a field whose
+   * shadows are 12-28 m long.
+   *
+   * The nodes are cached direct-mapped on a 128x128 wrap, stamped per frame. The wrap is safe
+   * because the region a frame touches is bounded by TS_FAR + TS_REACH = 73 m, i.e. 37 nodes each
+   * side of the camera against the 64 the wrap allows; if TS_FAR and TS_REACH ever grow past 128 m
+   * between them, two different pieces of ground start sharing a slot. Measured at 400x100 noon,
+   * the cache turns 150,196 CITY.height calls in one drawRelief into 1,868 — and, measured on the
+   * clock rather than on the call count, that saving pays for the four-tap bilinear exactly: the
+   * pass costs 2.50 ms where the point-sampled version cost 2.49. The cache is not an optimisation
+   * that was wanted, it is the price of the interpolation being affordable at all.
+   *
+   * ---- THE EDGE IS DITHERED AND THEN RAMPED ---------------------------------------------------
+   * A lunar shadow has no penumbra — that is one of the four facts at the top of surf_moon.js — and
+   * a shadow edge drawn as a hard test is a line of cells switching between v 130 and lum 0 as it
+   * sweeps. Two remedies stacked, and the second one is what actually bought the measurement:
+   *
+   *   THE DITHER, on the cell's own stable world hash, so the edge is a one-cell scatter rather
+   *   than a line and the handover is spread over every cell of it. This is facade()'s terminator
+   *   remedy, verbatim.
+   *
+   *   THE RAMP. A dither alone still takes each individual cell from its lit luminance to zero in
+   *   ONE frame, and on this world that is 56% of full scale. So the last TS_EDGE of the coverage
+   *   ramp DIMS THE CELL'S OWN PAINT instead of deleting it: e runs 0..1 across the band and the
+   *   cell is written back at lum * (1-e), so what used to be one 144-point drop is spread over the
+   *   whole time `k` takes to sweep TS_EDGE.
+   *
+   *   MEASURED, seeds 42/7/1234 at all six stops, 120x40, pinned camera, clock RUNNING, against
+   *   gates of 1.0 big steps/s and 2% in the 3-20 Hz band. BEFORE: the pass alone ran to 2.80% in
+   *   band and 0.75 big steps/s. AFTER, and this is the form the claim should always have taken —
+   *   the world pass alone at the same eighteen (seed, hour) pairs measures 0.04-1.81% in band,
+   *   0.00-0.25/s, worst step 20.4-85.9%; with this element drawn on top of it the figures are
+   *   0.34-1.81%, 0.00-0.25/s, worst step 20.4-85.9%. The worst step and the big-step rate are
+   *   IDENTICAL at every one of the eighteen or lower (the element dims cells the world pass was
+   *   stepping), and the largest in-band increment it adds anywhere is 0.52 points.
+   *
+   *   A handover cell is written back as kind 2 and not kind 3, because it is still floor and is
+   *   only partly shaded — a bootprint may legitimately be drawn on it. Only a cell at full
+   *   coverage becomes kind 3.
+   *
+   * ---- THE REACH IS 28 m, AND IT IS NOT 6/tan(alt) --------------------------------------------
+   * The obvious reach is "far enough to catch the tallest thing on the map", i.e. 6.0/tan(alt),
+   * which is 12 m at the top of the Apollo band and 44 m at the bottom. It is wrong, and the render
+   * says so louder than any census: at the dusk and dawn stops the sun is 7.7 degrees up, a 2.8 m
+   * mound throws 20 m and a 5 m rock pile throws 37, shadows merge, and a camera that happens to be
+   * looking up-sun gets a frame with NO GROUND IN IT. Measured at seed 42, dusk, yaw 4.5 — a pose
+   * looking straight into the low sun — the 40 m version took 90% of the visible floor and the near
+   * field went black.
+   *
+   * It is worth being clear that this is not an error in the shadow arithmetic. It is what a 7.7
+   * degree sun does to ground with 2.8 m of relief on it, and standing in the shade of a rock pile
+   * is a real thing to be doing on the Moon. It is simply not a frame, and this renderer has no
+   * cut to another one. The autopilot walk itself rarely gets there — over a whole 420 s day it
+   * never once looked at a frame that bad — but the viewer has a mouse, and "only if you do not
+   * look that way" is not a defence.
+   *
+   * ---- WHAT IS STILL BEARING-DEPENDENT, AND IT IS NOT GOING AWAY ------------------------------
+   * The share this pass takes still swings enormously with where the camera is pointed. Measured,
+   * seed 42 at the start pose, share of the visible ground's light removed, over six yaws:
+   *       dawn     0.0  0.7  51.9  73.8  40.6   6.5 %
+   *       morning  0.0 19.3  73.6  63.0  13.8   0.0 %
+   *       dusk    25.1 12.3   3.9   0.0  21.3  77.4 %
+   * That is not noise and it is not fixable here. city.js's corridors are straight, 10-20 m wide,
+   * flat by construction, and lie in shallow valleys because swellEdge fades the relief to zero at
+   * the block boundary; the walk follows those corridors, so most of the visible floor in any frame
+   * IS a corridor. A shallow straight valley lit ALONG its axis has no cast shadow on its floor and
+   * lit ACROSS it is entirely shadowed, so the answer is a function of the angle between the sun
+   * and the corridor. It is correct terrain behaviour on a map whose terrain has a lattice in it.
+   *
+   * The same measurement made over the OPEN GROUND rather than over a frame shows how much of the
+   * swing is the corridor and how much is the sun: marching this same law over a 121x121 m patch
+   * of flat ground at the dawn/dusk altitude, the shadowed share runs 11.4% to 26.0% over a full
+   * turn of the bearing — a factor of 2.3, against the frame's 0 to 77. The other factor of thirty
+   * is the corridor, and the only place it could be fixed is city.js.
+   *
+   * BE CLEAR ABOUT WHICH KNOB DID WHAT, because the reach is the smaller half of it. What actually
+   * stops the frame emptying is the RAMP and the FILL below: at the same yaw-4.5 dusk pose, the
+   * share of the visible ground's LIGHT this pass removes goes 86.2% before this round to 73.0%
+   * with the ramp and the fill in and the reach still at 40. The reach then sets how much of the
+   * middle of the distribution it takes. Measured over a full 420 s day of the real autopilot walk,
+   * sampled once a second at 140x44, seeds 42/7/3/1234, the share of the visible floor whose
+   * luminance the pass changes —
+   *       reach 40   p50 0.0-0.1   p90 0.5-11.9   max 9.9-34.2   mean 0.3-2.9
+   *       reach 28   p50 0.0-0.1   p90 0.5- 7.5   max 9.8-33.7   mean 0.3-2.3
+   *       reach 18   p50 0.0-0.1   p90 0.4- 2.5   max 3.2-27.0   mean 0.1-1.3
+   * (the pre-round tree, for the same walk: p90 0.7-14.4, max 14.0-36.1, mean 0.5-3.6.)
+   *
+   * 28 IS CHOSEN ON ATTRIBUTION RATHER THAN ON THE TAIL. At the worst pose 28 and 40 are within
+   * four points of each other (77.4% against 73.0%) and neither is the problem any more. What 40
+   * buys is shadow from casters 30-40 m up-sun, and at 40 m one floor row already spans 7 m of
+   * ground — the caster and its shadow are never in the same part of the picture, so what arrives
+   * is a tonal wash the eye cannot attribute to anything. 28 m holds the day's p90 under 8% and
+   * still runs the full 20.6 m shadow a 2.8 m mound throws at the dusk sun. 18 was measured and
+   * rejected the other way: it holds the tail down by giving up the content, and an element costing
+   * 2.5 ms a frame has to do something with it.
+   *
+   * TS_FAR 45 m is the same argument seen down the barrel of the projection. At the reference grid
+   * (400x100) a floor row spans d^2/263 metres, so a 28 m shadow is 3.6 rows deep at 45 m and 1.6
+   * at 68; past 45 the whole shadow is inside a row and is doing nothing the fines are not.
+   *
+   * SIX SAMPLES NEAR AND FOUR FAR, EVENLY SPACED. Geometric spacing is the obvious choice and is
+   * wrong: it puts three samples in the first two metres, where nothing on this map is ever tall
+   * enough to matter, and leaves the gaps at the far end where the mounds are. Even spacing over a
+   * 28 m reach gives a step of 4.7 m near and 7 m far, against blockers that are lots 7-16 m across
+   * on a field that has already been smoothed to a 2 m lattice — so nothing is missed. Ten and six
+   * were the first cut's numbers and they were sized for a 40 m reach; at 28 m they oversample the
+   * 2 m lattice by a factor of three and cost 15% of the pass for nothing.
+   *
+   * ---- THE FALLOFF AND THE FILL, WHICH ARE THE SAME ARGUMENT ----------------------------------
+   * A shadow whose caster is 4 m away is a hole: you can see the rock and you can see its shadow,
+   * and the two agree. A shadow whose caster is 25 m away is not, and the reason is roughness. A
+   * natural crest is not a knife edge; its own sub-metre relief is smeared along the shadow by
+   * 1/tan(alt), which at the dusk sun is a factor of seven, so what a distant crest actually throws
+   * is a LACE of light and dark rather than a solid band. So the coverage a sample can contribute
+   * falls from 1 at TS_HARD to TS_RAG at the reach — applied INSIDE the max over samples, never to
+   * the winning sample's distance afterwards, because the argmax jumps between samples and a term
+   * keyed on it would put the step function straight back.
+   *
+   * And a cell at full coverage is not empty. Inside TS_FILL_D the shadow keeps a TS_FILL scatter
+   * of slate at lum 14-40 — the same swatch and the same argument as surf_moon.js's darkFace fill,
+   * which is light bounced off the sunlit ground around it — tapering to nothing by TS_FILL_E.
+   * Without it a deep shadow is a rectangle of absolutely nothing, and this world already has more
+   * of those than it can spend.
+   *
+   * ---- WHAT IT COSTS --------------------------------------------------------------------------
+   * Measured at 400x100, seed 42 noon, best of six runs of 200 replayed frames, pinned camera,
+   * clock running:
+   *       world pass alone                      7.95 before / 8.06 now   (untouched)
+   *       world pass + this element alone      10.44 / 10.56             (the pass is 2.5 ms)
+   *       moon element set WITHOUT this pass   10.67 / 10.64             (untouched)
+   *       moon element set with everything     11.72 / 13.16
+   * The pass costs the same 2.5 ms it always did. What moved is its MARGINAL cost — 1.05 ms before,
+   * 2.52 now — and the difference is somebody else's work: a fully shadowed cell becomes kind 3,
+   * drawPrints and drawBoulders both skip kind 3, so the first cut of this pass partly paid for
+   * itself by blacking out enough ground to make the two passes below it cheaper. Shading less
+   * costs more, which is not a sentence anybody expects, and it is the whole gap. The frame budget
+   * is 16.7 ms and the moon world sits at 13.2 on this machine; the dials if it ever has to come
+   * down are TS_FAR and TS_NEAR, in that order.
+   *
+   * ---- LAYER 13, BEFORE THE PRINTS AND THE BOULDERS, AND THAT IS LOAD-BEARING ------------------
+   * A cell at FULL coverage is written by `emit`, so it stops being kind 2. drawPrints and
+   * drawShadow both gate on groundAt, which tests kind 2 — so a bootprint inside a terrain shadow
+   * is not drawn dim, it is not drawn at all, and a boulder's own shadow does not get rasterised
+   * over ground that is already dark. Both of those fall out of the ordering for free. Drawn the
+   * other way round, the prints would sit on top of the shadow and each one would be a print with
+   * its own light source.
+   */
+  var TS_FAR = 45.0, TS_NEAR = 6, TS_FARN = 4, TS_SOFT = 0.55;
+  var TS_REACH = 28.0, TS_HARD = 4.0, TS_RAG = 0.18;
+  var TS_FILL = 0.20, TS_FILL_D = 20.0, TS_FILL_E = 45.0;
+  var TS_EDGE = 0.45, TS_EDGE_I = 1 / TS_EDGE;
+
+  var BG_PITCH = 2.0, BG_INV = 1 / BG_PITCH, BG_N = 128, BG_MASK = BG_N - 1, BG_SH = 7;
+  var bgH = new Float32Array(BG_N * BG_N), bgS = new Int32Array(BG_N * BG_N), bgStamp = 0;
+
+  function bgAt(gi, gj) {
+    var idx = ((gj & BG_MASK) << BG_SH) | (gi & BG_MASK);
+    if (bgS[idx] === bgStamp) return bgH[idx];
+    var wx = gi * BG_PITCH, wz = gj * BG_PITCH;
+    var h = CITY.height(wx, wz), h2;
+    h2 = CITY.height(wx + 1, wz);     if (h2 > h) h = h2;
+    h2 = CITY.height(wx, wz + 1);     if (h2 > h) h = h2;
+    h2 = CITY.height(wx + 1, wz + 1); if (h2 > h) h = h2;
+    bgS[idx] = bgStamp; bgH[idx] = h;
+    return h;
+  }
+
+  function bgSample(wx, wz) {
+    var qx = wx * BG_INV, qz = wz * BG_INV;
+    var i0 = Math.floor(qx), j0 = Math.floor(qz);
+    var fx = qx - i0, fz = qz - j0;
+    var a = bgAt(i0, j0), b = bgAt(i0 + 1, j0), c = bgAt(i0, j0 + 1), d = bgAt(i0 + 1, j0 + 1);
+    var ab = a + (b - a) * fx;
+    return ab + ((c + (d - c) * fx) - ab) * fz;
+  }
+
+  var TS_UN = new Float64Array(TS_NEAR), TS_RN = new Float64Array(TS_NEAR),
+      TS_UF = new Float64Array(TS_FARN), TS_RF = new Float64Array(TS_FARN);
+
+  function drawRelief(f) {
+    if (!CITY) return;
+    bgStamp++; if (bgStamp > 2000000000) { bgStamp = 1; bgS.fill(0); }
+    var ta = Math.tan(sunAlt()); if (ta < 0.05) ta = 0.05;
+    var sX = sunX(), sZ = sunZ();
+    var reach = 6.0 / ta; if (reach > TS_REACH) reach = TS_REACH;
+    var x, y, s, u;
+    for (s = 0; s < TS_NEAR; s++) {
+      u = (s + 1) * reach / TS_NEAR; TS_UN[s] = u;
+      TS_RN[s] = u <= TS_HARD ? 1 : 1 - (1 - TS_RAG) * (u - TS_HARD) / (TS_REACH - TS_HARD);
+    }
+    for (s = 0; s < TS_FARN; s++) {
+      u = (s + 1) * reach / TS_FARN; TS_UF[s] = u;
+      TS_RF[s] = u <= TS_HARD ? 1 : 1 - (1 - TS_RAG) * (u - TS_HARD) / (TS_REACH - TS_HARD);
+    }
+    var y0 = Math.floor(V.horizon); if (y0 < 0) y0 = 0;
+    for (y = y0; y < V.rows; y++) {
+      var row = y * V.cols;
+      for (x = 0; x < V.cols; x++) {
+        var i = row + x;
+        if (!groundAt(f, x, y, i)) continue;
+        var d = GP.d;
+        if (d > TS_FAR) continue;
+        var near = d < 30, n = near ? TS_NEAR : TS_FARN;
+        var k = 0;
+        for (s = 0; s < n; s++) {
+          u = near ? TS_UN[s] : TS_UF[s];
+          var rise = bgSample(GP.wx + sX * u, GP.wz + sZ * u) - u * ta;
+          if (rise <= 0) continue;
+          var c = (rise < TS_SOFT ? rise / TS_SOFT : 1) * (near ? TS_RN[s] : TS_RF[s]);
+          if (c > k) k = c;
+        }
+        if (k <= 0) continue;
+        var q = qOf(d);
+        var hv = hash2(Math.floor(GP.wx * q), Math.floor(GP.wz * q), BASE + 0x71);
+        var e = (k * (1 + TS_EDGE) - hv) * TS_EDGE_I;
+        if (e <= 0) continue;
+        if (e < 1) {
+          if (f.lum[i] > 0) put(f, x, y, f.ch[i], f.col[i], f.lum[i] * (1 - e), d * 0.996, 2);
+          continue;
+        }
+        var ff = d < TS_FILL_D ? 1 : (d > TS_FILL_E ? 0 : (TS_FILL_E - d) / (TS_FILL_E - TS_FILL_D));
+        if (hv < TS_FILL * k * ff)
+          emit(f, x, y, hv < 0.06 ? G_DOT : G_COMMA, P.slate, 14 + hv * 130, d * 0.996);
+        else
+          emit(f, x, y, 0, P.shadow, 0, d * 0.996);
+      }
+    }
+  }
+
   /* ---- registration -------------------------------------------------------------------------------
-   * All six are pure functions of (world, t) with NO update(). That is the property the offline
+   * All seven are pure functions of (world, t) with NO update(). That is the property the offline
    * harness needs to scrub to any frame, and on this world it is easy to keep: nothing here has a
    * velocity. The only thing that changes between two frames is where CC.Daylight has put the sun,
    * and every element reads that fresh through surf_moon.js's getters.
@@ -1265,7 +1655,20 @@
    * omission. There is nothing here to damp: no sway, no drift, no phase, no spawn. What moves is
    * the director's clock, which belongs to daylight.js, and freezing it in one element while the
    * painter kept turning the same sun would light the ground and the sky from two different places.
-   * If the sun should stop under reduced motion, it has to stop in daylight.js. It is in the report. */
+   * If the sun should stop under reduced motion, it has to stop in daylight.js — one line in its
+   * update(), holding the phase at the instant the flag came on exactly as `Y` already does. That
+   * is a request to whoever owns daylight.js and it is written out as such in the report; the
+   * previous round's comment said "it is in the report" about an item that was never filed, which
+   * is how a whole world came to ship with no reduced-motion damping and nobody downstream told.
+   *
+   * WHAT THAT COSTS TODAY, measured rather than assumed: with the clock running, camera pinned,
+   * 120x40, 4 s, seeds 42 and 7 at noon and dusk, THE MOON'S OWN TWELVE ELEMENTS give identical
+   * worst step, big-step rate and 3-20 Hz figures to the last digit with the flag on and with it
+   * off. It is not that the damping is working; it is that there is nothing here for the flag to
+   * reach. (The full moon list also carries the shared optics chain, whose exposure pass is a
+   * feedback loop on the frame and moves the third digit either way; that is not this file's.)
+   * The figures themselves pass — see the block on drawRelief — so this is a gap in the contract
+   * rather than a hazard. */
   function mk(name, layer, fn) {
     return {
       name: name, layer: layer, world: 'moon',
@@ -1289,6 +1692,10 @@
   /* Bootprints BEFORE boulders, and the order is load-bearing: both write kind 2, so a boulder's
    * shadow falling across the trail dims and then erases the prints under it. A print you can see
    * inside a shadow is a print with its own light source. */
+  /* Terrain shadow FIRST of the three ground passes — see the block comment on drawRelief. It
+   * turns the cells it owns into kind 3, and both of the passes below gate on kind 2, so the
+   * ordering is what stops a bootprint or a boulder's shadow being drawn inside a dark band. */
+  CC.ELEMENTS.push(mk('moon-relief',     13, drawRelief));
   CC.ELEMENTS.push(mk('moon-bootprints', 14, drawPrints));
   CC.ELEMENTS.push(mk('moon-boulders',   15, drawBoulders));
 

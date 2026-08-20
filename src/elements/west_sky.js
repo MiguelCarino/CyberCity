@@ -25,11 +25,34 @@
   var P = CC.P, g = CC.g, put = CC.put, hash2 = CC.hash2, vnoise = CC.vnoise, clamp = CC.clamp;
 
   var G_DOT = g('.'), G_TICK = g('`'), G_QUOTE = g("'"), G_DASH = g('-'), G_EQ = g('='),
-      G_o = g('o'), G_8 = g('8');
+      G_o = g('o'), G_8 = g('8'), G_TILDE = g('~'), G_PLUS = g('+'), G_DQ = g('"'),
+      G_HASH = g('#'), G_COLON = g(':'), G_UNDER = g('_'), G_PCT = g('%');
 
   /* Past Surf.FOG_END so any facade wins the depth test, and ordered among themselves: the sun is
    * behind the cloud, the cloud is behind the birds. Same mechanism sky.js uses. */
   var D_SUN = 1.02e5, D_CLOUD = 9.6e4, D_BIRD = 8.0e4;
+  /* ---- AND ONE DEPTH IN FRONT OF sky.js's DECK, for the day cells only ---------------------------
+   * sky.js's `cloudbase` runs at layer 3 with its own D_CLOUD of 9.5e4 and paints the whole slot in
+   * P.shadow at lum 26-42, which is correct in the city and at night out here and flatly wrong at
+   * noon: an overcast midday sky is the BRIGHTEST large surface any frame containing one has, and
+   * it was arriving as 1538 cells of dark blue-grey over the top of a frontier noon (tallied at
+   * seed 42 frame 300). CC.put tests `dist < f.dist[i]` strictly, so this file's 9.6e4 loses to it
+   * everywhere the two overlap however late this element draws.
+   *
+   * 9.4e4 is used ONLY by the daylight branch below, so the night frame keeps sky.js's deck exactly
+   * as it has it and nothing about the tuned hour moves. sky.js is not mine to edit; if it ever
+   * learns the clock, this constant goes back to D_CLOUD and the branch stays. */
+  var D_CLOUD_DAY = 9.4e4;
+
+  /* The one published day number, from the painter that owns it — see surf_west.js's dFill. Two
+   * definitions of "how much day is in the frame" is two clocks, and they disagree for one frame
+   * every time the viewer presses T. */
+  function dayFill() {
+    if (!CC.SurfWest) return 0;
+    return CC.SurfWest.dayFill;
+  }
+  var INK = [G_TICK, G_DOT, G_UNDER, G_DASH, G_COLON, G_TILDE, G_DQ, G_PLUS, G_EQ, G_HASH, G_PCT];
+  function ink(t) { var i = (t * 11) | 0; return INK[i < 0 ? 0 : (i > 10 ? 10 : i)]; }
 
   var W_CLOUD = 0.1, W_HAZE = 0.3, W_WIND = 0.2, W_RAIN = 0;
   function bindWeather() {
@@ -93,14 +116,31 @@
    * here are the halo and the disc itself is small. */
   var SUN_ALT = 0.16, SUN_R = 0.030;
 
+  /* ---- AND IT CLIMBS, once there is a day for it to climb through ------------------------------
+   * The paragraph above is an argument for pinning the sun at nine degrees, and it is right about
+   * dusk and wrong about every other hour: at noon the clock puts the sun at 0.95 rad, the frame
+   * reaches atan(horizon/scale) = 0.56 rad, and a sun drawn at 0.16 is an amber blob sitting on the
+   * rooftops in the middle of the day. What the eye reads noon by is that there is NO sun in the
+   * picture and everything below is lit from straight above.
+   *
+   * So the drawn altitude is the pinned one blended toward the clock's by the day fill. At dFill 0
+   * it is exactly 0.16 and the tuned frame is untouched — including at night, where this element
+   * currently draws a halo and where removing it is not mine to decide. At dusk (dFill 0.055) it
+   * moves by a seventh of a degree. By morning the sun has climbed out of the top of the frame and
+   * plot() clips it, which costs nothing and is the correct picture. */
+  function drawAlt() {
+    var live = CC.SurfWest ? CC.SurfWest.SUN_ALT : SUN_ALT;
+    return SUN_ALT + (live - SUN_ALT) * dayFill();
+  }
+
   CC.ELEMENTS.push({
     name: 'west-sun',
     layer: 5,
     world: 'west',
     draw: function (frame, cam) {
       setup(frame, cam);
-      var az = sunAz(), ca = Math.cos(SUN_ALT);
-      var p = proj(Math.sin(az) * ca, Math.sin(SUN_ALT), Math.cos(az) * ca);
+      var al = drawAlt(), az = sunAz(), ca = Math.cos(al);
+      var p = proj(Math.sin(az) * ca, Math.sin(al), Math.cos(az) * ca);
       if (!p.ok) return;
       var cx = p.x, cy = p.y;
       var rw = SUN_R * CB.colsPerTan / p.w, rh = SUN_R * CB.scale / p.w;
@@ -166,6 +206,7 @@
     draw: function (frame, cam, t) {
       setup(frame, cam);
       if (W_CLOUD < 0.03) return;
+      var dF = dayFill();
       var tt = CC.reducedMotion ? 0 : t * (0.004 + 0.016 * W_WIND);
       var az0 = sunAz();
       /* One pass over the sky rows of the frame. Cheaper than walking a sphere and exact: every
@@ -195,12 +236,60 @@
            * the drift rate, which is 0.004-0.02 of a cycle a second. */
           var body = vnoise(Math.floor(lad) * 3.1 + bear * 2.0 + tt * 3, 0x9C1);
           /* Not every rung of the ladder is cloud; cover is the weather. */
+          /* Cover is the weather at every hour; what the DAY changes is that the cells inside a
+           * cloud get painted. See the two branches below. */
           if (body > 0.22 + 0.68 * W_CLOUD) continue;
           /* Keyed on the SKY, not on the glass. hash2(x, y) welds the dither to the screen, so
            * turning the camera slides the cloud through a fixed stipple — the same bug the star
            * field had before surfaces.js started hashing on bearing and elevation. */
           var d = hash2(Math.floor(bear * 220), Math.floor(el * 900), 0x33B);
           if (fb > 0.66) continue;                       // the gap between two bars
+          /* ---- THE DECK TURNS OVER WITH THE DAY -----------------------------------------------
+           * A cloud at dusk is lit FROM UNDERNEATH and is a silhouette everywhere else, which is
+           * what the two night branches draw and why they are the best thing in this sky. A cloud
+           * at noon is the exact inverse: lit from ABOVE, so the top of every bar is the brightest
+           * white in the frame and the underside is the shaded part — and it is OPAQUE, where a
+           * dusk cloud is a shape you read off one bright edge.
+           *
+           * Both facts are drawn on the same ladder, because the geometry of a stacked deck does
+           * not change with the hour; what changes is which end of each bar has the light on it and
+           * how much of the bar gets ink. The crossover is dithered on the day fill exactly as the
+           * walls are, so the sky turns over cell by cell rather than as one plane.
+           *
+           * The day cells go in at D_CLOUD_DAY so they win against sky.js's own deck; the night
+           * cells keep D_CLOUD and lose to it, which is the shipped behaviour. */
+          var isDay = hash2(Math.floor(bear * 111), Math.floor(el * 640), 0x6B2) < dF;
+          if (isDay) {
+            /* Opaque: 0.86 of the bar takes ink against the night branch's 0.16-0.34. A midday deck
+             * with holes in it reads as a stipple over black, which is what the dusk treatment
+             * looked like when the day arrived and it did not survive being looked at. */
+            if (d > 0.86) continue;
+            if (fb > 0.50) {
+              /* The underside, in shade. Never `shadow` — core.js lifts shadow by day precisely
+               * because a shaded thing under a bright sky is filled — so it is stone going to
+               * indigo, which is the palette's own "shade with the sky in it". */
+              plot(frame, x, y, ink(0.30 + 0.26 * d), d > 0.55 ? P.stone : P.indigo,
+                   (54 + 46 * d) * (0.5 + 0.5 * W_CLOUD), D_CLOUD_DAY);
+            } else {
+              /* The top, in full sun. This is the brightest large surface a frontier noon has and
+               * it is written like one: white at the crown, sand where the bar thins, on the heavy
+               * half of the ink ramp. */
+              /* THE TOP IS HELD UNDER THE SKY IT SITS IN, and that is a photosensitivity number
+               * before it is an aesthetic one. `body` jumps discontinuously whenever the ladder's
+               * integer part steps, so a whole rung of the deck can switch on or off between two
+               * frames — which is fine when the rung is a dark silhouette against a dark sky (26 to
+               * 56, the night branch below) and is a large-area step when it is a white mass
+               * against a blue one. Measured with tools/west-flicker.cjs pinned at noon, this
+               * element carried the frontier's worst per-cell step from 79.2% to 84.3%; written at
+               * 180 rather than 220 it is back inside surf_west.js's own day sky ladder, which
+               * tops out at 214, and the deck stops being able to out-step the dome behind it. */
+              var top = 1 - fb / 0.50;
+              plot(frame, x, y, ink(0.52 + 0.34 * top + 0.14 * (d - 0.5)),
+                   top > 0.45 ? P.white : P.sand,
+                   (104 + 72 * top) * (0.76 + 0.30 * d), D_CLOUD_DAY);
+            }
+            continue;
+          }
           if (fb > 0.50) {
             /* THE LIT UNDERSIDE. One or two rows, ember going to amber where the sun is, and the
              * brightest thing in the sky after the disc itself. */
@@ -213,6 +302,82 @@
             plot(frame, x, y, fb > 0.28 ? G_TICK : G_DOT, P.slate,
                  (26 + 30 * (1 - fb)) * (0.6 + 0.6 * d), D_CLOUD);
           }
+        }
+      }
+    }
+  });
+
+  /* ========================================================================= the deck by day ===
+   * A REPAIR, and a narrow one. sky.js's `cloudbase` is the only element in this project that can
+   * cover the whole slot, and it paints in P.shadow at lum 26-42 on purpose — its own comment
+   * explains that slate at that lum printed as a LIT cell and turned the sky into the brightest
+   * flat area in a picture whose subject is a dark street. That is right in the city, right on this
+   * frontier at night, and wrong at noon by the widest margin anything in this world gets wrong:
+   * an overcast midday sky is the brightest large surface any frame containing one has, and 1538
+   * cells of dark blue-grey were arriving over the top of a frontier noon (tallied at seed 42
+   * frame 300, which is 13% of the whole frame).
+   *
+   * sky.js is not mine to edit, and the deck belongs to two worlds so it should not simply be
+   * turned off out here either. So this walks the slot AFTER cloudbase and after the bars, finds
+   * the cells that are still the night deck, and repaints them as the sky they are covering. It
+   * identifies them by what they are — a cell painted by an element, in P.shadow, at a depth out
+   * past the world — rather than by a constant copied from another file, so it repairs the deck and
+   * nothing else, and it cannot touch a bird (D_BIRD is 8.0e4, inside the test) or a facade.
+   *
+   * It costs nothing at night: dF is 0 and the function returns on its first line.
+   *
+   * WHAT I WOULD RATHER HAVE DONE: give cloudbase's `base`, `hue` and `dens` a daylight branch off
+   * CC.Daylight, the way this file's own deck now has one. That is four lines in sky.js and it
+   * would fix the city's noon as well, which has the same fault for the same reason.
+   * ========================================================================================== */
+  CC.ELEMENTS.push({
+    name: 'west-daysky',
+    layer: 7,
+    world: 'west',
+    draw: function (frame, cam) {
+      var dF = dayFill();
+      if (dF <= 0.002) return;
+      setup(frame, cam);
+      var cols = frame.cols, col = frame.col, lum = frame.lum, dist = frame.dist, kind = frame.kind;
+      var maxRow = Math.floor(CB.horizon); if (maxRow > CB.rows - 1) maxRow = CB.rows - 1;
+      var x, y, i, h;
+      for (y = 0; y <= maxRow; y++) {
+        for (x = 0; x < cols; x++) {
+          i = y * cols + x;
+          if (kind[i] !== 3 || col[i] !== P.shadow || dist[i] < 9.0e4) continue;
+          /* Dithered against dF on the SKY rather than on the screen, so the repair crosses over
+           * with the hour instead of switching, and so it does not crawl when the camera turns.
+           *
+           * THE ANCHOR IS THE PROJECTION'S OWN, and it was a hardcoded 260. Turning the camera by
+           * dyaw slides a fixed world bearing LEFT by colsPerTan * dyaw columns — that is proj()'s
+           * own arithmetic, VP.x = (s/w) * colsPerTan + cols/2 — so x + yaw * colsPerTan is the
+           * quantity that stands still while the frame moves under it. 260 is that number for no
+           * grid this build ever draws: colsPerTan is cols / (2 tan(fov/2)), which is 84 at 120
+           * columns, 139 at 200 and 279 at 400, so the constant over-compensated by 87% at the
+           * default size and under-compensated by 7% at the largest, and the comment above claimed
+           * the opposite of what the code did at the size it is drawn at. The live value is exact
+           * at the centre of the frame and 34% short at the edges, where the tangent stretches and
+           * the true rate is colsPerTan * sec^2(fov/2) — the same linearisation proj() lives with,
+           * and well inside a dither's own noise. Parenthesised because `+` binds tighter than `|`:
+           * the |0 was always applying to the whole sum, which is what was wanted and what nothing
+           * said. */
+          h = hash2((x + (cam.yaw || 0) * CB.colsPerTan) | 0, y, 0x4D77);
+          if (h > dF) continue;
+          /* The deck's own depth is kept in the cell, and the repair goes in one metre nearer so a
+           * later pass of cloudbase in the same frame cannot win it back. Written as ice going to
+           * white with height, which is the same pair surf_west.js's day sky ladder uses — this is
+           * the same sky, seen through a hole in a deck that is lit from above. */
+          var up = 1 - y / (maxRow + 1);
+          /* WHITE LEADS AND ICE FOLLOWS. ice is 90,240,255 — the most saturated swatch in the
+           * table — and at the lums a daylight sky wants it prints as a cyan that no sky has ever
+           * been; written as the majority it turned the top of the frame turquoise. It is the right
+           * swatch for the COLD part of a dome (core.js lifts it 0.36 -> 0.66 for exactly that) but
+           * a repaired deck cell is a HOLE IN A CLOUD, and the light coming through one is white
+           * with a little of the sky in it. So ice is a third of the cells and it goes to the ones
+           * high in the frame, where the dome actually is blue. */
+          plot(frame, x, y, ink(0.30 + 0.26 * up + 0.20 * h),
+               h < 0.60 ? P.white : (up > 0.45 ? P.ice : P.stone),
+               (96 + 74 * up) * (0.80 + 0.34 * h), dist[i] - 1);
         }
       }
     }
@@ -253,10 +418,16 @@
          * end-on it is a single dot. cos of the phase IS the aspect. */
         var asp = Math.abs(Math.cos(ph));
         var x = p.x, y = p.y;
-        plot(frame, x, y, G_DOT, P.slate, 62, D_BIRD);
+        /* A vulture against a bright sky is a SILHOUETTE, and slate at lum 62 is neither: by
+         * day slate prints at gain 0.78 and the bird comes out lighter than the cloud behind it.
+         * timber at a low lum is the darkest warm ink available and reads as a shape with the sun
+         * behind it, which is what one actually looks like. */
+        var dF = dayFill();
+        var bc = dF > 0.5 ? P.timber : P.slate, bl = 62 - 22 * dF;
+        plot(frame, x, y, dF > 0.5 ? G_TILDE : G_DOT, bc, bl, D_BIRD);
         if (asp > 0.45) {
-          plot(frame, x - 1, y - (asp > 0.8 ? 1 : 0), G_TICK, P.slate, 54, D_BIRD);
-          plot(frame, x + 1, y - (asp > 0.8 ? 1 : 0), G_QUOTE, P.slate, 54, D_BIRD);
+          plot(frame, x - 1, y - (asp > 0.8 ? 1 : 0), G_TICK, bc, bl - 8, D_BIRD);
+          plot(frame, x + 1, y - (asp > 0.8 ? 1 : 0), G_QUOTE, bc, bl - 8, D_BIRD);
         }
       }
     }

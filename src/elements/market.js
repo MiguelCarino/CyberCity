@@ -55,7 +55,7 @@
       G_8 = CC.g('8'), G_0 = CC.g('0'), G_HASH = CC.g('#'), G_X = CC.g('X'),
       G_M = CC.g('M'), G_W = CC.g('W'), G_o = CC.g('o'),
       G_COLON = CC.g(':'), G_COMMA = CC.g(','), G_DOT = CC.g('.'), G_QUOTE = CC.g("'"),
-      G_TICK = CC.g('`');
+      G_TICK = CC.g('`'), G_V = CC.g('V'), G_UNDER = CC.g('_');
 
   /* Blocky only. Anything with holes in it dithers instead of massing at this cell size — the
    * same table street.js keeps, for the same reason. */
@@ -402,11 +402,20 @@
    * lit ember cells in horizontal slabs across the right of the frame, which is a garnish being
    * asked to be a pillar. spring keeps its 12%: it is the draw that stops a row of stalls reading
    * as one repeated stall, and it is small enough on screen to be affordable. */
+  /* JADE TAKES FOUR POINTS OUT OF SPRING AND NOTHING OUT OF EITHER PILLAR, which is the only way
+   * a swatch gets added to this roll. spring 12% -> 8%: the paragraph above says spring's job is
+   * "the draw that stops a row of stalls reading as one repeated stall", and jade does exactly
+   * that job at a different hue — a teal strip light over a fish counter — so the two are
+   * interchangeable for the purpose and the pair still totals 12%. amber's 60 and azure's 14 are
+   * untouched, which is what the pillar census requires; ember and warm keep their 7 each.
+   * jade's night ceiling is 134, under both pillars and under ember and warm, so it cannot become
+   * the loudest object on the pavement however many stalls it lands on. */
   function counterHue(r) {
     if (r < 0.60) return P.amber;
     if (r < 0.74) return P.azure;
     if (r < 0.81) return P.ember;
-    if (r < 0.93) return P.spring;
+    if (r < 0.89) return P.spring;
+    if (r < 0.93) return P.jade;
     return P.warm;
   }
   /* Vending machines are the other way round: a machine is a backlit screen, so azure still leads.
@@ -419,11 +428,22 @@
     if (r < 0.92) return P.spring;
     return P.ember;
   }
+  /* Every entry is the lum that lands this swatch at v 130-165 on core.js's night curve, which is
+   * the band the header argues for: above the muddy top and under the hot line. The three added
+   * here are the ones this file can now be handed and they are all at the bottom of their own
+   * range because all three are DARK PIGMENTS — jade's ceiling is 134, rose's 131, gold's 157 —
+   * so each needs a large lum to reach a modest value, and a default of 165 would have printed
+   * jade at v 115 and rose at black. rose in particular is not a mistake to write at 250: core.js
+   * crushes every rose cell under lum 96 to zero, so near-full-scale is the only place the swatch
+   * exists at all, and it still cannot pass v 131. */
   function litLum(col) {
     if (col === P.azure) return 96;
     if (col === P.warm) return 152;
     if (col === P.spring) return 155;
     if (col === P.violet) return 228;
+    if (col === P.jade) return 240;                  // v 132, the top of what teal can do
+    if (col === P.rose) return 250;                  // v 130, and it can never be hot
+    if (col === P.gold) return 178;                  // v 137
     return 165;                                      // amber and ember
   }
 
@@ -498,6 +518,36 @@
      * the canopy's coverage for no shape at all. */
     panel(f, axis, a0 - 0.45, a1 + 0.45, fas, 2.26, 2.54, 0, P.shadow, 0, 0, 0, sd);
     panel(f, axis, a0 - 0.45, a1 + 0.45, cnt, 2.30, 2.50, 0, P.shadow, 0, 0, 0, sd);
+    /* ---- THE CANVAS VALANCE, and it is the only lit cell on the canopy ------------------------
+     * The canopy is deliberately a black cut-out — the paragraph above is right that a silhouette
+     * is the whole read at thirty metres and costs the print nothing. What it never had is any
+     * indication of WHAT the canopy is made of, and a market canopy is canvas: the one object at
+     * street level whose material is not concrete, glass or a light.
+     *
+     * One row of glyph along the fascia's lower edge, lit from underneath by the strip light two
+     * courses down — which is where a real awning's only light comes from, and is why this is the
+     * bottom edge and not the top. Dashed at roughly half duty so it reads as a scalloped hem
+     * rather than as a rule, and because half the cells is half the cost.
+     *
+     * THE THREE SWATCHES ARE THE POINT AND THEY ARE ALL SURFACE SWATCHES. moss is "canvas" by
+     * name, timber is a weathered board hem, sand is the same canvas gone pale in the sun. None of
+     * them can clear the muddy band at night — their night ceilings are 94, 111 and 138 — and that
+     * is exactly right here: a canvas awning lit from below is DARKER than the counter under it,
+     * and a valance that outprinted the strip light would invert the whole object. Written at lums
+     * that land v 89 / 101 / 126, i.e. under litLum's dimmest counter (azure, v 128) in every
+     * case. Rolled once per RUN, because one market's awnings are one bolt of cloth.
+     *
+     * NOTHING HERE VARIES WITH TIME. It is a static material on a static object; the flicker gate
+     * has nothing to measure. */
+    var cvs = hash2(3, 0, sd + 313);
+    var cvh = cvs < 0.44 ? P.moss : (cvs < 0.78 ? P.timber : P.sand);
+    /* 2.10-2.24, i.e. STRICTLY UNDER the fascia's 2.26 and not overlapping it. That is not a
+     * layout preference, it is the depth test: the valance sits on the fascia's own plane, so a
+     * cell it shares with the black fascia is at exactly the same distance, CC.put wants a strict
+     * improvement, and the fascia — which draws first — keeps it. Written overlapping at first and
+     * it printed nothing at all, silently, which is this file's own documented failure mode. */
+    panel(f, axis, a0 - 0.45, a1 + 0.45, fas, 2.10, 2.24,
+          cvs < 0.5 ? G_V : G_UNDER, cvh, cvh === P.sand ? 200 : 214, 22, 1, sd + 313);
 
     /* THE STRIP LIGHT. One row of glyph, the full length of the run, and it is the long horizontal
      * that carries the perspective. It is drawn at the counter plane rather than at the fascia so
@@ -695,8 +745,15 @@
      * of cells. The colour is an independent draw from the hatch's — sharing one roll between the
      * sign and the counter welds every violet-signed kiosk to one counter colour, which is the bug
      * this repo has now found three times. */
+    /* ROSE JOINS VIOLET HERE AND NOWHERE ELSE IN THIS FILE, and the argument is the paragraph
+     * above with one swatch substituted. This is a TWO-CELL sign — the smallest lit object the
+     * file paints — and rose's whole licence is "signage and screens only, small cells, low gain".
+     * Two cells on one kiosk in eight is about as small as a cell count gets, and core.js's
+     * ceiling of 131 means the pair cannot clear the hot line or take the bloom with them however
+     * they are written. Taken out of azure's share rather than out of amber's, because amber is
+     * the pillar this file's own census says the frame is short of. */
     var sr = hash2(2, 0, sd + 211);
-    var shue = sr < 0.17 ? P.violet : (sr < 0.60 ? P.amber : P.azure);
+    var shue = sr < 0.17 ? P.violet : (sr < 0.29 ? P.rose : (sr < 0.60 ? P.amber : P.azure));
     var slum = litLum(shue);
     pcell(f, axis, along - 0.22, face, 1.74, G_0, shue, slum, 1);
     pcell(f, axis, along + 0.22, face, 1.74, G_0, shue, slum * 0.9, 1);

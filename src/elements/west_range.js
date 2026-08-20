@@ -30,7 +30,8 @@
   var P = CC.P, hash2 = CC.hash2, put = CC.put, vnoise = CC.vnoise, clamp = CC.clamp;
 
   var G_PIPE = CC.g('|'), G_DASH = CC.g('-'), G_UNDER = CC.g('_'), G_DOT = CC.g('.'),
-      G_COMMA = CC.g(','), G_TICK = CC.g('`'), G_QUOTE = CC.g("'"), G_STAR = CC.g('*');
+      G_COMMA = CC.g(','), G_TICK = CC.g('`'), G_QUOTE = CC.g("'"), G_STAR = CC.g('*'),
+      G_o = CC.g('o');
 
   var CITY = null, BASE = 0, Surf = null, WEST = null;
   function boot(city) {
@@ -98,7 +99,16 @@
     var sunA = litFace(axis ? 1 : 0, axis ? 0 : 1);
     var sunB = litFace(axis ? -1 : 0, axis ? 0 : -1);
     var sun = sunA > sunB ? sunA : sunB;
-    var pcol = sun > 0.6 ? P.amber : P.slate, plum = sun > 0.6 ? 96 : 26;
+    /* ---- THE DAY, from the painter that owns it (surf_west.js's dFill) -------------------------
+     * `sun > 0.6 ? P.amber : P.slate` is a creosoted pole picked out of the dark by a low sun. At
+     * noon it is a creosoted pole: dark brown against a bright sky, which is the OPPOSITE relation
+     * to the background and is what makes a pole line read at midday. So the day swatches are
+     * timber and stone rather than amber and slate, and the pole gets DARKER against its
+     * surroundings rather than brighter — the one object in this pass that does. */
+    var dF = (CC.SurfWest && CC.SurfWest.dayFill !== undefined) ? CC.SurfWest.dayFill : 0;
+    var day = hash2(idx, axis, BASE + 0x14) < dF;
+    var pcol = day ? (sun > 0.6 ? P.timber : P.stone) : (sun > 0.6 ? P.amber : P.slate);
+    var plum = day ? (sun > 0.6 ? 120 : 86) : (sun > 0.6 ? 96 : 26);
 
     for (var k = lo; k <= hi; k++) {
       var a0 = k * POLE_PITCH + hash2(k, idx, BASE + 0x12) * 3.0;
@@ -112,6 +122,19 @@
        * fencepost, and the only place the insulators can go. */
       var ay = hgt - 0.55;
       var i;
+      /* THE INSULATORS, day and near field only. Two white glass knobs on the crossarm, and they
+       * are the only bright thing on a pole — which is exactly how one reads against a sky. Gated
+       * on distance because at thirty metres they are the same cell as the crossarm. */
+      /* No objVisible() in this file, so the distance test is the projected depth of the pole
+       * head — which project() has already computed one line up in column(). PJ is the shared
+       * scratch and is still holding it. */
+      if (day && PJ.d < 26) {
+        for (i = -1; i <= 1; i += 2) {
+          if (project(wx(axis, a0, cross + i * 0.9), ay + 0.22, wz(axis, a0, cross + i * 0.9)))
+            emit(f, Math.floor(PJ.x), Math.floor(PJ.y), G_o,
+                 sun > 0.6 ? P.white : P.stone, sun > 0.6 ? 176 : 108, PJ.d);
+        }
+      }
       for (i = -1; i <= 1; i++) {
         if (!i) continue;
         var ax2 = wx(axis, a0, cross + i * 0.9), az2 = wz(axis, a0, cross + i * 0.9);
@@ -135,11 +158,20 @@
           if (st > V.cols * 2) st = 0;
           for (var q = 1; q < st; q++) {
             var tq = q / st;
-            emit(f, lx + Math.round(dx * tq), ly + Math.round(dy * tq), G_DOT, P.slate,
-                 sun > 0.6 ? 40 : 18, ld + (pd - ld) * tq);
+            emit(f, lx + Math.round(dx * tq), ly + Math.round(dy * tq), G_DOT,
+                 day ? P.timber : P.slate, day ? 96 : (sun > 0.6 ? 40 : 18),
+                 ld + (pd - ld) * tq);
           }
         }
-        emit(f, px, py, G_DOT, P.slate, sun > 0.6 ? 40 : 18, pd);
+        /* THE WIRE ITSELF, and by day it is a DARK line on a bright sky rather than a faint one
+         * on a dark sky. Same swatch inversion as the pole, and the same reason: a wire is a
+         * silhouette at every hour, and slate at gain 0.78 by day would print it as a pale streak
+         * across the dome. It stays one glyph wide and gets no more ink than it had — a thin
+         * bright line that a walking camera steps across is the failure the whole project's
+         * photosensitivity rule is written for, and the fix for it here is to keep it thin AND
+         * dark, not to make it heavier. */
+        emit(f, px, py, G_DOT, day ? P.timber : P.slate,
+             day ? 96 : (sun > 0.6 ? 40 : 18), pd);
         lx = px; ly = py; ld = pd;
       }
     }

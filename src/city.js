@@ -79,14 +79,24 @@
    * writing long before it is legible as writing, and those three carry that shape. */
   var SIGN_CH_WEST = ['M', 'W', 'N', 'H', 'X', 'A', 'K'];
 
-  /* ---- the Moon's two surfaces, and there are only two ------------------------------------------
-   * A world with no buildings needs no styles: index 7 is regolith and index 8 is rock, and the
-   * triple is read by surf_moon.js as [sunlit, shadowed, grain]. The indices continue the west
-   * table's numbering rather than restarting, because city.js's `style` is one integer shared by
-   * every world and a reader who sees 8 should be able to find it in one table. */
+  /* ---- the Moon's three surfaces, and there are only three --------------------------------------
+   * A world with no buildings needs no styles: index 7 is regolith, index 8 is rock and index 9 is
+   * the ground itself, and the triple is read by surf_moon.js as [sunlit, shadowed, grain]. The
+   * indices continue the west table's numbering rather than restarting, because city.js's `style`
+   * is one integer shared by every world and a reader who sees 8 should be able to find it in one
+   * table.
+   *
+   * 9 IS NOT AN OBJECT AND THAT IS THE WHOLE POINT OF IT. The swell (see swellAt) gives an empty
+   * lot a height, and a lot with a height is a lot the caster paints a facade on — so without a
+   * marker the painter cannot tell a two-metre rise in the plain from a two-metre rock. The
+   * distinction is carried as a style index rather than as a new record field for the same reason
+   * the frontier's butte is: `style` is one of the six things raycast.js already copies into the
+   * scratch it hands the texture layer, and a new field would need plumbing in a file this lane
+   * does not own. Its glyphs are the softest in the table — a mound of powder has no edge. */
   var STYLE_CH_MOON = [
     ['%', '.', ':'],   // 7 regolith  — powder, and mostly not painted at all
-    ['8', ':', '%']    // 8 rock      — breccia and basalt, blocky and hard-edged
+    ['8', ':', '%'],   // 8 rock      — breccia and basalt, blocky and hard-edged
+    ['.', ',', "'"]    // 9 swell     — open ground that happens to be higher than the ground beside it
   ];
 
   // Districts are the colour masses. Weights keep the two pillars dominant and violet rare,
@@ -130,24 +140,87 @@
        * share by exactly nothing and only the total energy changes. Anything else here — a bit
        * more on the pillars, a bit less on concrete — would be re-tasting a split that was
        * measured over 480 frames, and it is not what was wrong with the picture. */
+      /* ---- NINE QUARTERS, AND WHAT THE THREE NEW ONES ARE FOR ---------------------------------
+       * The table was six rows drawn from a twelve-swatch palette, and four of those swatches are
+       * signage or specular and cannot lead a wall — so the districts were really amber, azure,
+       * slate, ember and spring, and two of those five are the pillars. A city with three
+       * non-pillar quarters cannot be walked through for ten minutes without repeating itself,
+       * which is what "more colours" is asking about.
+       *
+       * The eight new swatches buy three quarters that were unspellable before, and each one is a
+       * MATERIAL rather than a tint: `gilt` is jade tilework under brass, `market` is moss render
+       * over timber hoardings, `finance` is indigo glass. They are 18% of the ground between them
+       * — deliberately narrow, because the pillars are the look.
+       *
+       * THE PILLAR ARITHMETIC, which is the constraint this table exists to satisfy. Ground share
+       * that leads on a pillar: sodium 0.22 + screen 0.21 + arcade 0.06 = 0.49, against 0.55
+       * before. The six points come back through `mix`: every one of the six accent quarters
+       * threads a pillar at (1 - mixP), so the pillar-hued share of LOTS is
+       *     0.49 + 0.17*0.20 + 0.09*0.45 + 0.07*0.50 + 0.07*0.45 + 0.06*0.48 + 0.05*0.38 = 0.68,
+       * against 0.66 before — the OLD table's concrete threaded white, which is not a pillar, and
+       * this one threads amber. So the pillars come out two points AHEAD while the frame gains
+       * three quarters, and the ground those quarters take is taken off slate and off the two
+       * pillars' own surplus. It is also energy the print barely notices: jade, moss and indigo
+       * carry day gains of 0.58, 0.74 and 0.62, the dull half of the day ladder.
+       *
+       * `stone` ON CONCRETE IS A DELIBERATE NIGHT CHANGE and the only one in this table. slate is
+       * blue by construction (core.js says so at length) and it was carrying the daylight concrete
+       * of the whole city, which is why a noon frame had no grey in it. stone's night ceiling is
+       * 122 against slate's 114, so the concrete quarter prints eight points brighter after dark;
+       * that is the price of it printing as CONCRETE at noon (day ceiling 145 against 114) and it
+       * is worth paying. Nothing else here moves the night frame by more than the ratio arithmetic
+       * above.
+       */
       { name: 'sodium',   hue: P.amber,  mix: P.azure,  mixP: 0.86, accent: P.warm,  styles: [0, 3, 0],
-        hMin: 15, hMax: 34, lit: 0.32, signP: 0.34, landmark: 0.010, w: 0.25 },
+        hMin: 15, hMax: 34, lit: 0.32, signP: 0.34, landmark: 0.010, w: 0.22 },
       { name: 'screen',   hue: P.azure,  mix: P.amber,  mixP: 0.86, accent: P.white, styles: [1, 4, 1],
-        hMin: 24, hMax: 56, lit: 0.27, signP: 0.16, landmark: 0.030, w: 0.24 },
-      { name: 'concrete', hue: P.slate,  mix: P.white,  mixP: 0.80, accent: P.white, styles: [2, 5],
-        hMin: 16, hMax: 32, lit: 0.22, signP: 0.05, landmark: 0.006, w: 0.20 },
+        hMin: 24, hMax: 56, lit: 0.27, signP: 0.16, landmark: 0.030, w: 0.21 },
+      { name: 'concrete', hue: P.stone,  mix: P.azure,  mixP: 0.80, accent: P.white, styles: [2, 5],
+        hMin: 16, hMax: 32, lit: 0.22, signP: 0.05, landmark: 0.006, w: 0.17 },
       // ember is the low industrial pocket — it exists to open the sky slot back up.
       { name: 'ember',    hue: P.ember,  mix: P.amber,  mixP: 0.55, accent: P.red,   styles: [5, 2],
-        hMin: 8,  hMax: 19, lit: 0.22, signP: 0.13, landmark: 0.002, w: 0.11 },
+        hMin: 8,  hMax: 19, lit: 0.22, signP: 0.13, landmark: 0.002, w: 0.09 },
       { name: 'spring',   hue: P.spring, mix: P.azure,  mixP: 0.50, accent: P.white, styles: [2, 0],
-        hMin: 15, hMax: 29, lit: 0.24, signP: 0.16, landmark: 0.006, w: 0.12 },
+        hMin: 15, hMax: 29, lit: 0.24, signP: 0.16, landmark: 0.006, w: 0.07 },
       // The entertainment strip. Its facades are ordinary azure/amber on purpose: violet is a
       // signage colour only, and a whole wall of it turns the frame into the cliche the
       // references deliberately avoid.
       // ...and the accent obeys that too: it used to be P.violet, which put 16-column violet
       // walls in the frame in direct contradiction of the comment directly above it.
-      { name: 'arcade',   hue: P.azure,  mix: P.amber,  mixP: 0.55, accent: P.warm,  styles: [1, 3],
-        hMin: 13, hMax: 27, lit: 0.30, signP: 0.60, landmark: 0.004, w: 0.06 }
+      /* ROSE ARRIVES HERE AND NOWHERE ELSE, as this one quarter's accent. It is never a `hue`, so
+       * it can never be a wall: `accent` reaches the print only through surfaces.js's window
+       * accent roll and through signHue below, both of which are a minority of a minority. On top
+       * of that the swatch defends itself — core.js gives rose the lowest gain in either ladder
+       * (0.20 night, 0.18 day) and its knee crushes every rose cell under lum 96 to black, so
+       * "small signage cells only" is arithmetic here rather than a note. Arcade is 6% of the
+       * ground, which is the narrowest row in the table. */
+      { name: 'arcade',   hue: P.azure,  mix: P.amber,  mixP: 0.55, accent: P.rose,  styles: [1, 3],
+        hMin: 13, hMax: 27, lit: 0.30, signP: 0.60, landmark: 0.004, w: 0.06 },
+      /* ---- gilt: jade tilework, brass frames ---------------------------------------------------
+       * The quarter with money in it and no screens. jade is the deep teal of glazed tile and
+       * oxidised copper and it is a SURFACE swatch — core.js blends it on the sun rather than on
+       * the sky, so it is the one of the three new hues that goes flat at dusk and comes back at
+       * noon. gold is the frame round every opening, and it is the brightest new swatch at night
+       * (ceiling 157) which is why it is an accent and not a hue: a whole wall of it would print
+       * as a second amber pillar. Amber threads it at 45%. */
+      { name: 'gilt',     hue: P.jade,   mix: P.amber,  mixP: 0.55, accent: P.gold,  styles: [0, 2],
+        hMin: 14, hMax: 30, lit: 0.28, signP: 0.30, landmark: 0.008, w: 0.07 },
+      /* ---- market: moss render over timber hoardings -------------------------------------------
+       * Two storeys of low frontage, the dullest quarter in the city and the only place the eye
+       * gets a rest. moss is the weakest swatch in either ladder (night ceiling 94, under the
+       * 110-155 structure band on purpose — a hedge at night IS darker than the concrete beside
+       * it), so this row takes 6% of the ground for well under 6% of the energy. Its low hMax is
+       * the other half of the job: it opens the sky slot back up exactly as `ember` does. */
+      { name: 'market',   hue: P.moss,   mix: P.amber,  mixP: 0.52, accent: P.timber, styles: [5, 2],
+        hMin: 7,  hMax: 16, lit: 0.20, signP: 0.28, landmark: 0.001, w: 0.06 },
+      /* ---- finance: indigo glass ---------------------------------------------------------------
+       * The tallest row in the table and the darkest. indigo is night glass and shade with sky in
+       * it — day ceiling 104 against white's, which is what makes a curtain-wall tower read at
+       * noon as a dark slab against a bright sky instead of as a lit one. landmark 0.045 is the
+       * highest in the city: this is where the towers are. It is also the thinnest at 5%, because
+       * a dark quarter is the one thing that must not become the picture. */
+      { name: 'finance',  hue: P.indigo, mix: P.azure,  mixP: 0.62, accent: P.white, styles: [1, 4],
+        hMin: 26, hMax: 60, lit: 0.24, signP: 0.06, landmark: 0.045, w: 0.05 }
     ];
 
     /* ---- the frontier's five and a half ----------------------------------------------------------
@@ -170,26 +243,79 @@
      * is what opens the town out into country every few blocks instead of tiling frontage to the
      * horizon. Its `hue` still matters — a butte is lit by the same low sun as everything else.
      */
+    /* ---- MATERIALS, NOT COLOURS ------------------------------------------------------------------
+     * This table used to hand the painter warm, slate, ember, white and spring, and the reason is
+     * that those were the only five swatches in a twelve-colour neon palette that a mud wall could
+     * plausibly borrow. It showed. surf_west's facade() collapses any hue it does not recognise as
+     * a surface onto amber, so a whole town of clapboard, adobe, fieldstone and lime render came
+     * out of the print as one amber building repeated to the horizon at dusk and as nothing at all
+     * at noon — which is exactly the complaint this pass answers.
+     *
+     * The palette now has the swatches the setting is actually made of, so every row below leads
+     * on the MATERIAL rather than on a tint, and a quarter is meant to be identifiable at noon by
+     * what it is built out of:
+     *     timber  weathered board going silver, and mud brick
+     *     sand    planed and painted board in sun, dirt, bone, sunlit adobe
+     *     stone   fieldstone, rubble wall, unlit rock
+     *     white   lime-washed plaster and render
+     *     ember   red rock and red-oxide paint
+     *     moss    canvas, sage, and the sage-green paint every second door out here wore
+     *
+     * `hue` is therefore a claim about SUBSTANCE and `style` is a claim about CONSTRUCTION, and
+     * the pair is the whole contract: style 0 with hue timber is unpainted clapboard, style 0 with
+     * hue sand is the same wall painted, style 4 with hue stone is a rubble bank and style 3 with
+     * hue timber is adobe. The painter never has to guess a material out of a colour again.
+     *
+     * TALL LOTS READ AS MASS BY DAY, and that was checked rather than hoped: a landmark (9-14 m)
+     * and a butte (9-32 m) both take D.hue, and every hue in this table except ember carries a day
+     * gain of 0.72-0.90 with a day ceiling of 120-190 — the top of the daylight ladder. There is
+     * no row here whose tall lots come out as a silhouette, which is what `slate` (day ceiling
+     * 114, and BLUE) did to two of the six quarters before.
+     *
+     * hMin/hMax, lit, signP, landmark, vacant and w are unchanged from the fit they were measured
+     * against; only the substance moves. The one exception is `ranch`, which was ember-hued
+     * board-and-batten with no material of its own and is now `stone`, the fieldstone quarter —
+     * the bank, the jail and the mill — because a stone quarter is the thing this table could not
+     * previously say at all, and the brief asks for it by name. Its butte rate rises 0.004 -> 0.006
+     * because bedrock at the surface is what makes a quarter stone in the first place.
+     *
+     * `hue2` is gone from the adobe row. Nothing has ever read it. */
     DIST_WEST = [
-      { name: 'main',     hue: P.warm,   mix: P.amber,  mixP: 0.72, accent: P.amber, styles: [0, 2, 0, 2],
+      /* Main street: planed board, painted, and the only quarter that could afford paint. sand is
+       * the paint gone chalky in the sun; white is the fresh half of it; timber is the raw board
+       * of the porch posts and the boardwalk, which is why it is the accent here. */
+      { name: 'main',     hue: P.sand,   mix: P.white,  mixP: 0.64, accent: P.timber, styles: [2, 0, 2, 0],
         hMin: 6.2, hMax: 10, lit: 0.20, signP: 0.66, landmark: 0.012, w: 0.21,
         vacant: 0.07, butte: 0 },
-      { name: 'dust',     hue: P.slate,  mix: P.white,  mixP: 0.74, accent: P.white, styles: [0, 1, 5],
+      /* The unpainted end of town — clapboard and board-and-batten left to weather. Bare pine goes
+       * silver-grey in a dry climate, which is exactly the timber-to-stone axis this row runs. */
+      { name: 'boards',   hue: P.timber, mix: P.stone,  mixP: 0.70, accent: P.sand,  styles: [0, 1, 1, 5],
         hMin: 5.0, hMax: 8.5, lit: 0.11, signP: 0.18, landmark: 0.004, w: 0.19,
         vacant: 0.20, butte: 0 },
-      { name: 'adobe',    hue: P.ember,  hue2: P.warm,  mix: P.warm,  mixP: 0.66, accent: P.warm, styles: [3, 3, 4],
+      /* Adobe. The palette note for timber lists mud brick against it and that is not a coincidence
+       * — an adobe wall in shade is the colour of wet earth and in sun it is the colour of dust,
+       * so this row is timber leading sand rather than either alone. */
+      { name: 'adobe',    hue: P.timber, mix: P.sand,   mixP: 0.58, accent: P.ember, styles: [3, 3, 4],
         hMin: 4.4, hMax: 7.5, lit: 0.13, signP: 0.12, landmark: 0.010, w: 0.14,
         vacant: 0.16, butte: 0 },
-      { name: 'ranch',    hue: P.ember,  mix: P.slate,  mixP: 0.58, accent: P.red,   styles: [1, 1, 5],
+      /* Fieldstone: the bank, the jail, the mill and the powder house — the buildings a town builds
+       * out of what it dug up, and the ones still standing. It is the quarter with the lowest lit
+       * rate in the settled half of the table because most of those buildings are empty at night. */
+      { name: 'stone',    hue: P.stone,  mix: P.timber, mixP: 0.74, accent: P.sand,  styles: [4, 4, 0],
         hMin: 5.4, hMax: 9.5, lit: 0.09, signP: 0.09, landmark: 0.006, w: 0.13,
-        vacant: 0.30, butte: 0.004 },
+        vacant: 0.30, butte: 0.006 },
       /* The mission quarter: lime-washed plaster and the one place with trees in it. white leads,
-       * spring is the cottonwood, and it carries the church — landmark 0.05 is by far the highest
-       * in either world, because a mission IS its bell tower. */
-      { name: 'mission',  hue: P.white,  mix: P.amber,  mixP: 0.60, accent: P.spring, styles: [3, 4, 2],
+       * moss is the cottonwood and the sage (it replaces spring, which is a neon-transit green and
+       * had no business on a tree), and it carries the church — landmark 0.022 is the highest in
+       * this world, because a mission IS its bell tower. */
+      { name: 'mission',  hue: P.white,  mix: P.sand,   mixP: 0.62, accent: P.moss,  styles: [3, 4, 2],
         hMin: 5.4, hMax: 9.5, lit: 0.14, signP: 0.07, landmark: 0.022, w: 0.07,
         vacant: 0.22, butte: 0 },
-      { name: 'range',    hue: P.slate,  mix: P.ember,  mixP: 0.62, accent: P.ember, styles: [4, 1, 4],
+      /* Open range, 26% of the ground and 62% of it empty. Its hue is the BUTTE's hue — a rock lot
+       * takes D.hue directly — so sand leads, because a flat-topped sandstone butte at noon is the
+       * palest thing in the frame and at dusk it is the last thing still lit. ember threads the red
+       * beds through it; moss is the sagebrush. */
+      { name: 'range',    hue: P.sand,   mix: P.ember,  mixP: 0.60, accent: P.moss,  styles: [4, 1, 4],
         hMin: 4.4, hMax: 7.5, lit: 0.06, signP: 0.02, landmark: 0.000, w: 0.26,
         vacant: 0.62, butte: 0.072 }
     ];
@@ -201,41 +327,69 @@
      * and the entire signage path — the brightest thing the caster can draw — is switched off by
      * DATA, with no code change and no way for a neon blade sign to appear on a crater rim.
      *
-     * `hue` is white or slate and never anything warm, and that is the lighting doctrine in the
-     * table: there is no atmosphere to redden anything, and core.js prints slate at a ceiling of
-     * 114 — under the muddy band's own ceiling — so slate can never be the LIT face of anything.
-     * It is the shadow swatch here and nothing else. */
+     * `hue` is never anything warm, and that is the lighting doctrine in the table: there is no
+     * atmosphere to redden anything. It used to be white or slate; slate is gone from every row,
+     * because core.js prints slate at a ceiling of 114 — under the muddy band's own ceiling — so
+     * it could never be the LIT face of anything, and the swatch that means "unlit rock, regolith,
+     * dust" now exists and is called stone. surf_moon.js does not read `hue` at all today; these
+     * are written so that it CAN, and so that the record does not lie about what it is standing on
+     * in the meantime.
+     *
+     * EIGHT TERRAIN TYPES, UP FROM SIX. The two new rows are the two lunar landforms the table
+     * could not say: an ejecta RAY (the brightest ground on the Moon, near dead flat, and strung
+     * with secondary craters) and a BOULDER FIELD (the roughest, and almost entirely rock). The
+     * crater rate is also spread much wider than it was — 0.02 to 0.58 against 0.02 to 0.46 — so
+     * that crossing a district boundary changes how pocked the ground is and not just how tall the
+     * rocks on it are. Weights sum to 1.00. */
     DIST_MOON = [
-      /* The floor of a mare, and the district that IS the plain: 94% of its lots are open ground,
+      /* The floor of a mare, and the district that IS the plain: 95% of its lots are open ground,
        * which is why it is the heaviest row in the table. */
-      { name: 'mare',     hue: P.slate, mix: P.white, mixP: 0.70, accent: P.white, styles: [7],
-        hMin: 0.5, hMax: 1.8, lit: 0, signP: 0, landmark: 0.000, w: 0.30,
-        vacant: 0.94, boulder: 0.10, crater: 0.06 },
-      /* Ejecta — the blanket thrown out of a crater, and the one place the ground has real relief
-       * in it. Its lots are rock piles a metre to five metres high. */
-      { name: 'ejecta',   hue: P.white, mix: P.slate, mixP: 0.62, accent: P.pure,  styles: [7, 8],
-        hMin: 1.2, hMax: 5.0, lit: 0, signP: 0, landmark: 0.000, w: 0.20,
-        vacant: 0.70, boulder: 0.55, crater: 0.10 },
-      /* Rim. The crater branch in computeCell fires here: a raised ring round a flat walkable
-       * floor, and the only district in any world that draws a SHAPE rather than a height. */
-      { name: 'rim',      hue: P.white, mix: P.slate, mixP: 0.66, accent: P.pure,  styles: [8],
-        hMin: 2.0, hMax: 7.0, lit: 0, signP: 0, landmark: 0.004, w: 0.16,
-        vacant: 0.52, boulder: 0.18, crater: 0.46 },
+      { name: 'mare',     hue: P.stone, mix: P.white, mixP: 0.72, accent: P.white, styles: [7],
+        hMin: 0.5, hMax: 2.2, lit: 0, signP: 0, landmark: 0.000, w: 0.24,
+        vacant: 0.95, boulder: 0.10, crater: 0.03 },
+      /* Ejecta — the blanket thrown out of a crater. Its lots are rock piles a metre to five and a
+       * half metres high, and it is the roughest thing the walk routinely passes through. */
+      { name: 'ejecta',   hue: P.white, mix: P.stone, mixP: 0.60, accent: P.pure,  styles: [8, 7],
+        hMin: 1.2, hMax: 5.4, lit: 0, signP: 0, landmark: 0.000, w: 0.14,
+        vacant: 0.72, boulder: 0.55, crater: 0.10 },
+      /* A RAY. Fresh fines flung out along a line from a young impact, and the highest-albedo
+       * ground on the Moon — hence white leading with nothing threaded through it at all. It is
+       * the FLATTEST row in the table (0.3-1.0 m, 97% vacant) and it earns its place by what it
+       * carries rather than by what it stands up: crater 0.14 is the secondary chain, a scatter of
+       * small bowls in a line, which is the one lunar landform that is legible from inside it. */
+      { name: 'rays',     hue: P.white, mix: P.stone, mixP: 0.86, accent: P.pure,  styles: [7],
+        hMin: 0.3, hMax: 1.0, lit: 0, signP: 0, landmark: 0.000, w: 0.10,
+        vacant: 0.97, boulder: 0.06, crater: 0.14 },
+      /* A BOULDER FIELD. The one district that is mostly not ground: 45% of its lots carry rock,
+       * against 28% in ejecta and 5% on the mare. Its heights are LOW (0.8-3.2 m) on purpose —
+       * this is a field of metre blocks you walk between, not a massif you look at, and its whole
+       * job is to be the near-field terrain that gives the plain a scale. */
+      { name: 'field',    hue: P.stone, mix: P.white, mixP: 0.64, accent: P.pure,  styles: [8, 8, 7],
+        hMin: 0.8, hMax: 3.2, lit: 0, signP: 0, landmark: 0.000, w: 0.10,
+        vacant: 0.55, boulder: 0.90, crater: 0.02 },
+      /* Rim. The crater branch in computeCell fires here: a raised ring round a flat floor, and the
+       * only district in any world that draws a SHAPE rather than a height. */
+      { name: 'rim',      hue: P.white, mix: P.stone, mixP: 0.66, accent: P.pure,  styles: [8],
+        hMin: 2.0, hMax: 7.5, lit: 0, signP: 0, landmark: 0.004, w: 0.14,
+        vacant: 0.55, boulder: 0.18, crater: 0.58 },
       /* Highland — older, rougher, higher, and the only district that draws a massif. That is
        * what puts something on the horizon which is terrain rather than backdrop. */
-      { name: 'highland', hue: P.white, mix: P.slate, mixP: 0.74, accent: P.pure,  styles: [8, 7],
-        hMin: 3.5, hMax: 15.0, lit: 0, signP: 0, landmark: 0.030, w: 0.14,
-        vacant: 0.58, boulder: 0.24, crater: 0.08 },
+      { name: 'highland', hue: P.white, mix: P.stone, mixP: 0.74, accent: P.pure,  styles: [8, 7],
+        hMin: 3.5, hMax: 16.0, lit: 0, signP: 0, landmark: 0.030, w: 0.12,
+        vacant: 0.60, boulder: 0.24, crater: 0.08 },
       /* The landing site: flat, scoured, and the district the hardware elements probe for. Its
-       * ground is 96% empty because the descent engine cleared it. */
-      { name: 'site',     hue: P.slate, mix: P.white, mixP: 0.60, accent: P.amber, styles: [7],
-        hMin: 0.3, hMax: 1.2, lit: 0, signP: 0, landmark: 0.000, w: 0.08,
+       * ground is 96% empty because the descent engine cleared it. moon_craft.js requires
+       * height(px,pz) <= 0.05 at the anchor it picks, and the swell added below does NOT break
+       * that: the nearest of its five probes is the route centreline itself, and a street cell is
+       * height 0 by construction in every world. See swellAt. */
+      { name: 'site',     hue: P.stone, mix: P.white, mixP: 0.60, accent: P.amber, styles: [7],
+        hMin: 0.3, hMax: 1.2, lit: 0, signP: 0, landmark: 0.000, w: 0.06,
         vacant: 0.96, boulder: 0.04, crater: 0.02, hardware: 1 },
       /* Regolith plain — the transitional ground, and deliberately the dullest row in the table.
        * It exists so that two interesting districts are rarely adjacent. */
-      { name: 'plain',    hue: P.slate, mix: P.white, mixP: 0.80, accent: P.white, styles: [7],
-        hMin: 0.4, hMax: 1.4, lit: 0, signP: 0, landmark: 0.000, w: 0.12,
-        vacant: 0.92, boulder: 0.14, crater: 0.04 }
+      { name: 'plain',    hue: P.stone, mix: P.white, mixP: 0.80, accent: P.white, styles: [7],
+        hMin: 0.4, hMax: 1.6, lit: 0, signP: 0, landmark: 0.000, w: 0.10,
+        vacant: 0.93, boulder: 0.14, crater: 0.05 }
     ];
 
     norm(DIST_CYBER); norm(DIST_WEST); norm(DIST_MOON);
@@ -317,22 +471,99 @@
    *   setbackP 0 — the setback/false-front branch is a BUILDING idea. A rock has no podium and no
    *     capping board, so the branch is skipped outright rather than asked to pick a half.
    *   lmMin/lmVar 26-60 m — a "landmark" here is a massif. raycast.js's HMAX is 108 and must never
-   *     under-estimate the tallest thing emitted; 60 is comfortably under, so HMAX is untouched.
+   *     under-estimate the tallest thing emitted; 60 plus the swell's 2.8 is comfortably under, so
+   *     HMAX is untouched.
    *   startT 0.10 — see chooseStart. The city's threshold asks for a wall at 57 degrees on both
    *     sides, which nothing on the Moon clears, so every seed would scan all 64 candidates and
    *     then fall back to the argmax anyway.
+   *
+   * ---- WHAT WAS STILL DRAWING STRAIGHT LINES, and it was three things -------------------------
+   * The lattice was made invisible by pitch, width and vacancy, and it was still legible, because
+   * three of the numbers below were still BUILDING numbers applied to a plain.
+   *
+   *   aveEvery/crossEvery were BOTH 2, so every second corridor was the wide class. A period-two
+   *     alternation is the most readable rhythm there is — wide, narrow, wide, narrow to the
+   *     horizon is a ruled grid however much the positions are jittered, and jitter cannot hide a
+   *     pattern in WIDTH. They are 5 and 7 now: coprime, so the pair never repeats inside a frame,
+   *     and a wide corridor is a one-in-five event rather than a one-in-two.
+   *   alleyP/alleyDeepP were 0.70. An alley is a gap BETWEEN TWO BUILDINGS. On a plain it is a
+   *     one-or-two-metre strip of ground held at height 0 running the full 54-72 m of a block,
+   *     dead parallel to the corridor beside it — which, once the ground either side of it rolls,
+   *     is a trench with two straight edges. It is the single most axis-aligned feature the moon
+   *     map was producing. Zero, on the same argument as setbackP.
+   *   plazaP/plazaBigP were 0.55/0.70. A plaza is the city's block-breaker and it exists to open
+   *     the sky slot; on a plain the sky is already open and 90% of the blocks are already empty,
+   *     so all it contributed was an OCTAGON of flat ground, at a rate modulated by kk % 4 — a
+   *     period-four lattice artefact on top of a shape with straight edges. Zero.
+   *
+   * That leaves the corridors themselves, which cannot go: the route walker follows street
+   * centrelines and there is nothing else for it to follow. What answers them is the swell.
+   *
+   * ---- THE SWELL ------------------------------------------------------------------------------
+   *   swellAmp 2.8 m — peak relief, and the number is set against eyeY 1.66 rather than against
+   *     what looks like a hill. A mound only reveals anything by being crested if some of it is
+   *     ABOVE THE EYE, and how much of the plain that is, is measurable. Share of ground standing
+   *     1.66-6 m — i.e. over the walker's head and still terrain rather than massif — over the same
+   *     five-seed patch, against the same map with the swell off:
+   *         off 4.2-5.7   1.8 -> 4.2-6.0   2.8 -> 4.5-6.8   4.5 -> 5.0-8.1
+   *     At 1.8 the swell adds two tenths of a point and the plain stays a plane with texture on it;
+   *     at 2.8 it roughly doubles the world's above-eye ground, which is the point of it; 4.5 adds
+   *     two and a half points, and every one of those points is a metre of extra wall along a
+   *     corridor whose whole job is to not read as a corridor.
+   *   swellLat 54 / swellLat2 23 m — the two bilinear octaves, weighted 0.68/0.32. 54 m is "several
+   *     tens of metres across" as the brief asks; the second octave is there to stop the first
+   *     reading as a regular swell of one wavelength. Not commensurate with AVE 96 or CROSS 84,
+   *     deliberately: a relief lattice that shared a factor with the street lattice would put its
+   *     crests in the same place on every block.
+   *   swellT 0.56 — the threshold below which the field is EXACTLY zero, and it is a budget rather
+   *     than a taste. Ground at height 0 is what free-walk collision and moon_ground.js's boulder
+   *     scatter (`height > 0.1 -> skip`, and that scatter is most of this world's texture) both
+   *     spend, so the relief cannot be a field that is everywhere non-zero. Swept over a 400x400 m
+   *     patch round the start on seeds 42/7/3/99/1234 — walkable (h <= 0) / boulder ground (<= 0.1),
+   *     as the range over the five seeds:
+   *         off    88.6-92.1  /  88.6-92.1
+   *         0.56   72.9-78.8  /  79.0-85.6
+   *         0.40   63.6-67.1  /  73.1-76.0
+   *         0.20   55.6-59.6  /  63.8-67.0
+   *         0.00   54.5-57.7  /  59.6-61.9
+   *     At 0.56 the boulder field loses under a tenth of its candidate ground and three quarters of
+   *     the plain is still floor. The other thing the threshold buys is the read: the relief has to
+   *     be MOUNDS ON A PLAIN and not an everywhere-rippling surface, because a plain the eye never
+   *     sees flat has no datum to judge the mounds against, and at 0.00 the whole field is in
+   *     motion and none of it reads as ground.
+   *     moon_craft.js's landing-site probe found its full three sites on every seed at every one of
+   *     those settings, INCLUDING 0.00, and that is worth writing down rather than being relieved
+   *     about: the nearest of its five probes is the route centreline itself, and a street cell is
+   *     height 0 by construction. The probe was never at risk; the boulders were.
+   *   WHAT THE RELIEF COSTS THE PRINT, which is the question a new surface always has to answer
+   *     here, measured with-vs-without over nine frames (seeds 42/7/1234, frame 900, 200x60, at
+   *     night, noon and dusk) — muddy(9-119) / hot(v>=170):
+   *         night 6.4 / 1.66  ->  6.2 / 1.61
+   *         noon  4.1 / 3.63  ->  4.0 / 3.79
+   *         dusk  4.0 / 3.56  ->  3.9 / 3.67
+   *     Nothing. The muddy band goes DOWN by a tenth of a point at every hour and the hot tail up
+   *     by a tenth, which is what should happen: this world has no air, so a new face is either
+   *     lit or it is lum 0, and neither of those is in the middle of the range. The Moon can be
+   *     given geometry for free in a way the other two worlds cannot.
+   *   swellEdge 12 m — how far from a corridor the relief takes to reach full amplitude. This is
+   *     the whole anti-straight-line mechanism: the swell is multiplied to ZERO at the block edge,
+   *     so there is no step where the block meets the corridor, only a gradient. The corridors end
+   *     up lying in shallow valleys, which is what a track across rolling ground does anyway.
+   *   swellStyle 9 — the style a lot gets when its height is the swell and nothing else. See
+   *     STYLE_CH_MOON.
    */
   var TH_MOON = {
     id: 'moon', AVE: 96, CROSS: 84,
     aveJit: 38, aveOff: -18, crossJit: 34, crossOff: -16,
-    aveWide: 20, aveMid: 15, aveNarrow: 11, aveMidP: 0.55, aveEvery: 2,
-    crossWide: 17, crossMid: 13, crossNarrow: 10, crossMidP: 0.50, crossEvery: 2,
+    aveWide: 20, aveMid: 15, aveNarrow: 11, aveMidP: 0.55, aveEvery: 5,
+    crossWide: 17, crossMid: 13, crossNarrow: 10, crossMidP: 0.50, crossEvery: 7,
     lotW: 7, lotWVar: 9, lotD: 7, lotDVar: 9,
-    alleyMin: 12, alleyP: 0.70, alleyDeepMin: 12, alleyDeepP: 0.70,
-    plazaP: 0.55, plazaBigP: 0.70, plazaR: 14, plazaRVar: 16,
+    alleyMin: 12, alleyP: 0.00, alleyDeepMin: 12, alleyDeepP: 0.00,
+    plazaP: 0.00, plazaBigP: 0.00, plazaR: 14, plazaRVar: 16,
     vacant: 0.62, setbackP: 0.00, podMin: 0, podVar: 0, falseFront: 0,
     lmMin: 26, lmVar: 34, crownTall: 999, DG: 58, sky: 1,
     rimMin: 1.4, rimVar: 4.2, startT: 0.10,
+    swellAmp: 2.8, swellLat: 54, swellLat2: 23, swellT: 0.56, swellEdge: 12, swellStyle: 9,
     styleCh: STYLE_CH_MOON, signCh: SIGN_CH_WEST, styleBase: 7,
     setbackMode: 'none', signShape: 'none', signPalette: 'none'
   };
@@ -464,6 +695,65 @@
       return bd;
     }
 
+    /* ---- rolling relief ---------------------------------------------------------------------
+     * THE INVARIANT, stated once because three separate consumers depend on it and none of them
+     * says so out loud: HEIGHT 0 MEANS WALKABLE. camera()'s last-resort guard, control.js's
+     * free-walk collision, cell()'s `h <= 0 -> return null`, isStreet(), moon_ground.js's boulder
+     * scatter and moon_craft.js's landing-site probe all read exactly that one test, and there is
+     * no terrain-following anywhere in the tree — the eye is at a fixed 1.66 above y = 0. So relief
+     * is not something that can be added to the ground; it is something that can only be added
+     * where the ground is allowed to stop being ground.
+     *
+     * That is the same invariant the crater code respects, and it respects it in the same two
+     * ways. FIRST, a street cell returns from computeCell before any height branch is reached, so
+     * a corridor is height 0 by construction and nothing below can touch it. SECOND, the relief is
+     * thresholded: below swellT the field is exactly zero, so a majority of the open ground stays
+     * at height 0 and stays walkable, boulder-bearing and probe-able. A field that was everywhere
+     * non-zero would have fenced the walker into the lattice — the exact thing this world spends
+     * three theme constants hiding.
+     *
+     * Bilinear on a smoothstepped lattice, not a per-lot step. surf_moon.js's 9 m density swell
+     * carries the argument in full and it applies verbatim to geometry: a hard cell gives the plain
+     * visible tiles, which is the failure mode this is here to remove rather than to cause. Two
+     * octaves, then one more smoothstep on the way out of the threshold, so the foot of every mound
+     * meets the flat with a zero gradient and there is no crease anywhere in the field.
+     *
+     * Allocation-free and a pure function of (seed, gx, gz, block bounds): eight hashes and six
+     * lerps per cell, which is under a third of what districtAt's 27 hashes already cost on the
+     * same cell. The two octaves take ADJACENT salts, which the header at the top of this file
+     * would normally forbid — they go through `hash` rather than hash2, and that is the whole
+     * reason `hash` exists: routed through both coordinate multipliers, a salt step of one moves
+     * every bit of the accumulator, and the 40-salt sweep this file was measured with leaves no
+     * pair above 0.018. */
+    function bilin(gx, gz, lat, salt) {
+      var qx = gx / lat, qz = gz / lat;
+      var i0 = Math.floor(qx), j0 = Math.floor(qz);
+      var fx = qx - i0, fz = qz - j0;
+      fx = fx * fx * (3 - 2 * fx); fz = fz * fz * (3 - 2 * fz);
+      var a = hash(i0, j0, salt), b = hash(i0 + 1, j0, salt);
+      var c = hash(i0, j0 + 1, salt), d = hash(i0 + 1, j0 + 1, salt);
+      var ab = a + (b - a) * fx;
+      return ab + ((c + (d - c) * fx) - ab) * fz;
+    }
+    /* x0..x1 / z0..z1 are the block's interior bounds — the same two rectangles colX/rowZ already
+     * filled in for this cell, so the corridor fade costs no extra lattice work. The two fades are
+     * MULTIPLIED rather than min()'d: min leaves a crease along the block's diagonal, and a crease
+     * in a height field is a straight line, which is the one thing this function must not draw. */
+    function swellAt(gx, gz, x0, x1, z0, z1) {
+      var eu = gx - x0, e2 = x1 - gx; if (e2 < eu) eu = e2;
+      if (eu <= 0) return 0;
+      var ev = gz - z0; e2 = z1 - gz; if (e2 < ev) ev = e2;
+      if (ev <= 0) return 0;
+      var fu = eu < TH.swellEdge ? eu / TH.swellEdge : 1;
+      var fv = ev < TH.swellEdge ? ev / TH.swellEdge : 1;
+      fu = fu * fu * (3 - 2 * fu); fv = fv * fv * (3 - 2 * fv);
+      var n = bilin(gx, gz, TH.swellLat, S + 520) * 0.68 +
+              bilin(gx, gz, TH.swellLat2, S + 521) * 0.32;
+      if (n <= TH.swellT) return 0;
+      var m = (n - TH.swellT) / (1 - TH.swellT);
+      return TH.swellAmp * m * m * (3 - 2 * m) * fu * fv;
+    }
+
     /* ---- one cell ------------------------------------------------------ */
     var cH = 0, cD = 0, cLX = 0, cLZ = 0;   // computeCell's out-params, avoids an alloc per cell
     // Every cell of a lot asks for the same district; the Voronoi is 27 hashes, so remembering
@@ -519,8 +809,9 @@
       var h;
       /* Vacancy is the district's own now rather than one number for the whole map, because on the
        * frontier it is not an exception — `range` is 62% empty ground and that emptiness is the
-       * entire reason the world has a horizon in it. The city's six districts all carry 0.06,
-       * which is exactly the literal that used to be here. */
+       * entire reason the world has a horizon in it. None of the city's nine districts states one,
+       * so they all fall through to TH_CYBER.vacant 0.06, which is exactly the literal that used to
+       * be here. */
       var vac = D.vacant !== undefined ? D.vacant : TH.vacant;
       if (hash(lx, lz, S + 504) < vac) {
         h = 0;                                        // vacant lot / interior courtyard / open range
@@ -538,9 +829,11 @@
          * at character resolution is the RING — a flat floor with a raised lip round it, seen
          * edge-on from a metre seven off the ground.
          *
-         * The floor is height 0, which is deliberate twice over: it is walkable, so the route can
-         * cross a crater instead of being fenced out of one, and it costs the ray marcher nothing
-         * until the ray actually reaches the rim.
+         * The floor is height 0 — or, once the swell is added below, whatever the surrounding
+         * ground is doing, which is what a bowl in rolling terrain looks like. That is deliberate
+         * twice over: on flat ground it is walkable, so the route can cross a crater instead of
+         * being fenced out of one, and it costs the ray marcher nothing until the ray actually
+         * reaches the rim.
          *
          * A sine profile rather than a step, for the same reason the frontier's rock strata are
          * not ruled lines: a step reads as masonry. */
@@ -577,6 +870,11 @@
           }
         }
       }
+      /* Every branch above converges here, which is why the relief is added here and not in six
+       * places: a vacant lot becomes the mound itself, a rock pile stands ON the mound, a crater's
+       * floor and rim ride it together. Gated on the field existing at all, so the city and the
+       * frontier take one `undefined` comparison per cell and are byte-identical without it. */
+      if (TH.swellAmp !== undefined) h += swellAt(gx, gz, x0, x1, z0, z1);
       cH = h; cD = did; cLX = lx; cLZ = lz;
     }
 
@@ -591,17 +889,40 @@
        * timber front and the whole world stops being a place and starts being a filter. */
       if (TH.signPalette === 'none') return P.white;      // no signs are rolled at all; see DIST_MOON
       if (TH.signPalette === 'painted') {
-        if (r < 0.30) return P.warm;
-        if (r < 0.58) return P.amber;
-        if (r < 0.76) return P.white;
-        if (r < 0.90) return P.ember;
+        /* gold and moss are the two additions, and they are period rather than decorative: gilt
+         * lettering on a bank or a saloon board, and the dark green ground every second painted
+         * sign in the 1880s was laid on. Both are held to a tenth each. gold's night ceiling is
+         * 157, which is 22 points under amber's 179 — so a gilded board is the brightest painted
+         * sign in town and still cannot outrank the lamp behind the window beside it. */
+        if (r < 0.24) return P.warm;
+        if (r < 0.44) return P.amber;
+        if (r < 0.62) return P.white;
+        if (r < 0.74) return P.ember;
+        if (r < 0.84) return P.gold;
+        if (r < 0.92) return P.moss;
         return P.red;
       }
-      // Signage obeys the same two-pillar discipline as everything else; violet stays a garnish,
-      // and the arcade strip is the one place it is allowed to lead.
+      /* Signage obeys the same two-pillar discipline as everything else, and the three new signage
+       * swatches are threaded through the DISTRICT rather than through the general roll, because a
+       * colour that turns up everywhere is not a district's colour. Each branch is keyed on the
+       * quarter's ACCENT, which is the one field that is unique per row.
+       *
+       * ROSE. The rose-neon strip is here and only here, on the arcade's 6% of the ground, and it
+       * leads at 0.42 of that quarter's signs — which is 2.5% of the city's, i.e. narrower than
+       * violet has ever been. It is licensed as signage for the same reason violet is (core.js
+       * gives it a gain of 0.20 and a ceiling of 131, under every pillar and under white) and
+       * forbidden as a surface for the same reason too. */
+      if (D.accent === P.rose) return r < 0.42 ? P.rose : (r < 0.74 ? P.azure : P.amber);
+      // The gilt quarter signs itself in brass and tile, with amber carrying the rest.
+      if (D.accent === P.gold) return r < 0.38 ? P.gold : (r < 0.62 ? P.jade : (r < 0.88 ? P.amber : P.rose));
+      // The market's boards are painted timber with a gilded line on the good ones.
+      if (D.accent === P.timber) return r < 0.34 ? P.gold : (r < 0.56 ? P.amber : (r < 0.80 ? P.moss : P.warm));
       if (D.accent === P.violet) return r < 0.42 ? P.violet : (r < 0.74 ? P.azure : P.amber);
       if (r < 0.34) return P.amber;
       if (r < 0.64) return P.azure;
+      /* D.hue is the quarter talking, and it is what puts jade on a gilt facade, moss on a market
+       * one and indigo on a tower — narrow by construction, because it is 14% of the signs in one
+       * district rather than a colour the whole city can draw. */
       if (r < 0.78) return D.hue;
       if (r < 0.86) return P.ember;
       if (r < 0.93) return P.spring;
@@ -611,7 +932,16 @@
     function makeRec(gx, gz, h, did, lx, lz) {
       var D = DIST[did];
       var rock = !!(D.butte && TH.rockStyle !== undefined && hash(lx, lz, S + 507) < D.butte);
-      var style = rock ? TH.rockStyle : D.styles[(hash(lx, lz, S + 601) * D.styles.length) | 0];
+      /* THE LOT IS EMPTY AND THE SWELL IS THE ONLY REASON IT HAS A HEIGHT AT ALL. Re-drawing S+504
+       * rather than plumbing a flag out of computeCell: it is one hash, it is the same draw against
+       * the same vacancy this cell's height was decided by, and it keeps makeRec a pure function of
+       * the lot the way every other line in it is. Without the marker the painter cannot tell a
+       * mound of powder from a metre of rock — both arrive as `style 7, h 1.4` — and it would paint
+       * bedrock over the whole plain. */
+      var swellOnly = TH.swellStyle !== undefined &&
+                      hash(lx, lz, S + 504) < (D.vacant !== undefined ? D.vacant : TH.vacant);
+      var style = swellOnly ? TH.swellStyle
+                : (rock ? TH.rockStyle : D.styles[(hash(lx, lz, S + 601) * D.styles.length) | 0]);
       /* THE STYLE INDEX IS WORLD-WIDE AND THE GLYPH TABLE IS PER-THEME, which is why this
        * subtraction exists. `style` travels on the record and out to the painters, and a reader who
        * sees 8 should be able to find row 8 in one table rather than having to know which world's
@@ -680,7 +1010,10 @@
         /* 0 none 1 mast 2 tank 3 beacon in the city; 0 none 1 chimney 2 water tank 3 steeple on the
          * frontier. Same field, same three shapes at the same three rates — what differs is which
          * element reads it (structure.js against west_roof.js), and a rock never wears one. */
-        crown: rock ? 0 : (tall ? 3 : (cr < 0.14 ? 1 : (cr < 0.24 ? 2 : 0))),
+        // A rock wears no chimney, and neither does a rise in the ground: both are 0 by the same
+        // argument, and `swellOnly` is checked here as well as in `style` because crown is read off
+        // the record by the roof elements rather than off the style.
+        crown: (rock || swellOnly) ? 0 : (tall ? 3 : (cr < 0.14 ? 1 : (cr < 0.24 ? 2 : 0))),
         lotX: lx, lotZ: lz,
         seed: hash(lx, lz, S + 613),      // stable per building — hash this for per-facade variety
         face: hash(gx, gz, S + 614)       // stable per cell — hash this for per-column variety

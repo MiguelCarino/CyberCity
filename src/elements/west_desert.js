@@ -392,6 +392,16 @@
      * is what the frontier's furniture did before the clock existed. */
     var day = clamp(0.14 + 0.86 * D_SUN, 0, 1);
     var hot = sun > 0.6 && D_SUN > 0.35;
+    /* ---- WHAT A PLANT IS MADE OF, and slate is not it ---------------------------------------------
+     * Every plant in this function is drawn in slate, which is 62,98,138 — a deliberately BLUE
+     * swatch whose job in this project is unlit concrete. That was the whole vocabulary available
+     * when this file was written; the palette now has moss (92,126,74, "planting, algae, sage,
+     * canvas") and timber, and a creosote bush at midday is sage green over dead brown wood.
+     *
+     * Dithered per PLANT on the day fill, for the reason west_town.js's posts are: a bush is one
+     * object and half of it in each swatch is a stripe. slate stays the night swatch untouched, so
+     * the tuned frame is unchanged to the byte. */
+    var dF = dayFill();
 
     /* ---- the yucca ------------------------------------------------------------------------------
      * A stiff rosette with a flower stalk out of the middle, and the STALK is the whole silhouette:
@@ -409,7 +419,7 @@
         w = standing(yx, yz, 1.3, 1.0, 52);
         if (!w) continue;
         var stalk = 1.5 + (yh / 0.28) * 1.0;          // 1.5-2.5 m
-        column(f, yx, yz, 0, 0.55, G_STAR, P.slate, 24 + 30 * day, 0);
+        column(f, yx, yz, 0, 0.55, G_STAR, leafC(yh, dF), 24 + 30 * day + 84 * dF, 0);
         /* Two blades either side of the base — a rosette seen from any angle without an angle. */
         if (w < 22) {
           if (project(yx - 0.34, 0.42, yz)) emit(f, Math.floor(PJ.x), Math.floor(PJ.y), G_SLASH, P.slate, 20 + 26 * day, PJ.d);
@@ -468,8 +478,8 @@
           var rBot = Math.floor(bry);
           var cx2 = Math.floor(bcx + q);
           var side = (q * sunX > 0) ? 1 : 0;
-          var mcol = hot && side ? P.amber : P.slate;
-          var mlum = (hot && side ? 68 : 24) * (0.55 + 0.60 * day);
+          var mcol = hot && side ? (dF > 0.5 ? P.moss : P.amber) : leafC(mh / 0.46, dF);
+          var mlum = (hot && side ? 68 + 92 * dF : 24 + 74 * dF) * (0.55 + 0.60 * day);
           for (r2 = rTop; r2 <= rBot; r2++) {
             var deep = r2 - rTop;
             if (deep > 1 && hash2(cx2 * 3 + deep, i * 5 + j, BASE + 0x35) > 0.26) continue;
@@ -550,7 +560,7 @@
            * is why you can see one from a mile away. */
           if (project(wxp, 0.02, wzp))
             emit(f, Math.floor(PJ.x), Math.floor(PJ.y), g2 < 0.5 ? G_UNDER : G_TILDE,
-                 hot ? P.white : P.slate, (18 + 66 * day) * (0.6 + 0.6 * g2), PJ.d);
+                 hot ? P.white : leafC(oh / 0.32, dF), (18 + 66 * day + 76 * dF) * (0.6 + 0.6 * g2), PJ.d);
           /* Dead grass on the bank — amber, which is what season-old bunchgrass is — and only on
            * the outer third of the run, so it LINES the wash instead of filling it. */
           if (g2 > 0.62 && (u2 < -0.35 || u2 > 0.35) && project(wxp, 0.10 + g2 * 0.34, wzp))
@@ -625,7 +635,96 @@
     }
   }
 
+  /* Hoisted to module scope rather than closed over the caller's dF, and that is the contract
+   * rather than a preference: a function DECLARATION inside draw() allocates a closure every frame,
+   * and this file runs sixty times a second. */
+  function dayFill() {
+    return (CC.SurfWest && CC.SurfWest.dayFill !== undefined) ? CC.SurfWest.dayFill : 0;
+  }
+  function leafC(seedH, dF) {
+    if (seedH >= dF) return P.slate;
+    return seedH < dF * 0.42 ? P.timber : P.moss;
+  }
+
   function wrap(v, b) { return v - b * Math.floor(v / b + 0.5); }
+
+  /* ---- A GRAIN OF DUST IS TRANSLUCENT, and by day that stops being a nicety --------------------
+   * (veilCell and not veil: drawDust below already has a local `var veil` for the sheet, and a var
+   * declaration hoists over a function of the same name for the whole of that function's body.)
+   * emit() REPLACES a cell. That is right at dusk — a grain at lum 74 lands on a road at lum 20-60
+   * and is the brighter of the two — and it is the single largest photosensitivity fault the
+   * daylight pass created anywhere in this world. The same grain landing on a NOON road at lum
+   * 200-255 is a dark object crossing a bright one, several times a second, over the lower third of
+   * the frame; the step is the whole contrast between the two rather than the 29% of full scale the
+   * paragraph above so carefully bounds.
+   *
+   * Measured with tools/west-flicker.cjs pinned at noon (the shipped gate never pins the clock, so
+   * it has only ever measured this world after dark): with the daylight fill in and this element
+   * drawn, the frontier's own big-step rate was 5.50/s against the city's 2.00/s and its 3-20 Hz
+   * band 4.92% against 2.80%. With this one element suppressed, 1.75/s and 2.45%. It was all of it.
+   * The SHIPPED build fails the same way for the same reason — 2.50/s and 4.73% at noon on pristine
+   * sources — so this is a latent fault the fill made loud, not one it invented.
+   *
+   * So by day a grain VEILS. It reads the cell it is about to land on and moves it a fraction of
+   * the way toward its own level, which is what a translucent particle in front of something does,
+   * and takes that cell's SWATCH so the whole of the change is the fraction. The step is then
+   * bounded by alpha rather than by the contrast, whatever the background: 0.42 keeps it under the
+   * gate's third-of-full-scale line against a lum-255 road.
+   *
+   * Rejected 0.30, and the reason is worth writing down because it is counter-intuitive. A thinner
+   * veil does NOT keep going down: successive grains landing on the same cell in the same frame
+   * each read the value the last one left, so the field COMPOUNDS toward the dust's own level and
+   * what a dense preset does to a cell is set by how many grains cross it, not by alpha. At 0.30
+   * the 3-20 Hz band went UP (noon 3.02% -> 3.22%) because the same total displacement was being
+   * delivered in more, smaller writes. The lever that works on a compounding field is the number of
+   * CELLS each grain touches, which is the streak cap below.
+   *
+   * At dFill 0, alpha is exactly 1 and this is emit() to the byte — including the fog, which is
+   * applied here for emit()'s own reason and must be applied BEFORE the blend, since the cell being
+   * blended against has already been through it.
+   *
+   * The read is a READ. The contract's rule is that nothing may WRITE the typed arrays directly,
+   * and this still goes out through CC.put with a depth argument; optics.js and sky.js both read
+   * the frame the same way. */
+  function veilCell(f, x, y, ch, col, lum, d, alpha) {
+    if (x < 0 || y < 0 || x >= V.cols || y >= V.rows) return;
+    if (lum > 0 && CC.Surf) { lum = CC.Surf.fog(lum, d); if (lum <= 0) ch = 0; }
+    if (alpha < 0.999) {
+      var i = y * V.cols + x;
+      var dl = f.lum[i];
+      lum = dl + (lum - dl) * alpha;
+      if (f.ch[i] !== 0) col = f.col[i];
+      /* ---- AND IT DOES NOT TAKE THE CELL'S DEPTH, which is the other half of being translucent --
+       * This was the largest remaining daylight flicker fault in the world and it is not in the
+       * blend at all, it is in the fourth argument to put(). west-dust is layer 22 and west-wagon
+       * is layer 22 as well, so on a stable sort by layer this file's element draws FIRST — and a
+       * grain a few metres from the eye that claimed d=10 stopped the wagon forty metres up the
+       * road from drawing at all. The wagon is a black silhouette on a lum-251 road, so the cell it
+       * lost went 0 -> 169 -> 0 for the three frames the grain sat there: two steps of two thirds
+       * of full scale, added to a cell that was already stepping at the wagon's own rate. Measured
+       * at seed 3 under `dust`, clock pinned at morning: eleven big steps in four seconds against
+       * seven with this element suppressed, which is the whole of the 2.75/s against the 2.00/s
+       * tolerance. The same grain at NIGHT is opaque and genuinely does hide the wagon, which is
+       * correct and is why this is gated on alpha rather than applied always.
+       *
+       * A translucent thing does not own the cell it tints, so the depth it writes is the depth
+       * that was already there, a hair nearer — put() tests strictly, so it has to be nearer by
+       * something. 0.99999 is one part in a hundred thousand, which at the fog ramp's 210 m range
+       * is two millimetres and cannot reorder anything the caster resolved. A grain over SKY keeps
+       * its own depth: the cell's is Infinity, there is nothing behind it to be occluding, and
+       * every sky element in this world draws at layers 5-9, well before this one.
+       *
+       * `d < dc` IS THE VISIBILITY TEST AND IT STAYS. Written without it every grain in the shell
+       * passed put(), including the ones BEHIND the road, and the element took the whole lower half
+       * of the frame: measured at seed 7 frame 900 noon, rows 28 to 59 went from facade and floor
+       * to 200 element cells out of 200, because a grain thirty metres out was overwriting the
+       * glyph of a road cell twelve metres away. What is given up here is OWNERSHIP of the cell,
+       * not the right to be in front of it. */
+      var dc = f.dist[i];
+      if (d < dc && dc < 1 / 0) d = dc * 0.99999;
+    }
+    put(f, x, y, ch, col, lum > 255 ? 255 : (lum < 0 ? 0 : lum | 0), d, 3);
+  }
 
   function drawDust(f) {
     if (!duOx || !CITY) return;
@@ -677,6 +776,43 @@
      * the sky's luminance with a lift for the low sun, which is what makes a plume glow at the ends
      * of the day. */
     var lift = (0.06 + 0.94 * D_SKY) * (1 + 0.55 * D_WARM * D_SUN);
+    /* ---- AND THE RAMP IS NOT LINEAR IN THE FILL, because the ROAD's is not ----------------------
+     * Both numbers below were fitted at dFill 1 and then left linear in it, and the MORNING stop is
+     * where that shows. dFill is 0.858 there, so the veil is still half opaque — but the ground it
+     * is veiling has already arrived: the floor prints 61.8% of its cells lit at morning against
+     * 66.3% at noon, i.e. the background is at 93% of its noon brightness while the mitigation is
+     * only at 86% of its noon strength.
+     *
+     * `dk = f(2 - f)` is the fill with its knee pulled forward — 1-(1-f)^2, which is 0 at 0 and 1
+     * at 1, so night is the identity to the byte and noon is unchanged to the byte, and the whole
+     * of the move lands in the middle where the mismatch is. At morning it reads 0.980 rather than
+     * 0.858, which puts the alpha at 0.432 instead of 0.502.
+     *
+     * WHAT IT IS AND IS NOT WORTH. Measured with the gate's own measurement, clock pinned at
+     * morning (the shipped tools/west-flicker.cjs never touches the clock), against the linear
+     * version of the same two lines: the big-step RATE does not move — the fault that was costing
+     * 2.75/s against a 2.30 tolerance is the depth argument in veilCell() above, not the alpha —
+     * but the 3-20 Hz band does, seed 42 under `dust` 1.71% -> 1.60% and under `breeze` 1.41% ->
+     * 1.20%. It is margin rather than a fix, and it is written down as margin. Rejected keying on
+     * dSky directly, which is the quantity the road actually follows but is 0.657 at DUSK as well
+     * as at dawn and would have re-tuned this world's signature hour. */
+    var dk = dayFill(); dk = dk * (2 - dk);
+    /* How opaque a grain is allowed to be — see veil() above. 1 at dFill 0, so the tuned frontier
+     * is unchanged to the byte; 0.42 at noon, which is what holds the step under the gate's line
+     * against the brightest ground this world can print. */
+    var dAlpha = 1 - 0.58 * dk;
+    /* FIVE CELLS AT NIGHT AND TWO BY DAY, and this is the lever that actually moves the day
+     * flicker numbers. A streak is n+1 cells that change state together every frame, so the cap is
+     * very nearly a multiplier on how much of the frame this element is modulating — and by day
+     * every one of those cells is a bright one. The look survives the cut because a streak only
+     * reads AS a streak against a dark background: at noon what says "the wind is up" is the whole
+     * lower band going soft, which is the sheet below, not the individual grains.
+     *
+     * HOISTED, and it was in the per-grain loop. dayFill() is a property getter on CC.SurfWest and
+     * `use` reaches a couple of thousand grains under the dust presets; the comment eleven lines
+     * above the loop is this file's own argument against that — "taken once per frame rather than
+     * per particle, which is the whole reason the streak is affordable". */
+    var nCap = (5 - 3 * dk) | 0;
     /* Under a light haze the far shell goes first and what is left is a little dust round your
      * boots; under a storm the whole valley fills in. The rain's farUse, same shape. */
     var farUse = use * clamp(0.34 + 0.46 * amt, 0.22, 1);
@@ -709,7 +845,7 @@
        * down. Capped at five, past which it stops reading as a particle and starts reading as a
        * rule drawn on the picture. */
       var n = (Math.abs(crossV) * duSpd[i] * 0.028 * V.colK / w) | 0;
-      if (n > 5) n = 5;
+      if (n > nCap) n = nCap;
 
       /* NOT SCALED BY `amt`, which was the first cut's mistake: tying a grain's brightness to the
        * same number that decides how many grains there are squares the weather. Measured at 260x60,
@@ -744,7 +880,7 @@
          * under the step budget where two streaks land on the same cell. */
         var lm = base * (1 - k * 0.17);
         if (lm < 4) continue;
-        emit(f, sx, py, k === 0 ? gl : (n >= 3 ? G_DASH : G_TICK), hue, lm, d);
+        veilCell(f, sx, py, k === 0 ? gl : (n >= 3 ? G_DASH : G_TICK), hue, lm, d, dAlpha);
       }
     }
 
@@ -761,7 +897,16 @@
      * rewritten to avoid. It drifts at a fifth of the wind: a sheet travels, its grains faster. */
     if (W_HAZE < 1.55 || CC.reducedMotion) return;
     var veil = clamp((W_HAZE - 1.55) / 0.75, 0, 1) * settle;
-    var vl = (10 + 40 * lift) * veil;
+    /* AND THE SHEET IS A VEIL TOO, in the literal sense of the function above. It was emit(), i.e.
+     * a replacement, at lum 10-50 — which against a dusk road at lum 20-60 is a pale wash and
+     * against a NOON road at 200+ is a dark speck, dropped and lifted over up to 44% of the lower
+     * band as the drift walks the dither. It is the largest single contributor to the frontier's
+     * daylight big-step rate after the grains themselves, and it fails for exactly the same reason.
+     *
+     * It also has to get much brighter: a sheet of suspended dust at midday is LIT dust, the
+     * brightest thing between you and the far end of the street, and the whole read of a dust storm
+     * at noon is that the distance whites out rather than blacks out. */
+    var vl = (10 + 40 * lift + 168 * (1 - dAlpha) / 0.58) * veil;
     if (vl < 5) return;
     var top = Math.floor(V.horizon - V.rows * 0.10);
     if (top < 0) top = 0;
@@ -773,7 +918,8 @@
         var sp2 = ((vx2 + 0.5) * 2 / cols - 1) * V.hp;
         var hv = vnoise((V.yaw + sp2) * 9.0 + (vy - top) * 0.37 + drift, BASE + 0x62);
         if (hv > dv) continue;
-        emit(f, vx2, vy, band > 0.55 ? G_DOT : G_TICK, P.white, vl * (0.6 + 0.7 * band), 44);
+        veilCell(f, vx2, vy, band > 0.55 ? G_DOT : G_TICK, P.white,
+                 vl * (0.6 + 0.7 * band), 44, dAlpha);
       }
     }
   }
