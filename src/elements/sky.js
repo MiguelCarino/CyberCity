@@ -221,7 +221,7 @@
     layer: 3,
     /* THE TWO WORLDS WITH AIR IN THEM. There is no deck for the town to light the underside of.
      * See src/world.js: `world` may be a string or a set, and absent means every world. */
-    world: ['cyber', 'west'],
+    world: ['cyber', 'west', 'japan'],
     draw: function (frame, cam, t) {
       setup(frame, cam);
       /* Under about 0.4 the deck is a few wisps nobody would notice and 20 000 noise evaluations
@@ -328,7 +328,7 @@
     /* Both atmospheric worlds, and NOT the Moon: a lunar sky has stars at noon and they are hard,
      * colourless and welded to a black dome, which is a different object drawn a different way —
      * see elements/moon_ground.js. This one is a star seen through air. */
-    world: ['cyber', 'west'],
+    world: ['cyber', 'west', 'japan'],
     init: function (city, rng) {
       var r = fork(rng), i;
       stX = new Float32Array(NSTAR); stY = new Float32Array(NSTAR); stZ = new Float32Array(NSTAR);
@@ -419,7 +419,7 @@
      * D_MOON 9.0e4 and west_sky.js parks the sun at 1.02e5, so the moon won the depth test and
      * painted itself and a cyan halo straight over the sunset. It is now gated to the two worlds
      * that have a sky to hang it in, and faded out by daylight below. */
-    world: ['cyber', 'west'],
+    world: ['cyber', 'west', 'japan'],
     init: function (city, rng) {
       var r = fork(rng);
       moAz0 = (r() - 0.5) * 0.26;                    // the avenue runs +z, which is yaw 0

@@ -1,31 +1,59 @@
 # CyberCity
 
-Three walkable worlds drawn entirely in text characters, in one self-contained HTML file, with the
+Four walkable worlds drawn entirely in text characters, in one self-contained HTML file, with the
 sun going round.
 
 No build step to run it, no dependencies, no network requests. Open `index.html` and you are
 standing on a street in the rain. Press **2** and you are on a dirt road on the frontier; press
-**3** and you are on the Moon.
+**3** and you are on the Moon; press **4** and you are in a castle town on a wet evening.
 
 **[cybercity.carino.systems](https://cybercity.carino.systems)**
 
 ![A street canyon at night, lit tower faces either side](docs/street.png)
 
-## Three worlds
+## Four worlds
 
 | key | world | |
 |---|---|---|
 | `1` | **CyberCity** | a rain-lit city — neon, aerial traffic, police, market stalls |
 | `2` | **Frontier** | an 1880s timber town — veranda posts, painted boards, telegraph, horses, open desert |
 | `3` | **Moonwalk** | an Apollo-era lunar surface — regolith, craters, a black sky with Earth in it |
+| `4` | **Edo** | a castle town in the rain — paper screens, lanterns, tiled eaves, a canal, bridges, sakura |
 
-They are the same engine and the same seed. `#42` is a place in all three, so pressing 1, 2 and 3
+They are the same engine and the same seed. `#42` is a place in all four, so pressing 1, 2, 3 and 4
 in turn shows you the same corner of the same street lattice with a different century — or a
-different world — built on it. That is the point of having three.
+different world — built on it. That is the point of having four.
 
 ![A frontier main street at dusk, veranda posts and a sunset band](docs/frontier.png)
 
 ![A lunar plain at local noon, Earth hanging in a black sky](docs/moonwalk.png)
+
+![A machi street at dusk: lit paper screens down both sides, wet earth between](docs/edo.png)
+
+The fourth one is the odd one out and deliberately so. The first three are all lit from a long way
+off — by a sodium grid, by one low sun, by another one with no air in front of it — and **Edo** is
+lit from inside the street: a paper lantern hung under the eave at 2.1 m and an oil lamp behind
+every shopfront. That inverts the whole model. Sun and sky light the top of a wall and leave the
+ground dark; lanterns do the opposite, so a machi street after dark is bright at the bottom and
+black at the top, and which of the two lighting models the frame is under is what the clock
+decides. It is also the only world *built around* an overcast sky rather than merely having one as
+a weather state — under a deck there is no shadow to speak of and the two sides of a street are
+within a stop of each other, so what carries the picture is not tone but
+**lines**: the ridge tile, the drip edge under it, the mid-rail, the gutter, the batter of a castle
+wall. A cell of that world is a line or it is nearly nothing.
+
+![A canal at dusk: lantern light coming back off the water, banners on the far bank](docs/edo-canal.png)
+
+It also has a **canal** in it — 9.2 m of water on a 160 m pitch, so the walk meets one about every
+hundred seconds and crosses it on an arched taiko-bashi. Nothing is carved to make it: in this
+engine a negative height renders byte-identically to zero (the march is `if (h <= 0) continue` and
+the floor is painted by inverse projection against the y=0 plane, which never consults the
+heightmap), so the water is a *painted plane* with a 0.45 m stone coping beside it. That coping
+height is an occlusion budget rather than a wall: a parapet of height h at distance W hides all
+ground out to `W*eyeY/(eyeY-h)`, so the 1.2 m a real embankment has would hide the entire canal and
+the far bank behind its own kerb. At 0.45 m it costs three metres of water and the eye supplies the
+drop. What sells it is the reflect pass — a puddle gives back three cells, a canal gives back a
+quarter of the floor rows.
 
 ## The day
 
@@ -66,8 +94,10 @@ and it moves the other way. Both, measured at 200x60 on frame 300 at two seeds, 
 | **frontier** seed 7 | 26.5 / 0.24 | 38.7 / 1.03 | 40.9 / 7.16 |
 | **Moonwalk** seed 42 | 5.5 / 1.64 | 6.6 / 2.27 | 5.0 / 2.85 |
 | **Moonwalk** seed 7 | 11.8 / 1.27 | 7.2 / 3.88 | 6.2 / 3.60 |
+| **Edo** seed 42 | 38.6 / 0.38 | 46.8 / 2.58 | 51.9 / 0.71 |
+| **Edo** seed 7 | 30.8 / 0.03 | 37.3 / 2.08 | 37.6 / 0.07 |
 
-Three things in that table are worth saying out loud rather than leaving for someone to notice.
+Four things in that table are worth saying out loud rather than leaving for someone to notice.
 
 The Moon holds the night target at every hour of its day and at both seeds, 5.0% to 11.8% against
 a limit of 30, because it has no air — which is the whole argument for it being the third world.
@@ -78,10 +108,22 @@ under a sky that is a third of the frame and never goes to zero. The number move
 two seeds, which is the honest size of the seed effect out there — seed 7 draws more open range and
 open range is black.
 
-Twilight in the two atmospheric worlds is the flattest hour of the three — the city's hot tail is
-0.41% at dusk against 7.27% at night — and that is not a bug to be tuned out either: it is the hour
-when the neon and the sky are the same brightness, which is exactly what makes it look like
-twilight.
+Twilight in the two older atmospheric worlds is the flattest hour of the three — the city's hot
+tail is 0.41% at dusk against 7.27% at night — and that is not a bug to be tuned out either: it is
+the hour when the neon and the sky are the same brightness, which is exactly what makes it look
+like twilight.
+
+Edo is the only world whose hot tail goes the *other* way — a few hundredths of a per cent at
+night against two and a half at dusk — and it is the ladder rather than the picture. After dark the print's hot line is v 170 and the only
+swatches in the palette that reach it are `amber` (179), `azure` (219), `red` (206), `ice` (174)
+and `pure` (234) — a sodium lamp, a screen, a signal, a rain highlight and a specular. A paper
+lantern is materially `warm`, which tops out at 167: three points under the line at any luminance
+whatsoever, so a town lit entirely by lanterns censuses at nothing however many of them are in
+frame. That is not a fault to tune out by repainting the lantern in a swatch that lies about what
+it is. Two cells' worth of `pure` are spent where they are physically right — the blown-out core of
+a near lantern and the glint off the water in the gutter — and the rest of the world is honestly a
+dark wet street with warm holes in it. By dusk the ladder has crossed onto the day curve, where
+`warm` reaches 187 and `white` 209, and the same frame scores 2.58%.
 
 ![A dust storm coming up the road](docs/dust.png)
 
@@ -92,8 +134,8 @@ and `.` in twenty colours.
 ## The palette, and why it is twenty and not twelve
 
 It was twelve: two pillars — sodium amber and screen azure — and ten narrow things around them.
-Twelve is enough for a wet neon street at night and it is not enough for three worlds with a sun
-over them, and the failure was specific rather than general. There was no neutral grey at all
+Twelve is enough for a wet neon street at night and it is not enough for the daylight worlds, and
+the failure was specific rather than general. There was no neutral grey at all
 (slate is deliberately blue and says so in its own comment), no brown, no green that is not an
 accent, and nothing warm-metal. Everything that was none of those collapsed onto amber.
 
@@ -115,6 +157,12 @@ ladder, because rose is hue 337 and this build's bloom over a hot pink cell is t
 walked violet off magenta years ago. At 0.20 the knee crushes every rose cell under lum 96 to
 black, so rose can only exist where something wrote it near full scale — which makes "signage
 only, never a field" arithmetic instead of a note in a comment.
+
+Twenty turned out to be enough for a fourth world: **Edo adds no swatch at all.** Weathered cedar
+is `timber` in shade and `sand` in light, lime plaster is `white`, clay tile and a castle wall are
+`stone`, the dye on every piece of cloth in the place is `indigo`, and the lamp behind the paper is
+`warm`. That is the extension doing exactly what it was added for, and it is worth recording as
+evidence that the palette is now the right size rather than merely a bigger one.
 
 ## What is in it
 
@@ -294,7 +342,7 @@ It plays itself, so all of this is optional.
 | `Tab` | take the controls / give them back |
 | `Esc` | give them back |
 | `P` | photo mode — freezes the world, you can still look and move |
-| `1` `2` `3` | world: CyberCity, Frontier, Moonwalk (gamepad: `Y` / triangle cycles) |
+| `1` `2` `3` `4` | world: CyberCity, Frontier, Moonwalk, Edo (gamepad: `Y` / triangle cycles) |
 | `T` | step the time of day (`Shift`+`T` steps back) |
 | `Y` | stop / restart the automatic day cycle |
 | `Shift`+`1`–`6` | weather |
@@ -304,24 +352,30 @@ It plays itself, so all of this is optional.
 | `H` | show the controls |
 
 The weather presets are `clear, drizzle, rain, downpour, mist, storm` in the city,
-`blazing, breeze, dust, squall, overcast, thunder` on the frontier, and on the Moon exactly one,
-`vacuum`, with every parameter at zero — which is not a placeholder but the honest answer, and it
-is what makes the whole weather machinery collapse to nothing there without a single special case. They moved onto `Shift` when
+`blazing, breeze, dust, squall, overcast, thunder` on the frontier, `clear, haze, tsuyu, shower,
+typhoon, kiri` in Edo, and on the Moon exactly one, `vacuum`, with every parameter at zero — which
+is not a placeholder but the honest answer, and it is what makes the whole weather machinery
+collapse to nothing there without a single special case. Edo's table is very nearly the frontier's
+inverted: out there it is dry for weeks and the middle of the table is made of dust, and there it
+is a maritime climate on the edge of a monsoon and the middle of the table is four grades of rain.
+No row of it has `wet` under 0.20; the ground is always holding water, which is what the
+reflections in the road are for. They moved onto `Shift` when
 the worlds took the digit row: which world you are standing in is the larger fact, and it is the
 one a viewer told "press 1 or 2" reaches for.
 
 On a phone or tablet the left half of the screen walks, the right half looks, and a tap goes
 fullscreen. There is no world gesture: every gesture on a touchscreen is already spoken for by
 those two halves, and a hidden two-finger something that rebuilds the world is a trap rather than
-a control — so on a phone the other two worlds are reached by their URLs, `#west/42` and
-`#moon/42`.
+a control — so on a phone the other three worlds are reached by their URLs, `#west/42`,
+`#moon/42` and `#japan/42`.
 
 Gamepads work too, and a pad is the one input device other than a keyboard that can reach the
-second world: **Y** (triangle) cycles it.
+other worlds: **Y** (triangle) cycles through them.
 
-The URL carries the world and the seed — `#42` for a city, `#west/42` or `#moon/42` for the same
-seed elsewhere — so a place you liked is a link you can send. The bare `#seed=42` form still works,
-and so do the words people actually type: `#western/42`, `#lunar/42`, `#apollo/42`.
+The URL carries the world and the seed — `#42` for a city, `#west/42`, `#moon/42` or `#japan/42`
+for the same seed elsewhere — so a place you liked is a link you can send. The bare `#seed=42` form
+still works, and so do the words people actually type: `#western/42`, `#lunar/42`, `#apollo/42`,
+`#edo/42`, `#kyoto/42`.
 
 ![A downpour, ember quarter](docs/downpour.png)
 
@@ -369,17 +423,61 @@ occupied and only the sway moves them. Measured now, at a four-second window wit
 pinned: the frontier's own elements take a big step 1.50 times a second against the city's own
 1.50, and carry 2.53% of full scale in the 3-20 Hz band against the city's 2.28% — the two worlds
 are the same shape, which is what the gate was for. The Moon's own elements are 0.00/s and 0.00%,
-because `vacuum` has every parameter at zero and there is nothing out there that modulates. With
-every element in a world switched on at once, which is context rather than a gate, the big-step
-rates are 4.75/s for the city, 7.25/s for the frontier and 0.25/s for the Moon. The tumbleweed's
-roll rate and the cloud bars' drift were sized against the same rule in advance, with the
-arithmetic written down next to the constant.
+because `vacuum` has every parameter at zero and there is nothing out there that modulates. Edo's
+are 0.75/s and 2.23%. With every element in a world switched on at once, which is context rather
+than a gate, the big-step rates are 4.75/s for the city, 7.25/s for the frontier, 0.25/s for the
+Moon and 1.50/s for Edo. The tumbleweed's roll rate and the cloud bars' drift were sized against
+the same rule in advance, with the arithmetic written down next to the constant.
+
+The canal found a fifth kind of failure and it is the one worth reading, because **the shipped gate
+returned PASS on it while rendering zero canal cells**. `west-flicker.cjs` pins the camera at the
+map's start; the channel is on a 160 m pitch and is a hundred metres from there, so the tool was
+measuring a frame with no water in it. Pinning the camera *on the water* instead — that probe is
+kept as `tools/canal-flicker.cjs` — the first cut scored **3.61% in the 3-20 Hz band against a 2%
+rule and 2.5 big steps a second against a limit of 1.0**.
+
+The mechanism is the interesting part, and it is the companion to the blossom's lesson rather than a
+repeat of it. The ripple is a *fractional row offset* that the caster floors to pick a source row,
+so what the eye sees is not the offset, it is the offset **crossing an integer** — and each crossing
+swaps the reflected cell between a lantern and the black beside it, which is a near-full-scale step.
+Cutting the amplitude six-fold and the mirror by a third barely moved the number, because once the
+amplitude is under one row the crossing rate is no longer set by how far the offset swings; it is set
+by how often the noise wanders back across one boundary, which is the noise's own frequency. At
+1.1 Hz its third harmonic is 3.3 and lands inside the band. **The rate was the lever**: 0.37 Hz puts
+the first three harmonics at 0.74, 1.11 and 1.48, and the measurement drops to 1.43% and 0.50/s with
+reduced motion silent at 0.00%. The mirror then goes back up and the water keeps its depth.
+
+Edo's gate found four more before that, and it is worth saying that **none of them was visible in a
+still and none of them showed up in any census** — every frame was correct at every instant and the whole
+defect was in the rate. Rain running down a lit paper screen re-dealt its hash eleven times a
+second, which is the middle of the danger band, over the largest lit area in the frame; a second
+rain drawn into the sky dome re-dealt every sky cell it touched about every other frame, which is
+not a moving streak but per-frame noise, and per-frame noise puts energy at *every* frequency; the
+ripple offset on a puddle stepped the mirrored row by up to four rows at 4.5 Hz in a downpour; and
+the gutter's water pattern ran at 2.6 Hz, whose second and third harmonics land at 5.2 and 7.8. The
+sky rain was deleted outright — `elements/weather.js` already owns the rain in every world that has
+any, and a second cruder one behind it was never worth a line — and the other three were slowed
+under the band, with the streak also inverted to be *darker* than the paper behind it, which is
+both the smaller step and what water on a lit screen actually looks like.
+
+The blossom drift is the one that had to be redesigned rather than slowed, and its note is the
+useful one. A petal crosses a *cell* in about a fifth of a second at conversational distance, so it
+switches that cell at roughly 5 Hz whatever it is drawn at — and dimming it (150 to 96) and
+thinning the pool (64 petals to 40 to 22 to 10) left the gate reporting the identical figure at the
+identical cell every single time, because the worst cell is one petal's trajectory and neither
+lever touches the rate. What fixed it was distance: nothing inside 11 m is drawn, faded in over the
+next five, because at 11 m a petal covers a cell for half a second and is out of the band. It is
+also the better picture — a petal a metre from the eye reads as a bug on the lens.
 
 `prefers-reduced-motion` is honoured throughout. With it on, the walk slows, the rain calms, the
 police lightbar holds steady instead of alternating, the aerial traffic parks, the windmill's vane
-stops and the tumbleweed slows to a third — but both worlds stay populated. The point is stillness,
-not deletion. Measured: with the flag on, the frontier's own elements produce **no** step over a
-third of full scale anywhere and an empty 3-20 Hz band, in every weather state.
+stops, the tumbleweed slows to a third, and Edo's lantern flames, noren hems, gutter and sky bands
+all freeze — but every world stays populated. The point is stillness, not deletion. The one thing
+that is *removed* rather than damped is the blossom, and the reason is that damping it does not
+make it a quieter version of itself: a drift of petals **is** the motion, and thirty petals frozen
+in mid-air are not a calmer drift, they are a scatter of dots hanging in the sky. Measured: with
+the flag on, every world's own elements produce **no** step over a third of full scale anywhere and
+an empty 3-20 Hz band, in every weather state.
 
 ## Running it
 
@@ -433,13 +531,14 @@ Everything here runs without a browser, which is how the thing gets verified at 
 
 | | |
 |---|---|
-| `tools/headless.cjs` | render any frame of any seed offline, as a text dump — `--west` / `--moon`, `--time=`, `--weather=`, `--yaw=` |
+| `tools/headless.cjs` | render any frame of any seed offline, as a text dump — `--west` / `--moon` / `--japan`, `--time=`, `--weather=`, `--yaw=` |
 | `tools/topng.py` | turn that dump into a PNG, with the bloom the canvas applies |
 | `tools/metrics.py` | the print census — exposure bands, colour split, what each layer costs |
 | `tools/peds.cjs` | the crowd alone, against an empty frame, at a size you can actually see |
 | `tools/flicker-rate.cjs` | the photosensitivity gate, for the city's signage — run it with **no arguments**, see above |
 | `tools/lightning-rate.cjs` | the same, for storms |
 | `tools/west-flicker.cjs` | the same, for every world that is not the city — pinned camera, per cell, against the city as its baseline |
+| `tools/canal-flicker.cjs` | the same, for Edo's canal — pins the camera **on the water**, which the gate above structurally cannot do |
 | `tools/domshim.cjs` | runs the built page against a fake DOM — boot, resize, input, worlds, tab loss |
 
 The renderer is deterministic: the same seed and frame give a byte-identical picture in a browser

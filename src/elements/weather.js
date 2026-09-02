@@ -339,7 +339,7 @@
     layer: 12,
     /* THE TWO WORLDS WITH AIR IN THEM. Vacuum has no weather; rain on the Moon was diagonal streaks across a black sky.
      * See src/world.js: `world` may be a string or a set, and absent means every world. */
-    world: ['cyber', 'west'],
+    world: ['cyber', 'west', 'japan'],
     init: function (city, rng) {
       bindWorld(city, rng);
       /* The drop table is filled from a fork, not from `rng`, so that RN_MAX cannot re-seed the
@@ -835,7 +835,7 @@
     layer: 8,
     /* THE TWO WORLDS WITH AIR IN THEM. Fog is suspended water. There is none.
      * See src/world.js: `world` may be a string or a set, and absent means every world. */
-    world: ['cyber', 'west'],
+    world: ['cyber', 'west', 'japan'],
     init: function (city, rng) {
       bindWorld(city, rng);
       fgSeed = smallSeed(rng);
@@ -1049,7 +1049,7 @@
     layer: 7,
     /* THE TWO WORLDS WITH AIR IN THEM. A cloud deck needs an atmosphere to hold it up.
      * See src/world.js: `world` may be a string or a set, and absent means every world. */
-    world: ['cyber', 'west'],
+    world: ['cyber', 'west', 'japan'],
     init: function (city, rng) {
       bindWorld(city, rng);
       clSeed = smallSeed(rng);
@@ -1205,7 +1205,7 @@
     layer: 40,
     /* THE TWO WORLDS WITH AIR IN THEM. A stroke needs a charged medium to travel through.
      * See src/world.js: `world` may be a string or a set, and absent means every world. */
-    world: ['cyber', 'west'],
+    world: ['cyber', 'west', 'japan'],
     init: function (city, rng) {
       bindWorld(city, rng);
       lgSeed = smallSeed(rng);

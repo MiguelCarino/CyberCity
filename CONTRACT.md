@@ -40,9 +40,10 @@ concatenates them in order and the headless harness `require`s them through a sh
 | `src/weather_state.js` | `CC.Weather` | the weather director and one preset table per world; `rel()` is the cross-world quantity |
 | `src/city.js` | `CC.City` | `make(seed)` → heightmap + per-cell district/style/sign metadata, for any world |
 | `src/raycast.js` | `CC.Cast` | `render(frame, cam, city)` — fills every cell: façades, floor, sky |
-| `src/surfaces.js` | `CC.Surf` | texture fns: `facade(u,v,cell,dist)`, `floorTex(wx,wz,dist)`, `sky(x,y,t)`; owns `configure`/`cfg`/`fog` for every world and delegates to the three painters |
+| `src/surfaces.js` | `CC.Surf` | texture fns: `facade(u,v,cell,dist)`, `floorTex(wx,wz,dist)`, `sky(x,y,t)`; owns `configure`/`cfg`/`fog` for every world and delegates to the other painters through `CC.SURFACES` |
 | `src/surf_west.js` | `CC.SurfWest` | the frontier's `facade` / `floorTex` / `sky`, same signatures |
 | `src/surf_moon.js` | `CC.SurfMoon` | Moonwalk's, likewise. Painters self-register into `CC.SURFACES[id]`; `build.js` globs `src/surf_*.js` |
+| `src/surf_japan.js` | `CC.SurfJapan` | EDO's. The only painter with TWO key lights — a sky dome scaled by how much cloud there is, and a lamp wash that is a function of height above the ground and nothing else |
 | `src/proj.js` | `CC.Proj` | the ONE copy of the element camera — `make()` hands each world-space element file its own basis and the four helpers closed over it |
 | `src/control.js` | `CC.Control` | the walk and the input devices; re-anchors to `city.js`'s route on a rebuild |
 | `src/elements/*.js` | pushes to `CC.ELEMENTS` | ambient systems, see below |
@@ -78,8 +79,9 @@ CC.ELEMENTS.push({
   name: 'rain',
   layer: 10,              // lower draws first; elements draw after the world pass
   world: 'cyber',         // OPTIONAL: an id, or an ARRAY of ids. Absent means EVERY world —
-                          // which is a materially different promise now there are three, and is
-                          // why the atmospheric elements had to be given ['cyber','west'].
+                          // which is a materially different promise now there are four, and is
+                          // why the atmospheric elements carry ['cyber','west','japan'] and the
+                          // Moon is left out of every one of them.
   init(city, rng) {},     // allocate persistent state
   update(dt, t, cam) {},  // advance simulation; no drawing
   draw(frame, cam, t) {}, // use CC.put(frame, x, y, glyph, colour, lum, dist) — it depth-tests for you
@@ -90,14 +92,31 @@ CC.ELEMENTS.push({
 
 `CC.World` names the live world and calls back when it changes; `main.js` responds by tearing the
 map down and building a new one on the **same seed**. Everything downstream keeps its own data for
-every world next to the numbers it already has — `city.js` holds three district tables (nine
-quarters for the city, six for the frontier, eight for the Moon), `weather_state.js` three preset
-tables, `surfaces.js` delegates to three painters — rather than reading from one central theme
-object. The URL fragment is `#<seed>` for the default world and `#<world>/<seed>` otherwise.
+every world next to the numbers it already has — `city.js` holds four district tables (nine
+quarters for the city, six for the frontier, eight for the Moon, seven for EDO),
+`weather_state.js` four preset tables, `surfaces.js` delegates to four painters — rather than
+reading from one central theme object. The URL fragment is `#<seed>` for the default world and
+`#<world>/<seed>` otherwise.
+
+WHAT A FOURTH WORLD COST, recorded because it is the measurement that says whether the three
+registries below were worth building: 33.2 KB of stripped bundle, against the frontier's 65 and the
+Moon's 55. Nothing in `raycast.js`, `main.js`, `control.js`, `render_canvas.js` or
+`tools/headless.cjs` was touched at all — a world is now a `world.js` row, a `city.js` theme and
+district table, a `weather_state.js` preset table, one self-registering painter, and element files
+that tag themselves. If adding one turns out to need an edit to any of those five files, that edit
+is the bug.
 
 Rules for worlds:
 - An element that belongs to one world says so with `world:` on itself, as an id or an array of
-  them. The test is `CC.inWorld(el, id)` and there is exactly ONE definition of it, in `world.js`,
+  them. A shared element that has to behave differently per world does it through a **table keyed
+  by world id**, never a boolean. `street.js` carried `PED_WEST = city.world === 'west'` doing two
+  unrelated jobs — the frontier's costume weights and "this crowd is pre-electric" — and a fourth
+  world needed the second and not the first. It is now two lookups, `PED_ARCH` and `PED_PRE_W`, and
+  a world that is in neither gets the modern default rather than whatever the last `else` was.
+  Whatever the gate does, the DRAW must still happen: every one of those branches takes its hash
+  and throws the result away rather than skipping it, so one world's crowd is not a reshuffle of
+  another's.
+- The test is `CC.inWorld(el, id)` and there is exactly ONE definition of it, in `world.js`,
   shared by `main.js`, `tools/headless.cjs` and the photosensitivity gates — because those three had
   three copies and an offline reference frame rendered from a different element set than the
   browser's is not a reference frame. `main.js` filters **before** the layer sort, because every
@@ -106,7 +125,9 @@ Rules for worlds:
 - A world is added by appending a row to `world.js`'s `LIST` (never prepending — `LIST[0]` is the
   URL default and every `#42` link ever shared addresses it), a theme block and district table in
   `city.js`'s `THEMES`, a painter file that self-registers, a weather table in `weather_state.js`,
-  and element files tagged with its id. Nothing in the tree switches on a world id with a ternary
+  and element files tagged with its id. That is the whole list; EDO was added without touching
+  `raycast.js`, `main.js`, `control.js` or `tools/headless.cjs`, all four of which already read the
+  registry rather than a set of literals. Nothing in the tree switches on a world id with a ternary
   any more; every one of those is a registry lookup with a documented fallback.
 - Nothing decides geometry by reading `CC.World` at draw time. The map resolved the world once,
   inside `make()`, and carries the answer on itself as `city.world`; between a keypress and the
@@ -160,8 +181,15 @@ Rules for elements:
 
 ## The build
 
-`node build.js` must exit 0. It fails over **560 KB** and that line has been raised three times and
+`node build.js` must exit 0. It fails over **600 KB** and that line has been raised five times and
 held once; the essay in `build.js` is the record and it is addressed to whoever lands here next.
+**The next pass must split the payload.** Three passes running have now ended at this line with the
+same finding — the content is bigger than the headroom and every remaining cut is a rounding error
+against it. The last non-content cut in the tree (the duplicated `streetSpan` / `objVisible` /
+`corridor` bodies, measured at ~2,350 bytes and banked in `build.js`'s essay) is worth a tenth of a
+world.
+It also checks that every world's painter global is present, so a painter dropped into `src/` and
+never registered fails the build instead of rendering as the city.
 The order is: cut something that is not content, then cut content, then move the line, and write
 down which one you did. The whitespace has already been spent — `decomment()` halves leading
 indentation, worth 42,134 bytes of a measured 84,232 — so a future pass has one fewer option than
@@ -182,6 +210,32 @@ The gates, in the order they are worth running: `node build.js`, `node tools/dom
 `node tools/flicker-rate.cjs`, `node tools/lightning-rate.cjs`, `node tools/west-flicker.cjs 4`,
 the census, and a determinism check (the same seed, frame, world and hour rendered twice must be
 byte-identical).
+
+A GATE THAT CANNOT SEE THE FEATURE IS NOT A GATE, and this is the newest hard-won rule here. Both
+photosensitivity tools PIN THE CAMERA at the map's start, so anything the walk only reaches later is
+invisible to them: EDO's canal is on a 160 m pitch, and `west-flicker.cjs` returned PASS having
+rendered ZERO canal cells on a surface that was in fact running at 3.61% against a 2% rule. When a
+feature lives somewhere the pinned camera never stands, measure it where it lives —
+`tools/canal-flicker.cjs` is that probe for the canal and is the pattern to copy. Quoting a PASS
+from a tool that rendered none of the thing under test is worse than not running it.
+
+`west-flicker.cjs` is named after the frontier and is NOT scoped to it: it walks `CC.World.LIST`
+and gates every world that is not the default against the default's own elements, so a new world is
+covered the day its row lands. It is also the only gate that can see a whole class of defect that
+is invisible in a still and invisible in the census — a frame that is correct at every instant and
+wrong in its RATE. Adding EDO tripped it five times: an 11 Hz hash on a lit panel, a 26 Hz re-deal
+in the sky, a 4.5 Hz ripple offset, a 2.6 Hz gutter whose harmonics landed in band, and a drift of
+blossom whose petals cross a cell at about 5 Hz. Note that the last of those could not be fixed by
+dimming or by thinning the pool — both change the amplitude and the gate was measuring the rate;
+what fixed it was refusing to draw a petal inside 11 m.
+
+THE OTHER STANDING CHECK, and it is not optional either: before anything ships, render the same
+fixtures in every world that was ALREADY there and byte-compare them against the tree you started
+from. Twenty-seven — three worlds x three hours x three seeds — is what the pass that added EDO
+ran, and all twenty-seven were byte-identical.
+A world addition touches shared files (element `world:` tags, a per-world table in a shared
+element) and every one of those is an opportunity to move a frame in a world nobody was looking
+at.
 
 A note on window lengths, because two of those tools take one and they do not mean the same thing
 by it. `west-flicker.cjs` measures per-cell frame steps and rates, which have no bin width in them

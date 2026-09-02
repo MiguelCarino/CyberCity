@@ -41,7 +41,16 @@
   var LIST = [
     { id: 'cyber', name: 'CYBERCITY', aliases: ['city', 'cybercity', 'c'] },
     { id: 'west',  name: 'FRONTIER',  aliases: ['western', 'frontier', 'w'] },
-    { id: 'moon',  name: 'MOONWALK',  aliases: ['moonwalk', 'lunar', 'apollo', 'm'] }
+    { id: 'moon',  name: 'MOONWALK',  aliases: ['moonwalk', 'lunar', 'apollo', 'm'] },
+    /* Appended, never inserted, for the reason two paragraphs up: LIST[0] is the URL default and
+     * this row's index is what the 4 key selects. The id is the plain one — `japan` is what a
+     * person types into a fragment from memory and what every `world: 'japan'` tag in src/elements
+     * greps for — while the NAME is the place rather than the country, because the other three
+     * name a place too and because a world called JAPAN would be promising a country's worth of
+     * settings when what is built is one wet evening in one castle town. EDO is four letters of
+     * the 3x5 font's alphabet and it is the period as well as the city, which is the whole
+     * distinction this world is drawing against the other three. */
+    { id: 'japan', name: 'EDO',       aliases: ['japan', 'edo', 'kyoto', 'nihon', 'j'] }
   ];
 
   var cur = 0;

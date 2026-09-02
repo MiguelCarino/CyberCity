@@ -99,9 +99,51 @@
     ['.', ',', "'"]    // 9 swell     — open ground that happens to be higher than the ground beside it
   ];
 
+  /* ---- EDO's six, and every one of them is a JOINT rather than a surface ------------------------
+   * The world-wide style numbering continues at 10: the frontier stops at 6, the Moon at 9, and a
+   * reader who sees 13 on a record can find row 13 in exactly one table. TH_JAPAN.styleBase is 10
+   * and makeRec takes the offset off again.
+   *
+   * WHAT MAKES THE READ, and it is not colour. A frontier wall is a MASS of boards with holes
+   * punched in it, so its dim glyph carries the whole facade and its lit glyph is a rarity. A
+   * machiya front is the opposite object: it is a TIMBER FRAME with the gaps filled in, and the
+   * thing the eye reads it by is the frame — the vertical slats of a koshi lattice, the grid of a
+   * shoji screen, the posts either side of a plaster panel. So five of these six lead on a dim
+   * glyph that is a LINE ('|', '+', '=') rather than a stroke, and the two that do not are the two
+   * things in this world that genuinely are mass: the storehouse and the castle wall.
+   *
+   * '|' IS THE MOST IMPORTANT GLYPH IN THIS TABLE and it is the one the frontier could not use. Its
+   * measured ink is 18.7% against '-' at 5.3 (surf_west.js's INK ramp has the census), so a wall of
+   * it is four times the ink a clapboard wall is — which would have been wrong out there and is
+   * right here, because a koshi lattice really is a solid rank of slats at 3 cm centres and a
+   * machiya front really is darker and denser than the plaster beside it.
+   *
+   * AND THE LIT GLYPH IS THE PAPER, not a window. On every other world 'lit' means a hole with a
+   * lamp behind it; here the screen itself is the emitter — a shoji is a sheet of paper with the
+   * room's light coming through the whole of it — which is why rows 10 and 11 light in '#' and '8',
+   * the two heaviest glyphs the print will take without the bloom welding cells together. */
+  var STYLE_CH_JP = [
+    ['8', '|', 'o'],   // 10 machiya   — koshi lattice over a dark timber frame, the street standard
+    ['#', '+', ':'],   // 11 shoji     — a whole storey of paper screens; the wall IS the lamp
+    ['O', "'", ':'],   // 12 kura      — lime plaster storehouse, blind on three sides
+    ['0', 'X', ':'],   // 13 namako    — tile set in a diamond lattice of raised plaster joints
+    ['8', '=', 'o'],   // 14 temple    — heavy horizontal timber under an eave that eats the wall
+    ['%', '&', ':']    // 15 ishigaki  — the battered rubble base of a castle, and nothing above it
+  ];
+  /* A KANBAN, not a noren and not a lantern. Edo shop signage is a large carved or painted wooden
+   * board hung flat on the frontage, which is the object city.js already knows how to hang — the
+   * frontier's `board` — and the two soft lit things this world is actually remembered for, the
+   * split noren curtain and the paper chochin, are OBJECTS rather than texture and belong to
+   * src/elements/jp_town.js where they can hang in front of a wall instead of being painted on it.
+   *
+   * The glyphs are the ones that read as a dense block of brushed character at two cells tall.
+   * There is no '/' or 'Z' in here: a kanji is built out of horizontals and verticals and reads
+   * WRONG the instant a diagonal appears in it. */
+  var SIGN_CH_JP = ['#', 'H', 'X', 'M', 'W', 'K', '8'];
+
   // Districts are the colour masses. Weights keep the two pillars dominant and violet rare,
   // which is the reference ratio (amber ~26% of lit pixels, azure ~27%, violet a garnish).
-  var DIST = null, DIST_CYBER = null, DIST_WEST = null, DIST_MOON = null;
+  var DIST = null, DIST_CYBER = null, DIST_WEST = null, DIST_MOON = null, DIST_JAPAN = null;
   function buildDistricts() {
     DIST_CYBER = [
       // hMin is the floor of the canyon wall, not the average: with the squared height curve most
@@ -392,11 +434,118 @@
         vacant: 0.93, boulder: 0.14, crater: 0.05 }
     ];
 
-    norm(DIST_CYBER); norm(DIST_WEST); norm(DIST_MOON);
+    /* ---- EDO: a castle town on a wet evening, and the quarters are TRADES ---------------------
+     * Read against the other three tables, the axis this one runs is neither colour (the city) nor
+     * material (the frontier) nor landform (the Moon) — it is WHO LIVES ON THE BLOCK, because that
+     * is what actually decided how a machi was built. A merchant street, a warehouse district, a
+     * temple precinct and a castle enclosure are four different building types, four different
+     * heights and four different amounts of open ground, and every other field here falls out of
+     * which of them a lot belongs to.
+     *
+     * NOTHING LEADS ON A SATURATED HUE, and that is the discipline this table has to keep. The
+     * cliche of this setting is vermilion — the torii, the temple column, the lacquer — and a
+     * quarter with `hue: P.ember` in it would put sixteen-column red walls down a street where the
+     * real thing is unpainted cedar going grey, lime plaster and grey clay tile. So ember appears
+     * exactly once, on `temple`, at a mixP of 0.42 — i.e. under half of even that quarter's lots —
+     * and it is otherwise an ACCENT, which surfaces reach through the window-accent roll and
+     * signHue and nowhere else. Vermilion is a column and a gate, and columns and gates are
+     * objects, so they belong to src/elements/jp_town.js.
+     *
+     * THE PILLAR ARITHMETIC, on the same form as the city's. Ground that leads on timber or sand —
+     * the two swatches that ARE weathered cedar, in shade and in the wet light respectively —
+     * is machiya 0.26 + nagaya 0.15 + market 0.11 = 0.52, and `mix` threads one or the other
+     * through kura, temple, garden and castle at (1 - mixP) for another 0.09, so 61% of the town
+     * is wood. white takes 0.15 (the plaster), stone 0.13 (the castle base and the walls), moss
+     * 0.10 (the garden). That is a brown-grey-green town with red on the objects in it, which is
+     * what the reference prints are, and it is what stops this world reading as the frontier: the
+     * frontier is timber under a DRY sky at 0.30 haze minimum, and this is the same timber wet.
+     *
+     * `lit` IS HIGHER THAN ANY OTHER WORLD'S AND IT MEANS SOMETHING DIFFERENT HERE. On the city it
+     * is the share of punched windows with a lamp behind them; on the frontier it is a third of
+     * that, because a kerosene town can only afford so many. Here it is the share of BAYS whose
+     * paper screen is lit — and a bay is 2.9 m of frontage lit over its whole area rather than a
+     * 1 m hole in a wall, so the same number buys many times the lit surface. machiya at 0.46 is
+     * roughly one shopfront in two, which is what a lit machi street after dark actually is, and it
+     * is where the whole world's night look lives: measured before this table was raised, `warm`
+     * was 4.6% of a night frame's lit energy against the frontier's 17.5% — this world was less
+     * lamplit than the desert, which is the one thing it must never be.
+     *
+     * hMin/hMax ARE THE OTHER HALF OF THE SETTING. Nothing here except the castle keep and the
+     * pagoda clears 9 m, because a machiya is one and a half storeys with a deep roof on it — and
+     * the roof is most of the building, which is why the eave setback below (see TH_JAPAN's
+     * podMin/podVar) takes a third of every lot's height back off its outer ring. The two tall
+     * rows are deliberately rare and deliberately enormous against everything around them: a keep
+     * at 13-25 m over a street of 6 m frontages is a five-storey building in a two-storey town,
+     * seen from the end of every street in it, and it is the one vertical this world has. */
+    DIST_JAPAN = [
+      /* The merchant street, and the row this world is mostly made of. `styles` is machiya twice
+       * and shoji once so two lots in three are lattice and one in three is paper — which is what
+       * carries the lit frontage after dark without every building being a lantern. */
+      { name: 'machiya',  hue: P.timber, mix: P.sand,   mixP: 0.72, accent: P.warm,  styles: [10, 10, 11],
+        hMin: 5.4, hMax: 8.6, lit: 0.46, signP: 0.52, landmark: 0.004, w: 0.26,
+        vacant: 0.08 },
+      /* The back-lane tenements — nagaya, the row house. Lower, poorer, and the darkest frontage
+       * in the settled half of the table; its openings are shutters rather than lattice, which is
+       * why it leads on the plain machiya style with the plaster row threaded through it. */
+      { name: 'nagaya',   hue: P.timber, mix: P.stone,  mixP: 0.66, accent: P.sand,  styles: [10, 12, 10],
+        hMin: 4.2, hMax: 6.4, lit: 0.24, signP: 0.14, landmark: 0.002, w: 0.15,
+        vacant: 0.14 },
+      /* Kura — the fireproof storehouse, thick lime plaster over an earth core, and the only white
+       * mass in town. It is blind by construction (signP 0.06, lit 0.08): a warehouse has two
+       * small barred openings and a door, and at night there is nobody in it. */
+      { name: 'kura',     hue: P.white,  mix: P.timber, mixP: 0.70, accent: P.stone, styles: [12, 13, 12],
+        hMin: 6.2, hMax: 9.4, lit: 0.08, signP: 0.06, landmark: 0.006, w: 0.15,
+        vacant: 0.16 },
+      /* The temple precinct. landmark 0.026 is the highest rate in this world and it is what puts
+       * a pagoda up: TH_JAPAN's lmMin/lmVar hand a landmark 13-25 m, and against a 6 m street that
+       * is the silhouette the whole quarter exists for. ember leads under half its lots and gold
+       * is the metal on the finial and the bracket ends. */
+      { name: 'temple',   hue: P.ember,  mix: P.timber, mixP: 0.42, accent: P.gold,  styles: [14, 14, 12],
+        hMin: 6.6, hMax: 11.0, lit: 0.26, signP: 0.10, landmark: 0.026, w: 0.12,
+        vacant: 0.26 },
+      /* Garden — 58% open ground, and it does for this world exactly what `range` does for the
+       * frontier and `mare` for the Moon: it is the row that stops the town tiling frontage to the
+       * horizon. What is left standing on it is a wall, a gate and a teahouse, all low. moss leads
+       * because a garden here is moss, clipped pine and wet stone rather than lawn. */
+      { name: 'garden',   hue: P.moss,   mix: P.stone,  mixP: 0.58, accent: P.jade,  styles: [12, 15, 14],
+        hMin: 2.6, hMax: 5.0, lit: 0.06, signP: 0.02, landmark: 0.004, w: 0.10,
+        vacant: 0.58 },
+      /* The castle enclosure: a battered stone base with very little on top of it, and the tallest
+       * row in the table by a factor of three. hMin 7 is the ishigaki itself — a wall you cannot
+       * see over is the point of it — and landmark 0.030 is the keep. */
+      { name: 'castle',   hue: P.stone,  mix: P.white,  mixP: 0.76, accent: P.gold,  styles: [15, 15, 13],
+        hMin: 7.0, hMax: 12.0, lit: 0.07, signP: 0.02, landmark: 0.030, w: 0.11,
+        vacant: 0.22 },
+      /* The riverside market: awnings, stalls and hanging cloth, the lowest and busiest frontage
+       * in town. signP 0.62 is the highest anywhere in this project — a market IS its signage —
+       * and hMax 5.6 keeps the sky slot open over the one place the walk gets crowded. */
+      { name: 'market',   hue: P.sand,   mix: P.timber, mixP: 0.54, accent: P.jade,  styles: [10, 11, 10],
+        hMin: 3.4, hMax: 5.6, lit: 0.42, signP: 0.62, landmark: 0.001, w: 0.11,
+        vacant: 0.18 },
+      /* ---- THE CANAL BANK, AND IT HAS WEIGHT ZERO -----------------------------------------------
+       * This row is not a quarter and districtType can never roll it. `norm()` accumulates w into
+       * `acc` and `total`, districtType draws `r = hash * total` and returns the first row with
+       * `r < acc[i]` — so with w 0 this row's acc equals its predecessor's, r is strictly less than
+       * total, and the loop always returns at or before `market`. That is arithmetic, not a
+       * convention about being last: the row is unreachable by the Voronoi and reachable only by
+       * computeCell's river branch, which assigns it by index.
+       *
+       * It exists because makeRec is called for the COPING (a coping has height, so it is a lot
+       * like any other) and needs a district record to read hue/styles/lit/signP off. style 15 is
+       * ishigaki, the same battered rubble the castle wall is built from, which is exactly what a
+       * canal embankment is. lit and signP are 0: nobody lights a retaining wall and nobody nails a
+       * shop board to one. */
+      { name: 'river',    hue: P.stone,  mix: P.moss,   mixP: 0.72, accent: P.moss,  styles: [15],
+        hMin: 0.45, hMax: 0.45, lit: 0, signP: 0, landmark: 0, w: 0,
+        vacant: 0 }
+    ];
+
+    norm(DIST_CYBER); norm(DIST_WEST); norm(DIST_MOON); norm(DIST_JAPAN);
     /* Hung on the themes, so make() reads TH.dist and nothing selects a table by comparing a
      * string. The three-line `west ? A : B` chain this replaced is the exact shape that made a
      * third world silently inherit the city's districts. */
     TH_CYBER.dist = DIST_CYBER; TH_WEST.dist = DIST_WEST; TH_MOON.dist = DIST_MOON;
+    TH_JAPAN.dist = DIST_JAPAN;
     DIST = DIST_CYBER;
   }
   function norm(T) {
@@ -568,12 +717,79 @@
     setbackMode: 'none', signShape: 'none', signPalette: 'none'
   };
 
+  /* ---- EDO ---------------------------------------------------------------------------------
+   * The ground plan is the narrowest in the project and the LOTS are the strangest, and both of
+   * those are the setting rather than a taste.
+   *
+   *   AVE 38 / CROSS 32 — between the city's 30 and the frontier's 52, and closer to the city,
+   *     because a castle town is DENSE. The block is short, the crossings come often, and that is
+   *     what makes the alley rate below matter.
+   *   aveWide/Mid/Narrow 5/4/3 — half-widths, so the streets run 6 to 10 m against the frontier's
+   *     12-18 and the city's 6-12. A machi street is a street you can talk across, and at 6 m the
+   *     two rows of eaves nearly meet overhead, which is the whole read.
+   *   lotW 4 + 3, lotD 9 + 8 — THE EEL'S BED, and it is the one number in this file that is a
+   *     historical fact rather than a composition. Edo frontage was taxed by its width, so a
+   *     machiya is 4-7 m across the street and 9-17 m deep — an aspect ratio of about 1:2.5,
+   *     where every other world in this tree is roughly square (city 6-13 x 6-14, frontier 5-10 x
+   *     6-12). What it buys the frame is that a block's STREET face is cut into many narrow
+   *     buildings while its flank is a few long ones, so turning a corner changes the rhythm of
+   *     the wall completely — which is what walking round a machi block actually does.
+   *   alleyP 0.58 / alleyDeepP 0.46 — the roji, and the highest alley rate in any world. A machi
+   *     block is threaded with them and they are how the light gets in; the frontier's 0.52 was
+   *     already high and this is a place that is mostly alley.
+   *   setbackMode 'podium' with podMin 3.2 / podVar 2.2 — THE EAVE, drawn with the city's own
+   *     mechanism and nothing new. The podium rule drops a lot's outer ring to `pod` when pod is
+   *     lower than the lot; here the lot is 5-9 m and the ring lands at 3.2-5.4, so every building
+   *     in town is a low skirt of roof round a taller ridge. That is a hipped tile roof seen from
+   *     a metre seven, and it is the single most recognisable silhouette this world has. setbackP
+   *     is 0.62 rather than the city's 0.42 because a machiya without its eave is a shed.
+   *   lmMin 13 / lmVar 12 — a pagoda or a keep, 13-25 m. crownTall 20 so only the top half of
+   *     that band wears a crown. Well under raycast.js's HMAX of 108.
+   *   DG 30 — quarters about 30 m across, tighter than the city's 26-cell Voronoi in world terms
+   *     because the block pitch is longer; a trade quarter in a castle town is a few blocks, not
+   *     a district.
+   *   sky 1 — there is a sky, and it rains out of it.
+   */
+  var TH_JAPAN = {
+    id: 'japan', AVE: 38, CROSS: 32,
+    aveJit: 17, aveOff: -8, crossJit: 14, crossOff: -7,
+    aveWide: 5, aveMid: 4, aveNarrow: 3, aveMidP: 0.38, aveEvery: 4,
+    crossWide: 4, crossMid: 3, crossNarrow: 2, crossMidP: 0.30, crossEvery: 5,
+    lotW: 4, lotWVar: 3, lotD: 9, lotDVar: 8,
+    alleyMin: 8, alleyP: 0.58, alleyDeepMin: 9, alleyDeepP: 0.46,
+    plazaP: 0.11, plazaBigP: 0.22, plazaR: 4, plazaRVar: 7,
+    vacant: 0.10, setbackP: 0.62, podMin: 3.2, podVar: 2.2, falseFront: 0,
+    lmMin: 13, lmVar: 12, crownTall: 20, DG: 30, sky: 1,
+    /* ---- THE CANAL. See rivZ/rivD in make() for the meander and computeCell for the branch. -----
+     * A horikawa, not the Sumida: 9.2 m of water on a 160 m pitch in z, met once every 100 s of
+     * walking, which makes it the largest-scale event in the walk (a corner is 16-60 s).
+     *
+     * `rivCopeH` 0.45 IS THE NUMBER THE WHOLE FEATURE TURNS ON and it is an occlusion budget rather
+     * than a wall height. A wall of height hh at distance W hides all ground from W out to
+     * W*eyeY/(eyeY-hh); at 0.45 that is 8 -> 11.0 m and 12 -> 16.5 m, i.e. three metres of water.
+     * At the 1.2 m a real embankment parapet actually is, it would be 12 -> 43.3 m — the entire
+     * canal AND the far bank hidden behind its own kerb. The eye supplies the drop from a stone
+     * edge with dark broken water beyond it; it does not need to be shown the drop.
+     *
+     * The meander is deliberately SMALL (±5.0 m). The block interior between two cross streets is
+     * as narrow as 9 m once cz()'s jitter is spent, so the ±18 m a real river wants would put the
+     * channel down the middle of a cross street and the walk's jog segment would run up the water.
+     * Wavenumbers 0.01932 and 0.04310 rad/m are wavelengths of 325.2 and 145.8 m, which are 8.558
+     * and 3.836 of AVE 38 — neither near a small rational, on exactly the argument swellLat 54
+     * makes against AVE 96. The first cut used 0.04724, a clean 7/2 of AVE, and repeated its
+     * features on every block. */
+    rivHalf: 4.6, rivCope: 1.0, rivCopeH: 0.45, rivQuay: 2.2, rivEvery: 5,
+    rivAmp: 3.6, rivAmp2: 1.4,
+    styleCh: STYLE_CH_JP, signCh: SIGN_CH_JP, styleBase: 10,
+    setbackMode: 'podium', signShape: 'board', signPalette: 'lacquer'
+  };
+
   /* ---- the theme registry ---------------------------------------------------------------------
    * A MAP, not a ternary. The line this replaced was `id === 'west' ? TH_WEST : TH_CYBER`, and its
    * failure mode with a third world was not an error: an unknown id fell through to the city and
    * built a cyberpunk heightmap under somebody else's name. A missing key still falls back — a
    * world with no theme has to build SOMETHING — but adding a world is now one row. */
-  var THEMES = { cyber: TH_CYBER, west: TH_WEST, moon: TH_MOON };
+  var THEMES = { cyber: TH_CYBER, west: TH_WEST, moon: TH_MOON, japan: TH_JAPAN };
   function themeOf(id) { return THEMES[id] || TH_CYBER; }
   function worldId() {
     return (C && C.World && C.World.id) ? C.World.id : 'cyber';
@@ -625,6 +841,11 @@
     var TH = themeOf(worldId());
     var AVE = TH.AVE, CROSS = TH.CROSS;
     var DIST = TH.dist;
+    /* Resolved by NAME once per map rather than hardcoded as an index, because DIST_JAPAN's row
+     * order is a thing a later pass will reorder without thinking about this. -1 in every world
+     * that has no canal, and the branch is gated on the theme constant anyway. */
+    var RIVI = -1;
+    for (var ri = 0; ri < DIST.length; ri++) if (DIST[ri].name === 'river') RIVI = ri;
     var STY = TH.styles;
     var SIGNS = TH.signs;
 
@@ -645,6 +866,29 @@
       return (m % TH.crossEvery === 0) ? TH.crossWide
            : (hash(0, m, S + 202) < TH.crossMidP ? TH.crossMid : TH.crossNarrow);
     }
+
+    /* ---- THE CANAL ------------------------------------------------------------------------------
+     * A band in z, periodic on rivEvery cross streets, meandering in x. Two sine terms so it is not
+     * a regular wave; one seeded phase so a canal is a fact about the seed rather than about the
+     * origin. `rivQ` goes through this file's `hash` wrapper and not raw hash2, for the reason the
+     * salt-spreading essay at the top of the file gives; salt 53 is unused by anything else here.
+     *
+     * rivD measures the channel by |dz| rather than by true perpendicular distance. The combined
+     * slope of the two terms is 3.6*0.01932 + 1.4*0.04310 = 0.130, i.e. 7.4 degrees, so the two
+     * differ by cos(7.4 deg) = 0.9917 — under one per cent, on a function called twenty thousand
+     * times a frame. A sqrt here would buy nothing measurable and cost the whole frame budget.
+     *
+     * The `round((pz - b)/period)` term is what makes it periodic without a loop: it snaps to the
+     * nearest channel rather than searching, so the cost is constant however far from the origin
+     * the walk has got. */
+    var RIV_P = TH.rivEvery !== undefined ? TH.rivEvery * CROSS : 0;
+    var rivQ = TH.rivEvery !== undefined ? hash(0, 0, S + 53) * 6.2832 : 0;
+    function rivZ(px, pz) {
+      var b = CROSS * 0.5 + TH.rivAmp * Math.sin(px * 0.01932 + rivQ)
+                          + TH.rivAmp2 * Math.sin(px * 0.04310 - rivQ * 2.3);
+      return b + Math.round((pz - b) / RIV_P) * RIV_P;
+    }
+    function rivD(px, pz) { var d = pz - rivZ(px, pz); return d < 0 ? -d : d; }
 
     // Scratch records: computeCell is only ever called from buildChunk, never re-entrantly.
     var SX = { street: 0, k: 0, b: 0, x0: 0, x1: 0 };
@@ -762,6 +1006,33 @@
 
     function computeCell(gx, gz) {
       colX(gx, SX); rowZ(gz, SZ);
+      /* ---- THE CANAL COMES FIRST, AND THE TWO GUARDS ARE THE WHOLE DESIGN ------------------------
+       * `!SZ.street` — THE CROSS STREET WINS. A cross street runs parallel to the channel and the
+       * two overlap on a good fraction of crossings; letting the water flood it would put the
+       * walk's own jog segment in the canal. Clipped by the road instead, it reads as a kashi-dori,
+       * a canal-side street, which is the correct object and costs one comparison.
+       * `!SX.street` on the COPING only — the avenue is cut by the water (that is where the bridge
+       * goes) but must never be blocked by a wall, or the route walks into one.
+       *
+       * NOTHING IS CARVED. Height stays 0 on the water, because a negative height renders
+       * identically to zero in this engine — raycast.js's march is `if (h <= 0) continue` and the
+       * floor is painted by inverse projection against the y=0 plane with no reference to the
+       * heightmap at all. A channel at -1.4 m and one at -14 m produce the same frame. So the water
+       * is a PAINTED PLANE and the read comes from the coping's edge line, from the reflect pass,
+       * and from the far bank standing over it.
+       *
+       * Gated on the theme constant exactly as the Moon's swell is, so the other three worlds take
+       * one undefined comparison per cell and stay byte-identical. */
+      if (TH.rivHalf !== undefined && RIVI >= 0 && !SZ.street) {
+        var rr = rivD(gx + 0.5, gz + 0.5);
+        if (rr < TH.rivHalf) { cH = 0; cD = RIVI; return; }
+        if (rr < TH.rivHalf + TH.rivCope && !SX.street) {
+          /* The lot anchor is snapped to a 4 m lattice so makeRec's per-lot hashes give the coping
+           * a stone pattern that changes every four metres instead of every cell. `& 3` floors
+           * correctly for negative gx, which `%` would not. */
+          cH = TH.rivCopeH; cD = RIVI; cLX = gx - (gx & 3); cLZ = gz - (gz & 3); return;
+        }
+      }
       if (SX.street || SZ.street) { cH = 0; cD = districtAt(gx, gz); return; }
 
       var x0 = SX.x0, x1 = SX.x1, z0 = SZ.z0, z1 = SZ.z1, bK = SX.b, bM = SZ.b;
@@ -888,6 +1159,29 @@
        * the palette and the only cool thing in the frame is shadow. Put one azure sign on a
        * timber front and the whole world stops being a place and starts being a filter. */
       if (TH.signPalette === 'none') return P.white;      // no signs are rolled at all; see DIST_MOON
+      /* ---- EDO: LACQUER AND INK, and it is a narrower palette than the frontier's ---------------
+       * A kanban is a plank of cedar with characters cut into it and filled — with black ink,
+       * with gold leaf if the shop is doing well, with vermilion if it is a temple's. There are
+       * four colours on a street of them and none of them is blue, for exactly the reason the
+       * frontier note above gives: azure and violet read as EMITTED light and everything in this
+       * world is lit by an oil lamp or by a wet sky.
+       *
+       * WARM LEADS AT 0.30 and that is deliberate: `warm` is the lamp behind the paper, and a
+       * board hung under the eave of a lit shopfront takes its colour from that lamp rather than
+       * from its own paint. ember is the lacquered board (0.22), white the fresh plaster-ground
+       * one (0.18), gold the gilded one (0.14) — gold's night ceiling is 157, under amber's 179,
+       * so a gilded board is the brightest sign in town and still loses to the window beside it,
+       * which is the same arithmetic the frontier's note relies on. timber at 0.10 is the board
+       * nobody has repainted, and it is the one that reads as WOOD rather than as writing.
+       * jade closes it at 0.06 — the copper on a temple board, gone green. */
+      if (TH.signPalette === 'lacquer') {
+        if (r < 0.30) return P.warm;
+        if (r < 0.52) return P.ember;
+        if (r < 0.70) return P.white;
+        if (r < 0.84) return P.gold;
+        if (r < 0.94) return P.timber;
+        return P.jade;
+      }
       if (TH.signPalette === 'painted') {
         /* gold and moss are the two additions, and they are period rather than decorative: gilt
          * lettering on a bank or a saloon board, and the dark green ground every second painted
@@ -1357,6 +1651,10 @@
       isStreet: function (gx, gz) { return height(gx, gz) <= 0; },
       // Exposed for surfaces/elements that want to reason about the corridor itself.
       aveX: ax, aveW: aw, crossZ: cz, crossW: cw,
+      /* The canal, for the texture layer and for the bridges. `undefined` in a world with no
+       * channel, which is what raycast.js's `city.rivD ? ... : null` reads. */
+      rivD: TH.rivHalf !== undefined ? rivD : undefined,
+      rivHalf: TH.rivHalf, rivCope: TH.rivCope, rivQuay: TH.rivQuay,
       AVE: AVE, CROSS: CROSS, SPEED: SPEED,
       /* WHICH WORLD THIS MAP IS, carried on the map rather than read off CC.World. An element that
        * asks the registry is asking what the viewer last pressed; an element that asks the city is

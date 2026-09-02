@@ -4,7 +4,32 @@ import sys, json
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 CW, CH = 9, 16
-FONT = ImageFont.truetype("/usr/share/fonts/liberation-mono-fonts/LiberationMono-Bold.ttf", 15)
+# Liberation Mono Bold at 15 px in a 9x16 cell is the reference print, and it is what
+# render_canvas.js's atlas bakes and what surf_west.js's INK ramp was measured against — so it is
+# tried FIRST and every fallback below is a degradation that changes the ink census. The list
+# exists because this file is the standing verification procedure ("every change gets looked at
+# this way before it ships") and it was unrunnable on macOS, where that path does not exist: a
+# gate nobody can run is not a gate. Order is exact match, then the same metrics under another
+# name, then anything monospace, then PIL's bitmap default.
+_FONT_PATHS = [
+    "/usr/share/fonts/liberation-mono-fonts/LiberationMono-Bold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationMono-Bold.ttf",
+    "/Library/Fonts/LiberationMono-Bold.ttf",
+    "/System/Library/Fonts/SFNSMono.ttf",
+    "/System/Library/Fonts/Menlo.ttc",
+    "/System/Library/Fonts/Supplemental/Courier New Bold.ttf",
+]
+FONT = None
+for _p in _FONT_PATHS:
+    try:
+        FONT = ImageFont.truetype(_p, 15)
+        break
+    except OSError:
+        continue
+if FONT is None:
+    sys.stderr.write("topng: no mono TTF found, falling back to the bitmap default; "
+                     "glyph ink will not match the print\n")
+    FONT = ImageFont.load_default()
 
 def main(src, dst):
     lines = open(src).read().split('\n')

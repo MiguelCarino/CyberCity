@@ -861,6 +861,27 @@ testCase('worlds', function (ok) {
      m.CC && m.CC.Weather.PRESETS.length);
   ok(m.errors.length === 0, 'Moonwalk threw nothing');
 
+  /* THE FOURTH WORLD, checked the same way and for the same reason. The Moon's test above proves a
+   * world can boot with its own weather table; this one proves the case that table cannot catch —
+   * a world with SIX presets like the city's, where a registry miss would fall through to the city
+   * and the count would still be six. So the check is on the preset NAMES: `tsuyu` exists in
+   * exactly one table in this tree, and if EDO is running the city's schedule it will not be there.
+   *
+   * The alias is exercised rather than the id, because src/world.js's aliases are a table a reader
+   * edits by hand and nothing else in the suite reads one. */
+  const j = makeEnv({ hash: '#edo/11' }).run();
+  j.tick(90);
+  ok(!!j.CC && j.CC.World.id === 'japan', '#edo/11 boots EDO through its alias',
+     j.CC && j.CC.World.id);
+  ok(!!j.CC && j.CC.Main.seed === 11, 'and seed 11', j.CC && j.CC.Main.seed);
+  ok(j.get('drawImage') > 0, 'EDO drew', j.get('drawImage'));
+  ok(!!j.CC && j.CC.Weather.PRESETS.some(function (p) { return p.name === 'tsuyu'; }),
+     'EDO runs its own weather table, not the city\'s',
+     j.CC && j.CC.Weather.PRESETS.map(function (p) { return p.name; }).join(','));
+  ok(!!j.CC && !!j.CC.SURFACES && !!j.CC.SURFACES.japan,
+     'and its own painter is registered', j.CC && Object.keys(j.CC.SURFACES || {}).join(','));
+  ok(j.errors.length === 0, 'EDO threw nothing');
+
   /* THE CLOCK. T steps the time of day and Y stops it; neither may seize the camera. */
   const d = makeEnv({}).run();
   d.tick(60);

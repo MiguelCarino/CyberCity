@@ -100,6 +100,55 @@
   ];
   var NEXT_MOON = [[1]];
 
+  /* ---- EDO's six, and the axis is WET rather than windy -------------------------------------------
+   * Same eight physical directions again, and the table that comes out of them is almost the exact
+   * inverse of the frontier's. Out there it is dry for weeks and the middle of the table is made of
+   * dust; here it is a maritime climate on the edge of a monsoon and the middle of the table is
+   * made of RAIN, in four grades of it. There is no row in this table with `wet` under 0.20 and no
+   * row with `rain` at 0.00 except the two that are explicitly the dry interval — which is the
+   * point of the world: the reference prints of this place are prints of rain, and the ground in
+   * every one of them is holding water.
+   *
+   * `haze` never goes below 0.34, on the same argument as the frontier's 0.30 floor and for a
+   * completely different reason. There it is dust, and the thing it does is tell you a mesa is
+   * eight miles off. Here it is HUMIDITY, and the thing it does is put the wooded hills at the end
+   * of the street progressively out of focus — the stacked, flattened, receding ridgelines that
+   * are the one compositional device this setting is most known for. At 0.10 they would all sit in
+   * the same plane and read as a cut-out.
+   *
+   * `steam` is high everywhere (0.44-0.72) and it is the only parameter here that is doing a job
+   * the city invented it for. In the city it is a vent in the road; here it is what elements read
+   * to put mist coming off wet tile and off the river after rain, and a bathhouse is a real
+   * building on this street.
+   *
+   * rel() IS STILL THE CITY'S 'rain' ROW, permanently, exactly as PRESETS_WEST's note says. So
+   * `shower` at rain 0.78 really is 1.2x the rain the whole build was tuned under, and `tsuyu` —
+   * the plum-rain season, a fortnight of grey that never quite stops — is 0.52 of it. Those are
+   * absolute numbers in the same units, not a rebasing. */
+  /*                       rain  wind   fog   wet  storm  haze cloud steam */
+  var PRESETS_JAPAN = [
+    { name: 'clear',    p: [0.00, 0.18, 0.14, 0.22, 0.00, 0.40, 0.16, 0.44] },
+    { name: 'haze',     p: [0.00, 0.14, 0.40, 0.20, 0.00, 0.82, 0.34, 0.56] },
+    { name: 'tsuyu',    p: [0.34, 0.26, 0.36, 0.72, 0.02, 0.52, 0.72, 0.62] },
+    { name: 'shower',   p: [0.78, 0.44, 0.32, 0.96, 0.10, 0.44, 0.86, 0.58] },
+    { name: 'typhoon',  p: [1.00, 1.00, 0.42, 1.00, 0.66, 0.50, 1.00, 0.48] },
+    { name: 'kiri',     p: [0.08, 0.10, 1.00, 0.48, 0.00, 0.96, 0.76, 0.72] }
+  ];
+
+  /* The sequence is a valley climate: it clears, it hazes over, it rains for a long time, and the
+   * mist comes up off the water afterwards rather than before. `kiri` (the river fog) is reachable
+   * from every wet row and from nothing dry, which is what makes it read as the AFTERMATH of rain
+   * instead of as a weather state in its own right — and clear -> typhoon is zero, because a
+   * typhoon arrives over three hours of thickening cloud and you always see it coming. */
+  var NEXT_JAPAN = [
+    /* clear   -> */ [0, 6, 3, 1, 0, 0],
+    /* haze    -> */ [3, 0, 5, 2, 1, 2],
+    /* tsuyu   -> */ [2, 3, 0, 5, 2, 4],
+    /* shower  -> */ [1, 2, 5, 0, 2, 5],
+    /* typhoon -> */ [0, 1, 4, 5, 0, 3],
+    /* kiri    -> */ [4, 5, 3, 1, 0, 0]
+  ];
+
   /* ---- the table registry ------------------------------------------------------------------------
    * Keyed by world id. The two-way string compare this replaced meant a third world silently ran
    * the CITY's rain schedule — which on the Moon would have been a rainstorm in vacuum.
@@ -114,7 +163,8 @@
   function tables() {
     if (!TABLES) TABLES = { cyber: [PRESETS_CYBER, NEXT_CYBER],
                             west:  [PRESETS_WEST,  NEXT_WEST],
-                            moon:  [PRESETS_MOON,  NEXT_MOON] };
+                            moon:  [PRESETS_MOON,  NEXT_MOON],
+                            japan: [PRESETS_JAPAN, NEXT_JAPAN] };
     return TABLES;
   }
 

@@ -33,9 +33,9 @@
 <div id="hint">click for fullscreen</div>
 <script>
 (function () {
+'use strict';
 /* src/core.js */
 var CC = (function () {
- 'use strict';
 
  var PALETTE = [
   [216, 232, 74],
@@ -313,12 +313,13 @@ var CC = (function () {
 
 /* src/world.js */
 (function (CC) {
- 'use strict';
 
  var LIST = [
   { id: 'cyber', name: 'CYBERCITY', aliases: ['city', 'cybercity', 'c'] },
   { id: 'west',  name: 'FRONTIER',  aliases: ['western', 'frontier', 'w'] },
-  { id: 'moon',  name: 'MOONWALK',  aliases: ['moonwalk', 'lunar', 'apollo', 'm'] }
+  { id: 'moon',  name: 'MOONWALK',  aliases: ['moonwalk', 'lunar', 'apollo', 'm'] },
+
+  { id: 'japan', name: 'EDO',       aliases: ['japan', 'edo', 'kyoto', 'nihon', 'j'] }
  ];
 
  var cur = 0;
@@ -402,7 +403,6 @@ var CC = (function () {
 
 /* src/proj.js */
 (function (CC) {
- 'use strict';
 
  var put = CC.put, clamp = CC.clamp;
 
@@ -484,7 +484,6 @@ var CC = (function () {
 
 /* src/daylight.js */
 (function (CC) {
- 'use strict';
 
  var clamp = CC.clamp, smooth = CC.smooth;
 
@@ -635,7 +634,6 @@ var CC = (function () {
 
 /* src/weather_state.js */
 (function (CC) {
- 'use strict';
 
  var clamp = CC.clamp, smooth = CC.smooth, hash1 = CC.hash1;
 
@@ -674,11 +672,30 @@ var CC = (function () {
  ];
  var NEXT_MOON = [[1]];
 
+ var PRESETS_JAPAN = [
+  { name: 'clear',    p: [0.00, 0.18, 0.14, 0.22, 0.00, 0.40, 0.16, 0.44] },
+  { name: 'haze',     p: [0.00, 0.14, 0.40, 0.20, 0.00, 0.82, 0.34, 0.56] },
+  { name: 'tsuyu',    p: [0.34, 0.26, 0.36, 0.72, 0.02, 0.52, 0.72, 0.62] },
+  { name: 'shower',   p: [0.78, 0.44, 0.32, 0.96, 0.10, 0.44, 0.86, 0.58] },
+  { name: 'typhoon',  p: [1.00, 1.00, 0.42, 1.00, 0.66, 0.50, 1.00, 0.48] },
+  { name: 'kiri',     p: [0.08, 0.10, 1.00, 0.48, 0.00, 0.96, 0.76, 0.72] }
+ ];
+
+ var NEXT_JAPAN = [
+    [0, 6, 3, 1, 0, 0],
+    [3, 0, 5, 2, 1, 2],
+    [2, 3, 0, 5, 2, 4],
+    [1, 2, 5, 0, 2, 5],
+    [0, 1, 4, 5, 0, 3],
+    [4, 5, 3, 1, 0, 0]
+ ];
+
  var TABLES = null;
  function tables() {
   if (!TABLES) TABLES = { cyber: [PRESETS_CYBER, NEXT_CYBER],
               west:  [PRESETS_WEST,  NEXT_WEST],
-              moon:  [PRESETS_MOON,  NEXT_MOON] };
+              moon:  [PRESETS_MOON,  NEXT_MOON],
+              japan: [PRESETS_JAPAN, NEXT_JAPAN] };
   return TABLES;
  }
 
@@ -812,7 +829,6 @@ var CC = (function () {
 
 /* src/city.js */
 (function () {
- 'use strict';
 
  var C = (typeof CC !== 'undefined' && CC) ? CC
     : (typeof globalThis !== 'undefined' && globalThis.CC) ? globalThis.CC : null;
@@ -855,7 +871,18 @@ var CC = (function () {
   ['.', ',', "'"]
  ];
 
- var DIST = null, DIST_CYBER = null, DIST_WEST = null, DIST_MOON = null;
+ var STYLE_CH_JP = [
+  ['8', '|', 'o'],
+  ['#', '+', ':'],
+  ['O', "'", ':'],
+  ['0', 'X', ':'],
+  ['8', '=', 'o'],
+  ['%', '&', ':']
+ ];
+
+ var SIGN_CH_JP = ['#', 'H', 'X', 'M', 'W', 'K', '8'];
+
+ var DIST = null, DIST_CYBER = null, DIST_WEST = null, DIST_MOON = null, DIST_JAPAN = null;
  function buildDistricts() {
   DIST_CYBER = [
 
@@ -946,9 +973,45 @@ var CC = (function () {
     vacant: 0.93, boulder: 0.14, crater: 0.05 }
   ];
 
-  norm(DIST_CYBER); norm(DIST_WEST); norm(DIST_MOON);
+  DIST_JAPAN = [
+
+   { name: 'machiya',  hue: P.timber, mix: P.sand,   mixP: 0.72, accent: P.warm,  styles: [10, 10, 11],
+    hMin: 5.4, hMax: 8.6, lit: 0.46, signP: 0.52, landmark: 0.004, w: 0.26,
+    vacant: 0.08 },
+
+   { name: 'nagaya',   hue: P.timber, mix: P.stone,  mixP: 0.66, accent: P.sand,  styles: [10, 12, 10],
+    hMin: 4.2, hMax: 6.4, lit: 0.24, signP: 0.14, landmark: 0.002, w: 0.15,
+    vacant: 0.14 },
+
+   { name: 'kura',     hue: P.white,  mix: P.timber, mixP: 0.70, accent: P.stone, styles: [12, 13, 12],
+    hMin: 6.2, hMax: 9.4, lit: 0.08, signP: 0.06, landmark: 0.006, w: 0.15,
+    vacant: 0.16 },
+
+   { name: 'temple',   hue: P.ember,  mix: P.timber, mixP: 0.42, accent: P.gold,  styles: [14, 14, 12],
+    hMin: 6.6, hMax: 11.0, lit: 0.26, signP: 0.10, landmark: 0.026, w: 0.12,
+    vacant: 0.26 },
+
+   { name: 'garden',   hue: P.moss,   mix: P.stone,  mixP: 0.58, accent: P.jade,  styles: [12, 15, 14],
+    hMin: 2.6, hMax: 5.0, lit: 0.06, signP: 0.02, landmark: 0.004, w: 0.10,
+    vacant: 0.58 },
+
+   { name: 'castle',   hue: P.stone,  mix: P.white,  mixP: 0.76, accent: P.gold,  styles: [15, 15, 13],
+    hMin: 7.0, hMax: 12.0, lit: 0.07, signP: 0.02, landmark: 0.030, w: 0.11,
+    vacant: 0.22 },
+
+   { name: 'market',   hue: P.sand,   mix: P.timber, mixP: 0.54, accent: P.jade,  styles: [10, 11, 10],
+    hMin: 3.4, hMax: 5.6, lit: 0.42, signP: 0.62, landmark: 0.001, w: 0.11,
+    vacant: 0.18 },
+
+   { name: 'river',    hue: P.stone,  mix: P.moss,   mixP: 0.72, accent: P.moss,  styles: [15],
+    hMin: 0.45, hMax: 0.45, lit: 0, signP: 0, landmark: 0, w: 0,
+    vacant: 0 }
+  ];
+
+  norm(DIST_CYBER); norm(DIST_WEST); norm(DIST_MOON); norm(DIST_JAPAN);
 
   TH_CYBER.dist = DIST_CYBER; TH_WEST.dist = DIST_WEST; TH_MOON.dist = DIST_MOON;
+  TH_JAPAN.dist = DIST_JAPAN;
   DIST = DIST_CYBER;
  }
  function norm(T) {
@@ -1002,7 +1065,24 @@ var CC = (function () {
   setbackMode: 'none', signShape: 'none', signPalette: 'none'
  };
 
- var THEMES = { cyber: TH_CYBER, west: TH_WEST, moon: TH_MOON };
+ var TH_JAPAN = {
+  id: 'japan', AVE: 38, CROSS: 32,
+  aveJit: 17, aveOff: -8, crossJit: 14, crossOff: -7,
+  aveWide: 5, aveMid: 4, aveNarrow: 3, aveMidP: 0.38, aveEvery: 4,
+  crossWide: 4, crossMid: 3, crossNarrow: 2, crossMidP: 0.30, crossEvery: 5,
+  lotW: 4, lotWVar: 3, lotD: 9, lotDVar: 8,
+  alleyMin: 8, alleyP: 0.58, alleyDeepMin: 9, alleyDeepP: 0.46,
+  plazaP: 0.11, plazaBigP: 0.22, plazaR: 4, plazaRVar: 7,
+  vacant: 0.10, setbackP: 0.62, podMin: 3.2, podVar: 2.2, falseFront: 0,
+  lmMin: 13, lmVar: 12, crownTall: 20, DG: 30, sky: 1,
+
+  rivHalf: 4.6, rivCope: 1.0, rivCopeH: 0.45, rivQuay: 2.2, rivEvery: 5,
+  rivAmp: 3.6, rivAmp2: 1.4,
+  styleCh: STYLE_CH_JP, signCh: SIGN_CH_JP, styleBase: 10,
+  setbackMode: 'podium', signShape: 'board', signPalette: 'lacquer'
+ };
+
+ var THEMES = { cyber: TH_CYBER, west: TH_WEST, moon: TH_MOON, japan: TH_JAPAN };
  function themeOf(id) { return THEMES[id] || TH_CYBER; }
  function worldId() {
   return (C && C.World && C.World.id) ? C.World.id : 'cyber';
@@ -1041,6 +1121,9 @@ var CC = (function () {
   var TH = themeOf(worldId());
   var AVE = TH.AVE, CROSS = TH.CROSS;
   var DIST = TH.dist;
+
+  var RIVI = -1;
+  for (var ri = 0; ri < DIST.length; ri++) if (DIST[ri].name === 'river') RIVI = ri;
   var STY = TH.styles;
   var SIGNS = TH.signs;
 
@@ -1054,6 +1137,15 @@ var CC = (function () {
    return (m % TH.crossEvery === 0) ? TH.crossWide
      : (hash(0, m, S + 202) < TH.crossMidP ? TH.crossMid : TH.crossNarrow);
   }
+
+  var RIV_P = TH.rivEvery !== undefined ? TH.rivEvery * CROSS : 0;
+  var rivQ = TH.rivEvery !== undefined ? hash(0, 0, S + 53) * 6.2832 : 0;
+  function rivZ(px, pz) {
+   var b = CROSS * 0.5 + TH.rivAmp * Math.sin(px * 0.01932 + rivQ)
+             + TH.rivAmp2 * Math.sin(px * 0.04310 - rivQ * 2.3);
+   return b + Math.round((pz - b) / RIV_P) * RIV_P;
+  }
+  function rivD(px, pz) { var d = pz - rivZ(px, pz); return d < 0 ? -d : d; }
 
   var SX = { street: 0, k: 0, b: 0, x0: 0, x1: 0 };
   var SZ = { street: 0, m: 0, b: 0, z0: 0, z1: 0 };
@@ -1131,6 +1223,15 @@ var CC = (function () {
 
   function computeCell(gx, gz) {
    colX(gx, SX); rowZ(gz, SZ);
+
+   if (TH.rivHalf !== undefined && RIVI >= 0 && !SZ.street) {
+    var rr = rivD(gx + 0.5, gz + 0.5);
+    if (rr < TH.rivHalf) { cH = 0; cD = RIVI; return; }
+    if (rr < TH.rivHalf + TH.rivCope && !SX.street) {
+
+     cH = TH.rivCopeH; cD = RIVI; cLX = gx - (gx & 3); cLZ = gz - (gz & 3); return;
+    }
+   }
    if (SX.street || SZ.street) { cH = 0; cD = districtAt(gx, gz); return; }
 
    var x0 = SX.x0, x1 = SX.x1, z0 = SZ.z0, z1 = SZ.z1, bK = SX.b, bM = SZ.b;
@@ -1214,6 +1315,15 @@ var CC = (function () {
    var r = hash(lx, lz, S + 701);
 
    if (TH.signPalette === 'none') return P.white;
+
+   if (TH.signPalette === 'lacquer') {
+    if (r < 0.30) return P.warm;
+    if (r < 0.52) return P.ember;
+    if (r < 0.70) return P.white;
+    if (r < 0.84) return P.gold;
+    if (r < 0.94) return P.timber;
+    return P.jade;
+   }
    if (TH.signPalette === 'painted') {
 
     if (r < 0.24) return P.warm;
@@ -1526,6 +1636,9 @@ var CC = (function () {
    isStreet: function (gx, gz) { return height(gx, gz) <= 0; },
 
    aveX: ax, aveW: aw, crossZ: cz, crossW: cw,
+
+   rivD: TH.rivHalf !== undefined ? rivD : undefined,
+   rivHalf: TH.rivHalf, rivCope: TH.rivCope, rivQuay: TH.rivQuay,
    AVE: AVE, CROSS: CROSS, SPEED: SPEED,
 
    world: TH.id
@@ -1540,7 +1653,6 @@ var CC = (function () {
 
 /* src/surfaces.js */
 (function (CC) {
- 'use strict';
 
  var P = CC.P, g = CC.g, hash2 = CC.hash2, clamp = CC.clamp, vnoise = CC.vnoise;
 
@@ -1578,6 +1690,8 @@ var CC = (function () {
   xc: new Float64Array(8),
   xw: new Float64Array(8),
   xz0: 0, xpitch: 26,
+
+  rivD: null,
 
   rail: 0,
   skySeed: 0x5EED,
@@ -2705,9 +2819,542 @@ var CC = (function () {
  };
 })(CC);
 
+/* src/surf_japan.js */
+(function (CC) {
+
+ var P = CC.P, g = CC.g, hash2 = CC.hash2, clamp = CC.clamp, vnoise = CC.vnoise, smooth = CC.smooth;
+
+ var G_DOT = g('.'), G_COMMA = g(','), G_COLON = g(':'), G_QUOTE = g("'"),
+   G_TICK = g('`'), G_DASH = g('-'), G_UNDER = g('_'), G_EQ = g('='), G_TILDE = g('~'),
+   G_PIPE = g('|'), G_PLUS = g('+'), G_8 = g('8'), G_o = g('o'), G_X = g('X'), G_STAR = g('*'),
+   G_DQ = g('"');
+
+ function cfg() { return CC.Surf ? CC.Surf.cfg : null; }
+
+ var SUN_AZ = -0.5;
+ var SUN_X = Math.sin(SUN_AZ), SUN_Z = Math.cos(SUN_AZ), SUN_ALT = 0.16;
+
+ var dT = 1 / 0, dSun = 0.10, dSky = 0.12, dWarm = 0.30, dLamp = 1, dStar = 1,
+   dFill = 0, dNight = 1;
+ function dayAt(t) {
+  if (t === dT) return;
+  dT = t;
+  var D = CC.Daylight;
+  if (!D) return;
+  SUN_AZ = D.P.az; SUN_ALT = D.P.alt;
+  SUN_X = Math.sin(SUN_AZ); SUN_Z = Math.cos(SUN_AZ);
+  dSun = D.P.sun; dSky = D.P.sky; dWarm = D.P.warm; dLamp = D.P.lamp; dStar = D.P.star;
+  dFill = smooth(clamp((dSky - 0.70) / 0.30, 0, 1));
+  dNight = smooth(clamp((0.30 - dSky) / 0.30, 0, 1));
+ }
+
+ var wT = 1 / 0, wWet = 1, wRain = 1, wWind = 1, wCloud = 0.82, wHaze = 0.52;
+ function weatherAt(t) {
+  if (t === wT) return;
+  wT = t;
+  var W = CC.Weather;
+  if (!W) return;
+  wWet = W.rel('wet'); wRain = W.rel('rain'); wWind = W.rel('wind');
+  wCloud = W.P.cloud; wHaze = W.P.haze;
+ }
+
+ function openSky() { var k = 1 - wCloud; return k * k * (0.35 + 0.65 * k); }
+
+ var SKY_UP = 1.00, SKY_SIDE = 0.52;
+ function sunOf(cell) {
+  var dome = SKY_SIDE * (0.16 + 0.84 * dSky);
+  var op = openSky();
+  if (!cell || cell.faceX === undefined) return dome + 0.18 * dSun * op;
+
+  var nx = cell.faceX ? -cell.side : 0, nz = cell.faceX ? 0 : -cell.side;
+  var d = nx * SUN_X + nz * SUN_Z;
+  var split = 1 - 0.58 * clamp(SUN_ALT / 0.95, 0, 1);
+  var f = clamp(0.5 + 0.44 * d * split, 0, 1);
+
+  var direct = 0.62 * f * f * (3 - 2 * f) * Math.sqrt(dSun) * op;
+  return clamp(dome + direct, 0, 1.25);
+ }
+
+ function lampAt(v) {
+
+  var k = dLamp;
+  if (k <= 0.001) return 0;
+  var f = v <= 1.0 ? 1 : (v >= 3.6 ? 0 : (3.6 - v) / 2.6);
+  return k * f * f * (3 - 2 * f) * 0.86;
+ }
+
+ function seedOf(cell) {
+  if (!cell || typeof cell !== 'object') return 0;
+  return cell.seed !== undefined ? (cell.seed | 0) : 0;
+ }
+
+ var JP_ST = [
+    { pitch: 0.13, bay: 2.90, gnd: 2.30, up: 1.90, panel: 0.72, vert: 1, flat: 0 },
+    { pitch: 0.30, bay: 2.70, gnd: 2.20, up: 1.85, panel: 0.80, vert: 1, flat: 0 },
+    { pitch: 0.90, bay: 3.40, gnd: 2.60, up: 2.10, panel: 0.16, vert: 0, flat: 1 },
+    { pitch: 0.34, bay: 3.20, gnd: 2.55, up: 2.05, panel: 0.22, vert: 0, flat: 0 },
+    { pitch: 0.42, bay: 3.30, gnd: 3.10, up: 2.40, panel: 0.34, vert: 0, flat: 0 },
+    { pitch: 0.62, bay: 3.60, gnd: 3.60, up: 3.60, panel: 0.00, vert: 0, flat: 1 }
+ ];
+
+ var LIT = [
+    P.sand,    P.stone,   P.ember,   P.moss,
+    P.indigo,  P.white,   P.ember,   P.stone,
+    P.warm,    P.white,   P.white,   P.stone,
+    P.stone,   P.sand,    P.sand,    P.jade,
+    P.sand,    P.gold,    P.moss,    P.stone
+ ];
+ var MID = [
+    P.timber,  P.stone,   P.timber,  P.moss,
+    P.indigo,  P.stone,   P.timber,  P.stone,
+    P.sand,    P.stone,   P.stone,   P.indigo,
+    P.stone,   P.timber,  P.timber,  P.moss,
+    P.timber,  P.sand,    P.moss,    P.indigo
+ ];
+ var SHD = [
+    P.timber,  P.indigo,  P.timber,  P.moss,
+    P.indigo,  P.stone,   P.timber,  P.indigo,
+    P.timber,  P.indigo,  P.stone,   P.indigo,
+    P.indigo,  P.timber,  P.timber,  P.indigo,
+    P.timber,  P.timber,  P.moss,    P.indigo
+ ];
+
+ var INK = [G_TICK, G_DOT, G_UNDER, G_DASH, G_COLON, G_TILDE, G_DQ, G_PLUS, G_EQ];
+ function ink(k) { var i = (k * 9) | 0; return INK[i < 0 ? 0 : (i > 8 ? 8 : i)]; }
+
+ var FOUT = { ch: 0, col: 0, lum: 0 };
+ function fset(ch, col, lum) {
+  FOUT.ch = ch; FOUT.col = col;
+  FOUT.lum = lum < 0 ? 0 : (lum > 255 ? 255 : lum | 0);
+  return FOUT;
+ }
+
+ function grain(u, v, sd, lod) {
+  if (lod < 2) return 1;
+  var h = hash2(Math.floor(u * 13), Math.floor(v * 13), sd ^ 0x71A3);
+  return h < 0.18 ? 0.52 : 0.74 + h * 0.48;
+ }
+
+ function stoneFace(u, v, cell, dist, sd, sun) {
+  var h = cell && cell.h ? cell.h : 8;
+  var q = clamp(v / (h > 1 ? h : 1), 0, 1);
+
+  var cy = v / (0.86 - 0.44 * q);
+  var cr = Math.floor(cy), fy = cy - cr;
+  var wide = 0.90 + 0.85 * (1 - q);
+  var cx = u / wide + hash2(cr, sd, 0x2B71) * 3.1;
+  var bx = Math.floor(cx), fx = cx - bx;
+  var bh = hash2(bx, cr, sd ^ 0x51D);
+
+  var lit = LIT[cell && cell.hue !== undefined ? cell.hue : P.stone];
+  var mid = MID[cell && cell.hue !== undefined ? cell.hue : P.stone];
+  var shd = SHD[cell && cell.hue !== undefined ? cell.hue : P.stone];
+
+  var cv = clamp(sun * 1.25, 0, 1); cv = cv * cv;
+  if (fy < 0.13 || fx < 0.09)
+   return fset(G_DASH, shd, (8 + 108 * sun) * (0.7 + 0.6 * bh));
+
+  if (dist < 34 && q < 0.34 && bh < (0.20 + 0.24 * wWet) * (0.25 + 0.75 * cv))
+   return fset(bh < 0.10 ? G_COMMA : G_QUOTE, P.moss, (24 + 130 * sun) * (0.6 + 0.8 * bh));
+
+  if (bh > 0.62 * cv) return fset(0, P.shadow, 0);
+  return fset(ink(0.16 + 0.40 * sun + 0.22 * bh),
+        bh < 0.24 ? lit : (bh < 0.46 ? mid : shd),
+        (18 + 200 * sun) * (0.72 + 0.5 * bh));
+ }
+
+ function facade(u, v, cell, dist, t) {
+  if (v < 0) v = 0;
+  weatherAt(t === undefined ? 0 : t); dayAt(t === undefined ? 0 : t);
+  var sd = seedOf(cell);
+  var si = cell ? (((cell.style | 0) - 10) % 6) : 0;
+  if (si < 0) si += 6;
+  var sun = sunOf(cell);
+  if (si === 5) return stoneFace(u, v, cell, dist, sd, sun);
+
+  var st = JP_ST[si];
+  var h = cell && cell.h ? cell.h : 6;
+  var litR = cell && typeof cell.litRate === 'number' ? cell.litRate : 0.2;
+  var hue = cell && typeof cell.hue === 'number' ? cell.hue : P.timber;
+  var accent = cell && typeof cell.accent === 'number' ? cell.accent : P.warm;
+  var lod = dist < 18 ? 2 : (dist < 44 ? 1 : 0);
+  var gr = grain(u, v, sd, lod);
+  var lit = LIT[hue], mid = MID[hue], shd = SHD[hue];
+
+  var L = clamp(sun + lampAt(v), 0, 1.3);
+
+  var cov = clamp(L * 1.02, 0, 1); cov = cov * cov * cov;
+
+  var mh = hash2(Math.floor(u * 3.7), Math.floor(v * 3.7), sd ^ 0x1F5);
+  var k = clamp((L - 0.18) / 0.56, 0, 1);
+  var mat = mh < 0.66 * k * k ? lit : (mh < 0.66 * k * k + 0.26 + 0.16 * k ? mid : shd);
+
+  var top = h - v;
+
+  if (top < 0.12)
+   return fset(G_EQ, L > 0.42 ? lit : mid, (126 + 96 * L) * gr);
+  if (top < 0.42) {
+
+   var tw = hash2(Math.floor(u / 0.26), 0, sd ^ 0x3C1);
+   if (tw > 0.28 + 0.72 * sun) return fset(0, P.shadow, 0);
+   return fset(tw < 0.42 ? G_TILDE : G_DASH, tw < 0.42 ? mid : mat,
+         (34 + 168 * sun) * (0.7 + 0.5 * tw) * gr);
+  }
+  if (top < 0.58) {
+
+   var dw = hash2(Math.floor(u * 5.1), 0, sd ^ 0x7D3);
+   if (wWet > 0.30 && dw < 0.34 * wWet)
+    return fset(G_DOT, P.white, (40 + 96 * wWet) * (0.6 + 0.8 * dw));
+   if (sun < 0.20) return fset(0, P.shadow, 0);
+   return fset(G_UNDER, shd, 16 + 46 * sun);
+  }
+  if (top < 0.98) {
+
+   var ru = u / (st.bay * 0.25), rf = ru - Math.floor(ru);
+   if (lod === 2 && rf < 0.24 && top < 0.80 && sun > 0.16)
+    return fset(G_PIPE, shd, 20 + 52 * sun);
+   return fset(0, P.shadow, 0);
+  }
+
+  var bay = Math.floor(u / st.bay), fu = u / st.bay - bay;
+  var bh = hash2(bay, sd, 0x3B7);
+
+  var postW = 0.13 / st.bay;
+  if (fu < postW || fu > 1 - postW)
+   return fset(G_PIPE, si === 4 ? P.ember : (bh < 0.34 ? accent : shd),
+         (si === 4 ? 54 + 150 * L : (bh < 0.34 ? 34 : 12) + 104 * L) * gr);
+
+  var storey = v < st.gnd ? 0 : 1;
+  if (v > st.gnd && v < st.gnd + 0.22) {
+
+   return fset(G_EQ, mid, (34 + 168 * L) * gr);
+  }
+  if (v > st.gnd + 0.22 && v < st.gnd + 0.42)
+   return fset(0, P.shadow, 0);
+
+  if (st.flat) {
+   var ph = hash2(Math.floor(u * 1.9), Math.floor(v * 1.9), sd ^ 0x5A9);
+
+   if (v < 0.9) return fset(ph < 0.42 ? G_DASH : 0, ph < 0.42 ? shd : P.shadow, 14 + 70 * L);
+   if (bh < 0.34 && fu > 0.40 && fu < 0.60 && v > st.gnd + 1.0 && v < st.gnd + 1.7) {
+
+    var bu = (u / 0.13); bu -= Math.floor(bu);
+    return bu < 0.42 ? fset(G_PIPE, shd, 18 + 60 * L)
+            : fset(G_COLON, mid, 26 + 104 * L);
+   }
+   if (ph > 0.62 * cov) return fset(0, P.shadow, 0);
+   return fset(ink(0.10 + 0.46 * L), mat, (30 + 186 * L) * gr);
+  }
+
+  var inPanel = fu > (1 - st.panel) * 0.5 && fu < 1 - (1 - st.panel) * 0.5;
+  if (!inPanel) {
+   var wh = hash2(Math.floor(u * 4.3), Math.floor(v * 4.3), sd ^ 0x2E1);
+   if (wh > 0.56 * cov) return fset(0, P.shadow, 0);
+   return fset(ink(0.12 + 0.42 * L), mat, (26 + 190 * L) * gr);
+  }
+
+  var roomLit = hash2(bay, storey, sd ^ 0x6F3) < litR * (0.6 + 1.5 * (storey ? 0.5 : 1)) &&
+         dLamp > 0.02;
+
+  var glow = roomLit ? dLamp : 0;
+
+  var pu = u / st.pitch, pv = v / (st.pitch * 1.15);
+  var fpu = pu - Math.floor(pu), fpv = pv - Math.floor(pv);
+
+  if (glow > 0.02) {
+   var flick = CC.reducedMotion ? 1 : 0.90 + 0.10 * vnoise(t * 0.9 + bay * 7.3 + sd * 0.01, 0x2D);
+   var base = (168 + 62 * hash2(bay, storey, sd ^ 0x11)) * glow * flick;
+
+   if (wRain > 0.25 && lod === 2 && !CC.reducedMotion &&
+     hash2(Math.floor(u * 9), Math.floor(v * 5 - t * 0.7), sd ^ 0x4C7) < 0.06 * wRain)
+    return fset(G_PIPE, P.stone, base * 0.68);
+   if (lod < 2) return fset(G_8, P.warm, base * 0.86);
+   if (fpu < 0.16 || fpv < 0.13)
+    return fset(fpv < 0.13 ? G_DASH : G_PIPE, P.timber, base * 0.30);
+
+   if (storey === 0 && v < st.gnd * 0.34)
+    return fset(G_EQ, P.timber, (24 + 60 * sun) * gr);
+   return fset(G_8, P.warm, base);
+  }
+
+  if (st.vert) {
+   var sl = fpu;
+   var heavy = (Math.floor(pu) % 3) === 0;
+
+   if (sl < (heavy ? 0.52 : 0.34) && (heavy ? cov > 0.06 : cov > 0.34))
+    return fset(heavy ? G_PIPE : G_COLON, heavy ? shd : mid,
+          (14 + 176 * L) * (heavy ? 1 : 0.70) * gr);
+   if (dFill > 0.02 && hash2(Math.floor(u * 6.1), Math.floor(v * 6.1), sd ^ 0x38B) < 0.62 * dFill)
+    return fset(ink(0.10 + 0.34 * L), SHD[hue], (22 + 120 * L) * gr);
+   return fset(0, P.shadow, 0);
+  }
+
+  var course = fpv;
+  if (course < 0.20 && cov > 0.05)
+   return fset(G_DASH, si === 4 ? mid : lit, (30 + 190 * L) * gr);
+  if (si === 3) {
+
+   var dgx = Math.floor((pu + pv) * 0.5), dgy = Math.floor((pu - pv) * 0.5);
+   if (hash2(dgx, dgy, sd ^ 0x19B) < 0.34 * (0.3 + 0.7 * cov))
+    return fset(G_X, lit, (34 + 190 * L) * gr);
+  }
+  var fh = hash2(Math.floor(u * 4.9), Math.floor(v * 4.9), sd ^ 0x6D1);
+  if (fh > 0.52 * cov) return fset(0, P.shadow, 0);
+  return fset(ink(0.10 + 0.40 * L), mat, (24 + 190 * L) * gr);
+ }
+
+ var t0f = 0;
+ var ROUT = { ch: 0, col: 0, lum: 0, mir: 0, rip: 0, wch: 0 };
+ var mirNow = 0, ripNow = 0, wchNow = 0;
+ function rset(ch, col, lum) {
+  ROUT.ch = ch; ROUT.col = col;
+  ROUT.lum = lum < 0 ? 0 : (lum > 255 ? 255 : lum | 0);
+  ROUT.mir = mirNow; ROUT.rip = ripNow; ROUT.wch = wchNow;
+  return ROUT;
+ }
+
+ function water(wx, wz) {
+  var a = vnoise(wx * 0.62, wz * 0.41 + 11.3);
+  var b = vnoise(wx * 1.9 + 5.1, wz * 1.4);
+  var n = a * 0.7 + b * 0.3;
+  var thr = 0.72 - 0.34 * clamp(wWet, 0, 1.2);
+  return n <= thr ? 0 : clamp((n - thr) / (1 - thr), 0, 1);
+ }
+
+ function water(wx, wz, ed, L, lod) {
+  var cj = hash2(Math.floor(wx * 1.7), Math.floor(wz * 1.7), 0x6A31);
+
+  mirNow = 0.68 * clamp(0.25 + 0.9 * ed, 0, 1) * clamp(0.45 + 0.55 * wWet, 0, 1);
+  ripNow = CC.reducedMotion ? 0
+     : vnoise(wx * 0.9 + t0f * (0.22 + 0.10 * wRain), wz * 0.7) * (0.20 + 0.18 * wRain);
+  wchNow = wRain > 0.4 ? G_TILDE : G_DASH;
+
+  if (L > 0.45 && lod === 2 && cj > 0.962)
+   return rset(G_QUOTE, P.pure, 148 + 84 * clamp(L, 0, 1));
+
+  if (wRain > 0.35 && cj < 0.035 * wRain)
+   return rset(G_o, P.white, (54 + 96 * wRain) * (0.4 + 0.7 * L));
+  if (cj > 0.26) return rset(0, P.shadow, 0);
+  return rset(cj < 0.13 ? G_TILDE : G_DASH, P.indigo, (3 + 15 * L) * (0.7 + 0.6 * cj));
+ }
+
+ function floorTex(wx, wz, dist, t) {
+  weatherAt(t === undefined ? 0 : t); dayAt(t === undefined ? 0 : t);
+  t0f = t === undefined ? 0 : t;
+  var C = cfg();
+  var half = C ? C.half : 3.1;
+  var lane = wx - (C ? C.streetX : 4.0);
+  var al = lane < 0 ? -lane : lane;
+  var lod = dist < 18 ? 2 : (dist < 44 ? 1 : 0);
+  mirNow = 0; ripNow = 0; wchNow = 0;
+
+  var sun = clamp(SKY_UP * (0.16 + 0.84 * dSky) * (0.55 + 0.45 * openSky()), 0, 1.1);
+
+  var L = clamp(sun + lampAt(0) * 0.86, 0, 1.3);
+  var cov = clamp(L * 1.02, 0, 1); cov = cov * cov * cov;
+
+  var warmish = L > 0.42;
+  var gStone = warmish ? P.white : MID[P.stone];
+  var gEarth = warmish ? P.sand : MID[P.timber];
+
+  if (C && C.rivD) {
+   var rx = C.swap ? wz : wx, rz = C.swap ? wx : wz;
+   var rr = C.rivD(rx, rz);
+   if (rr < 4.6) {
+
+    return water(wx, wz, clamp((4.6 - rr) / 3.0, 0, 1), L, lod);
+   }
+   if (rr < 7.8) {
+
+    var qj = hash2(Math.floor(rx * 1.3), Math.floor(rz * 1.3), 0x5C7);
+    if (qj < 0.14) return rset(G_DASH, SHD[P.stone], 14 + 66 * L);
+    if (qj > 0.66 * cov) return rset(0, P.shadow, 0);
+    return rset(ink(0.12 + 0.32 * L), gStone, (26 + 190 * L) * (0.7 + 0.5 * qj));
+   }
+  }
+
+  var gd = al - (half - 0.55);
+  if (gd > -0.34 && gd < 0.34) {
+
+   var run = wz * 1.7 - (CC.reducedMotion ? 0 : t * 0.9);
+   var fr = run - Math.floor(run);
+
+   if (gd < -0.18 || gd > 0.18) {
+    var kj = wz / 0.62; kj -= Math.floor(kj);
+    return rset(kj < 0.16 ? G_DASH : G_UNDER, kj < 0.16 ? SHD[P.stone] : gStone,
+          (kj < 0.16 ? 20 + 40 * L : 52 + 186 * L));
+   }
+   mirNow = 0.34 * clamp(wWet, 0, 1);
+   ripNow = fr < 0.5 ? 0 : 1;
+   wchNow = G_TILDE;
+
+   if (L > 0.45 && lod === 2 && hash2(Math.floor(wz * 6.1), (gd * 9) | 0, 0x3B9) < 0.06)
+    return rset(G_QUOTE, P.pure, 150 + 80 * fr);
+   return rset(fr < 0.34 ? G_TILDE : G_DASH, P.white,
+         (36 + 190 * L) * (0.6 + 0.7 * fr) * (0.4 + 0.6 * clamp(wWet, 0, 1)));
+  }
+
+  if (al > half - 0.2) {
+   if (lod === 0) return rset(0, P.shadow, 0);
+   var sj = hash2(Math.floor(wz * 1.4), Math.floor(al * 1.6), 0x4E1);
+   if (sj < 0.16 * cov) return rset(G_DASH, SHD[P.stone], 12 + 60 * L);
+   if (sj > 0.58 * cov) return rset(0, P.shadow, 0);
+
+   return rset(ink(0.10 + 0.30 * L), sj < 0.38 ? gStone : gEarth,
+         (24 + 196 * L) * (0.7 + 0.5 * sj));
+  }
+
+  var rut = Math.abs(al - half * 0.52);
+  var inRut = rut < 0.42;
+  var w = water(wx, wz) * (inRut ? 1.35 : 0.82) * clamp(0.4 + 0.8 * wWet, 0, 1.4);
+
+  if (w > 0.20) {
+
+   var edge = w < 0.34;
+   mirNow = edge ? 0.16 : 0.62 * clamp(0.5 + 0.6 * w, 0, 1);
+
+   var rp = CC.reducedMotion ? 0
+      : vnoise(wx * 2.1 + t * (0.8 + 0.6 * wRain), wz * 1.7) * (1 + 2.2 * wRain);
+
+   ripNow = rp;
+   wchNow = wRain > 0.4 ? G_TILDE : G_DASH;
+   if (edge)
+    return rset(G_DOT, SHD[P.stone], 14 + 80 * L);
+
+   var wj = hash2(Math.floor(wx * 3.1), Math.floor(wz * 3.1), 0x27B);
+   if (wRain > 0.3 && wj < 0.10 * wRain)
+    return rset(G_o, P.white, (70 + 130 * wRain) * (0.4 + 0.7 * L));
+   return rset(wj < 0.4 ? G_TILDE : G_DASH, P.indigo, (10 + 96 * L) * (0.6 + 0.7 * wj));
+  }
+
+  if (lod === 0) return rset(0, P.shadow, 0);
+  if (inRut && rut > 0.30 && cov > 0.10)
+   return rset(G_UNDER, SHD[P.timber], 14 + 92 * L);
+  var eh = hash2(Math.floor(wx * 2.6), Math.floor(wz * 2.6), 0x6C3);
+  if (lod === 2 && eh < 0.05 * (0.3 + 0.7 * cov))
+   return rset(G_o, gStone, 30 + 190 * L);
+
+  if (eh > 0.44 * cov) return rset(0, P.shadow, 0);
+  return rset(eh < 0.5 ? G_DOT : G_COMMA, gEarth, (14 + 196 * L) * (0.6 + 0.8 * eh));
+ }
+
+ var SOUT = { ch: 0, col: 0, lum: 0 };
+ function sset(ch, col, lum) {
+  SOUT.ch = ch; SOUT.col = col;
+  SOUT.lum = lum < 0 ? 0 : (lum > 255 ? 255 : lum | 0);
+  return SOUT;
+ }
+
+ function ridge(b, lat, salt) {
+  return (vnoise(b * lat, salt) * 0.72 + vnoise(b * lat * 2.7 + 3.1, salt + 7) * 0.28);
+ }
+
+ var RANGES = [
+  { base: 0.020, amp: 0.130, lat: 2.1, salt: 0x1A, col: P.indigo, lum: 46, ink: 0.30 },
+  { base: 0.070, amp: 0.155, lat: 1.4, salt: 0x2B, col: P.stone,  lum: 34, ink: 0.20 },
+  { base: 0.115, amp: 0.175, lat: 0.9, salt: 0x3C, col: P.stone,  lum: 22, ink: 0.12 }
+ ];
+
+ var RIDGE_TOP = 0.32;
+
+ var t0v = 0;
+ function sky(sx, sy, t) {
+  t0v = t === undefined ? 0 : t;
+  weatherAt(t0v); dayAt(t0v);
+  var C = cfg();
+  var rows = C && C.rows ? C.rows : 60;
+  var hor = C ? C.horizon : rows * 0.56;
+  var vs = C && C.skyVScale ? C.skyVScale : 1;
+  var kk = C && C.skyK ? C.skyK : (rows / 0.7);
+  var sd = C ? C.skySeed : 0x5EED;
+
+  var ey = Math.floor((hor - sy) * vs);
+  var a = ey / rows;
+  if (a < 0) a = 0;
+  var bear = sx / kk;
+
+  var vis = dSky * (0.55 + 0.65 * wHaze);
+  if (vis > 0.05 && a < RIDGE_TOP) {
+   for (var i = 0; i < 3; i++) {
+    var R = RANGES[i];
+    var prof = R.base + R.amp * ridge(bear + i * 4.7, R.lat, R.salt);
+    if (a > prof) continue;
+
+    var edgeK = (prof - a) / (R.amp * 0.18 + 0.004);
+    var hs = hash2(sx, ey, sd ^ (0x400 + i));
+    if (edgeK < 1)
+     return sset(G_DASH, i === 0 ? P.stone : P.white,
+           (R.lum + 84) * vis * (0.7 + 0.5 * hs));
+
+    if (hs > R.ink) return sset(0, P.shadow, 0);
+    return sset(i === 0 ? G_COMMA : G_DOT, R.col, R.lum * vis * (0.6 + 0.8 * hs));
+   }
+  }
+
+  var lift = Math.exp(-Math.max(a - 0.04, 0) * (1.4 + 3.8 * wCloud));
+  var dome = dSky * (0.30 + 0.62 * lift) * (0.42 + 0.58 * (1 - 0.55 * wCloud));
+
+  var da = bear - SUN_AZ;
+  da = Math.atan2(Math.sin(da), Math.cos(da));
+  var west = 1 - Math.abs(da) / Math.PI; west = west * west;
+  var warmK = west * openSky() * dWarm * Math.exp(-a * 9.0);
+
+  var h1 = hash2(sx, ey, sd), h2v = hash2(sx, ey, sd ^ 0x5B);
+
+  var v = dome + warmK * 0.55;
+  if (v < 0.012) {
+
+   var opn = openSky();
+   if (dStar > 0.05 && opn > 0.25 && h1 < 0.010 * dStar * opn)
+    return sset(h2v > 0.7 ? G_STAR : G_DOT, h2v > 0.7 ? P.white : P.slate,
+          (60 + 110 * h2v) * dStar * opn);
+   return sset(0, P.shadow, 0);
+  }
+
+  var drift = CC.reducedMotion ? 0 : t0v * 0.006 * (0.4 + 1.2 * wWind);
+  var band = vnoise(bear * 0.55 + drift, a * 5.6) * 0.68 +
+       vnoise(bear * 1.9 + drift * 2.3 + 9.1, a * 14.0) * 0.32;
+
+  var depth = 0.30 + 0.55 * (1 - wCloud);
+  var cover = (0.18 + 0.66 * v) * (1 - depth + depth * 2 * band);
+  if (cover < 0) cover = 0;
+  if (h1 > cover) return sset(0, P.shadow, 0);
+
+  var vb = v * (0.72 + 0.56 * band);
+
+  var op = openSky();
+  var col;
+  if (warmK > 0.30) col = P.sand;
+  else if (op > 0.35 && a > 0.10 && h2v < op)
+   col = vb > 0.74 ? P.ice : P.azure;
+  else col = vb > 0.62 ? P.white : (vb > 0.30 ? P.stone : P.indigo);
+  return sset(band > 0.58 ? G_TILDE : (h2v > 0.40 ? G_DOT : G_TICK),
+        col, (40 + 200 * vb) * (0.66 + 0.5 * h2v));
+ }
+
+ var FOG_START_J = 14.0, FOG_END_J = 150.0, FOG_POW_J = 1.15;
+
+ CC.SurfJapan = {
+  id: 'japan',
+  facade: facade, floorTex: floorTex, sky: sky, STYLE: JP_ST,
+  fogStart: FOG_START_J, fogEnd: FOG_END_J, fogPow: FOG_POW_J,
+  sunOf: sunOf, dayAt: dayAt, openSky: openSky
+ };
+
+ Object.defineProperty(CC.SurfJapan, 'SUN_AZ', { get: function () { return SUN_AZ; } });
+ Object.defineProperty(CC.SurfJapan, 'SUN_X', { get: function () { return SUN_X; } });
+ Object.defineProperty(CC.SurfJapan, 'SUN_Z', { get: function () { return SUN_Z; } });
+ Object.defineProperty(CC.SurfJapan, 'SUN_ALT', { get: function () { return SUN_ALT; } });
+ Object.defineProperty(CC.SurfJapan, 'night', { get: function () { return dNight; } });
+ Object.defineProperty(CC.SurfJapan, 'dayFill', { get: function () { return dFill; } });
+
+ if (!CC.SURFACES) CC.SURFACES = {};
+ CC.SURFACES.japan = CC.SurfJapan;
+
+})(CC);
+
 /* src/surf_moon.js */
 (function (CC) {
- 'use strict';
 
  var P = CC.P, g = CC.g, hash2 = CC.hash2, clamp = CC.clamp;
 
@@ -3171,7 +3818,6 @@ var CC = (function () {
 
 /* src/surf_west.js */
 (function (CC) {
- 'use strict';
 
  var P = CC.P, g = CC.g, hash2 = CC.hash2, clamp = CC.clamp, vnoise = CC.vnoise, smooth = CC.smooth;
 
@@ -3866,7 +4512,6 @@ var CC = (function () {
 
 /* src/raycast.js */
 (function (CC) {
- 'use strict';
 
  var P = CC.P, poke = CC.poke, hash2 = CC.hash2, vnoise = CC.vnoise;
  var G_COLON = CC.g(':'), G_DASH = CC.g('-');
@@ -3989,6 +4634,8 @@ var CC = (function () {
   cf.xn = n;
 
   cf.xpitch = pitch;
+
+  cf.rivD = city && city.rivD ? city.rivD : null;
  }
 
  function floorRow(frame, i, r, rowC, ox, oz, dx, dz, len, horizon, scale, eyeY, t) {
@@ -4150,7 +4797,6 @@ var CC = (function () {
 
 /* src/control.js */
 (function (CC) {
- 'use strict';
 
  var clamp = CC.clamp, smooth = CC.smooth;
 
@@ -4635,7 +5281,6 @@ var CC = (function () {
 
 /* src/elements/ads.js */
 (function (CC) {
- 'use strict';
 
  var P = CC.P, g = CC.g, put = CC.put, hash2 = CC.hash2, clamp = CC.clamp, smooth = CC.smooth;
 
@@ -5121,7 +5766,6 @@ var CC = (function () {
 
 /* src/elements/hud.js */
 (function (CC) {
- 'use strict';
 
  var GH = CC.g('@');
 
@@ -5339,9 +5983,1110 @@ var CC = (function () {
 
 })(CC);
 
+/* src/elements/jp_banner.js */
+(function (CC) {
+
+ var PR = CC.Proj.make(), V = PR.V, PJ = PR.PJ;
+ var project = PR.project, emit = PR.emit, column = PR.column;
+
+ var P = CC.P, hash2 = CC.hash2, clamp = CC.clamp;
+
+ var G_PIPE = CC.g('|'), G_DASH = CC.g('-'), G_EQ = CC.g('='), G_8 = CC.g('8'),
+   G_TICK = CC.g('`');
+
+ var CITY = null, BASE = 0, JP = null;
+ function boot(city) {
+  CITY = (city && city.aveX && city.world === 'japan') ? city : null;
+  BASE = CITY ? ((Math.imul(CITY.seed | 0, 52711) >>> 5) & 0x3fffff) : 0;
+  JP = null;
+ }
+
+ var W_WET = 1, NIGHT = 1, LAMP = 1, DAYF = 0;
+ function view(f, cam, t) {
+  PR.view(f, cam, t);
+  if (!JP) JP = (CC.SURFACES && CC.World) ? CC.SURFACES[CC.World.id] : null;
+  W_WET = CC.Weather ? CC.Weather.rel('wet') : 1;
+  NIGHT = (JP && JP.night !== undefined) ? JP.night : 1;
+  DAYF = (JP && JP.dayFill !== undefined) ? JP.dayFill : 0;
+  LAMP = CC.Daylight ? CC.Daylight.P.lamp : 1;
+ }
+
+ function wxOf(axis, along, cross) { return axis ? along : cross; }
+ function wzOf(axis, along, cross) { return axis ? cross : along; }
+ function nearIdx(axis) {
+  return Math.round((axis ? V.oz : V.ox) / (axis ? CITY.CROSS : CITY.AVE));
+ }
+ function centreOf(axis, idx) { return axis ? CITY.crossZ(idx) : CITY.aveX(idx); }
+ function halfOf(axis, idx) { return axis ? CITY.crossW(idx) : CITY.aveW(idx); }
+ function alongOf(axis) { return axis ? V.ox : V.oz; }
+
+ function faceOf(axis, idx, side) {
+  return centreOf(axis, idx) + 0.5 + side * (halfOf(axis, idx) + 0.5);
+ }
+ function heightAt(axis, along, cross) {
+  return CITY.height(wxOf(axis, along, cross), wzOf(axis, along, cross));
+ }
+
+ var NOB_PITCH = 3.2;
+
+ var NOB_BOT = 1.10, NOB_TOP = 3.15;
+
+ var NOB_W = 0.58;
+
+ var NOB_OUT = 1.00;
+
+ var NOB_NEAR = 9, NOB_FAR = 26;
+
+ var NOB_R = { temple: 0.72, market: 0.64, machiya: 0.46, kura: 0.30, nagaya: 0.26, garden: 0.20,
+        castle: 0.16 };
+
+ var NOB_DEV = [P.ember, P.ember, P.ember, P.gold];
+
+ var NOB_TN = [138, 114, 124, 175];
+ var NOB_TE = [106, 184, 210, 127];
+ var NOB_TD = [97, 210, 229, 114];
+
+ function minLum(si, d) {
+  var th = NOB_TN[si] * NIGHT + (1 - NIGHT) * (NOB_TE[si] + (NOB_TD[si] - NOB_TE[si]) * DAYF);
+  return th * (d > 14 ? 1 + 0.0095 * (d - 14) : 1) * 1.15;
+ }
+
+ function lampAt(vy) {
+  if (vy <= 1.0) return 0.86;
+  if (vy >= 3.6) return 0;
+  var k = (3.6 - vy) / 2.6;
+  return 0.86 * k * k * (3 - 2 * k);
+ }
+ function groundLum(vy) {
+  return 30 + 225 * clamp(lampAt(vy) * LAMP + (1 - NIGHT) * (0.30 + 0.62 * DAYF), 0, 1);
+ }
+
+ function drawNobori(f, axis, idx) {
+  var here = alongOf(axis);
+
+  var lo = Math.floor((here - NOB_FAR - NOB_PITCH) / NOB_PITCH);
+  var hi = Math.floor((here + NOB_FAR + NOB_PITCH) / NOB_PITCH);
+  if (hi - lo > 24) hi = lo + 24;
+
+  for (var side = -1; side <= 1; side += 2) {
+   var wall = faceOf(axis, idx, side);
+   var poleC = wall - side * NOB_OUT;
+   var clothC = wall - side * (NOB_OUT + NOB_W);
+   var lace = wall - side * (NOB_OUT + 0.06);
+   var back = wall + side * 0.8;
+
+   for (var k = lo; k <= hi; k++) {
+    var along = k * NOB_PITCH + hash2(k, side, BASE + 0x61) * 1.2;
+
+    if (heightAt(axis, along, back) < 1.6) continue;
+
+    var D = CITY.DISTRICTS && CITY.DISTRICTS[CITY.districtAt(wxOf(axis, along, back),
+                                wzOf(axis, along, back))];
+    var rate = D ? NOB_R[D.name] : 0;
+    if (!rate) continue;
+    if (hash2(k, side * 3 + (axis ? 7 : 0), BASE + 0x62) > rate) continue;
+
+    if (heightAt(axis, along, poleC) > 0.5) continue;
+
+    if (!project(wxOf(axis, along, lace), NOB_BOT, wzOf(axis, along, lace))) continue;
+    var xa = PJ.x, rb = PJ.y, d = PJ.d;
+    if (d < NOB_NEAR || d > NOB_FAR) continue;
+    if (!project(wxOf(axis, along, clothC), NOB_BOT, wzOf(axis, along, clothC))) continue;
+    var xb = PJ.x;
+    if (!project(wxOf(axis, along, lace), NOB_TOP, wzOf(axis, along, lace))) continue;
+    var rt = PJ.y;
+
+    var c0 = Math.floor(xa < xb ? xa : xb), c1 = Math.floor(xa < xb ? xb : xa);
+    var r0 = Math.floor(rt), r1 = Math.floor(rb);
+    if (r1 < r0) { var sw = r0; r0 = r1; r1 = sw; }
+
+    if (c1 < 0 || c0 >= V.cols) continue;
+    var nw = c1 - c0 + 1;
+    if (nw > 8) nw = 8;
+    if (r1 - r0 > V.rows) continue;
+
+    var plum = groundLum(0.55) * 0.92;
+    if (plum >= minLum(3, d))
+     column(f, wxOf(axis, along, poleC), wzOf(axis, along, poleC),
+        0, NOB_BOT + 0.10, G_PIPE, P.sand, plum, 0);
+
+    var dev = NOB_DEV[(hash2(k, side, BASE + 0x63) * 4) | 0];
+    var devI = dev === P.gold ? 2 : 1;
+    var cd = nw >= 3 ? (nw >> 1) : -1;
+    var hemR = (r1 - r0) >= 8 ? 1 : 0;
+    var cdq = (k * 7 + side * 3) | 0;
+    var c, r;
+
+    for (r = r0; r <= r1; r++) {
+
+     var vy = r1 > r0 ? NOB_BOT + (NOB_TOP - NOB_BOT) * (r1 - r) / (r1 - r0) : NOB_BOT;
+     var gl = groundLum(vy);
+     var top = r === r0, hem = r >= r1 - hemR;
+
+     for (c = 0; c < nw; c++) {
+      var edge = nw >= 4 && (c === 0 || c === nw - 1);
+      var ch, si, col, lm;
+
+      if (hem || top) {
+
+       ch = G_DASH; si = devI; col = dev; lm = gl;
+      } else if (c === cd &&
+
+           hash2(cdq, (vy * 6) | 0, BASE + 0x64) < 0.62) {
+       ch = G_8; si = devI; col = dev; lm = gl;
+      } else if (edge) {
+
+       ch = G_PIPE; si = 0; col = P.white; lm = gl * 0.86;
+      } else {
+       ch = G_EQ; si = 0; col = P.white; lm = gl;
+      }
+
+      if (lm < minLum(si, d)) {
+       if (si === 0) continue;
+       ch = G_EQ; col = P.white; lm = gl;
+       if (lm < minLum(0, d)) continue;
+      }
+
+      emit(f, c0 + c, r, ch, col, lm, d - 0.02);
+     }
+    }
+
+    if (LAMP > 0.4 && W_WET > 0.5 && d < 20 && r1 > r0)
+     emit(f, c0 + nw, r1 - 1, G_TICK, P.pure, 132 * LAMP, d - 0.04);
+   }
+  }
+ }
+
+ function mk(name, layer, fn) {
+  return {
+   name: name, layer: layer, world: 'japan',
+   init: function (city) { boot(city); },
+   draw: function (f, cam, t) {
+    if (!CITY) return;
+    view(f, cam, t === undefined ? (cam.t || 0) : t);
+    fn(f);
+   }
+  };
+ }
+
+ CC.ELEMENTS.push(mk('jp-nobori', 18, function (f) {
+  var i;
+  for (i = -1; i <= 1; i++) drawNobori(f, 0, nearIdx(0) + i);
+  for (i = -1; i <= 1; i++) drawNobori(f, 1, nearIdx(1) + i);
+ }));
+
+})(CC);
+
+/* src/elements/jp_castle.js */
+(function (CC) {
+
+ var PR = CC.Proj.make(), V = PR.V, PJ = PR.PJ;
+ var project = PR.project, emit = PR.emit, litFace = PR.litFace;
+
+ var P = CC.P;
+
+ var G_EQ = CC.g('='), G_UNDER = CC.g('_'), G_TICK = CC.g('`'),
+   G_CARET = CC.g('^'), G_QUOTE = CC.g("'"), G_o = CC.g('o');
+
+ var CITY = null, JP = null;
+ function boot(city) {
+  CITY = (city && city.aveX && city.world === 'japan') ? city : null;
+  JP = null;
+ }
+
+ var NIGHT = 1, DAYF = 0, WALK = 1.6;
+ function view(f, cam, t) {
+  PR.view(f, cam, t);
+  if (!JP) JP = (CC.SURFACES && CC.World) ? CC.SURFACES[CC.World.id] : null;
+
+  NIGHT = (JP && JP.night !== undefined) ? JP.night : 1;
+  DAYF = (JP && JP.dayFill !== undefined) ? JP.dayFill : 0;
+
+  WALK = (CITY && CITY.SPEED) ? CITY.SPEED : 1.6;
+ }
+
+ var KEEP_R = 124;
+
+ var STEP_X = 4, STEP_Z = 8;
+ var MAX_KEEPS = 3;
+
+ var KEEP_MIN_H = 12.5;
+
+ var builtX = new Int32Array(MAX_KEEPS), builtZ = new Int32Array(MAX_KEEPS), builtN = 0;
+
+ var TIER_SPAN = 0.58, FLY0 = 1.10, FLY_D = 0.78;
+
+ var KEEP_HZ = 2.0, RIDGE_HZ = 1.6, RIDGE_FAR = 82, FADE_M = 9;
+
+ var RIDGE_H = 2.6;
+
+ function runEave(f, ax, az, bx, bz, y, col, lum, soffit, tick) {
+  var n, i, u, px, pz, x, yy;
+
+  var okA = project(ax, y, az), sx = PJ.x, sy = PJ.y, sd = PJ.d;
+  var okB = project(bx, y, bz), ex = PJ.x, ey = PJ.y, ed = PJ.d;
+  if (okA && okB) {
+   n = ex > sx ? ex - sx : sx - ex;
+   var m = ey > sy ? ey - sy : sy - ey;
+   if (m > n) n = m;
+
+   n = Math.ceil(n * (ed > sd ? ed / sd : sd / ed));
+  } else {
+   var dx = bx - ax, dz = bz - az;
+   n = Math.ceil(Math.sqrt(dx * dx + dz * dz) * 2);
+  }
+  if (n < 1) n = 1;
+  if (n > 96) n = 96;
+
+  for (i = 0; i <= n; i++) {
+   u = i / n;
+   px = ax + (bx - ax) * u; pz = az + (bz - az) * u;
+   if (!project(px, y, pz)) continue;
+   x = Math.floor(PJ.x); yy = Math.floor(PJ.y);
+   emit(f, x, yy, G_EQ, col, lum, PJ.d);
+   if (soffit) emit(f, x, yy + 1, G_UNDER, P.shadow, 0, PJ.d);
+   if (tick && (i === 0 || i === n))
+    emit(f, x, yy - 1, G_TICK, col, lum * 1.25, PJ.d - 0.01);
+  }
+ }
+
+ function drawKeep(f, rec) {
+  var lx = rec.lotX, lz = rec.lotZ;
+
+  var H = CITY.height(lx + 2, lz + 4);
+  if (H < KEEP_MIN_H) return 0;
+
+  var floorH = H - 0.6, x0 = lx + 2, x1 = lx + 2, z0 = lz + 4, z1 = lz + 4, xm;
+  while (x0 > lx && CITY.height(x0 - 1, lz + 4) > floorH) x0--;
+  while (x1 < lx + 5 && CITY.height(x1 + 1, lz + 4) > floorH) x1++;
+  xm = (x0 + x1) >> 1;
+  while (z0 > lz && CITY.height(xm, z0 - 1) > floorH) z0--;
+  while (z1 < lz + 15 && CITY.height(xm, z1 + 1) > floorH) z1++;
+
+  var wx0 = x0, wx1 = x1 + 1, wz0 = z0, wz1 = z1 + 1;
+
+  var kx = (wx0 + wx1) * 0.5, kz = (wz0 + wz1) * 0.5;
+  var rx = kx - V.ox, rz = kz - V.oz;
+  var d = Math.sqrt(rx * rx + rz * rz);
+  if (d > KEEP_R) return 0;
+
+  var sd = rec.seed;
+  var nt = H >= 19 ? 4 : (H >= 15 ? 3 : 2);
+  var step = H * TIER_SPAN / (nt - 1);
+  var fly0 = FLY0 + sd * 0.30;
+
+  var sunPX = litFace(1, 0), sunNX = litFace(-1, 0);
+  var sunPZ = litFace(0, 1), sunNZ = litFace(0, -1);
+
+  var built = 0, i, s;
+  for (i = 0; i < nt; i++) {
+   var y = H - i * step;
+   var fly = fly0 + i * FLY_D;
+
+   var dMin = Math.sqrt((y - V.eyeY) * V.scale * WALK / KEEP_HZ);
+   if (d < dMin) continue;
+   var fade = d < dMin + FADE_M ? (d - dMin) / FADE_M : 1;
+   fade = fade * fade * (3 - 2 * fade);
+
+   var ex0 = wx0 - fly, ex1 = wx1 + fly, ez0 = wz0 - fly, ez1 = wz1 + fly;
+
+   var fx = V.fwx < 0 ? -V.fwx : V.fwx, fz = V.fwz < 0 ? -V.fwz : V.fwz;
+   var broadIsX = fx > fz;
+
+   for (s = 0; s < 4; s++) {
+
+    var ax, az, bx, bz, sun, isBroad;
+    if (s === 0) {
+     if (V.ox <= ex1) continue;
+     ax = ex1; az = ez0; bx = ex1; bz = ez1; sun = sunPX; isBroad = broadIsX;
+    } else if (s === 1) {
+     if (V.ox >= ex0) continue;
+     ax = ex0; az = ez0; bx = ex0; bz = ez1; sun = sunNX; isBroad = broadIsX;
+    } else if (s === 2) {
+     if (V.oz <= ez1) continue;
+     ax = ex0; az = ez1; bx = ex1; bz = ez1; sun = sunPZ; isBroad = !broadIsX;
+    } else {
+     if (V.oz >= ez0) continue;
+     ax = ex0; az = ez0; bx = ex1; bz = ez0; sun = sunNZ; isBroad = !broadIsX;
+    }
+
+    var lum = 18 + 120 * sun * (0.22 + 0.78 * (1 - NIGHT)) + 26 * DAYF;
+    runEave(f, ax, az, bx, bz, y, P.stone, lum * fade, 1, 1);
+
+    if (isBroad && i > 0 && i < nt - 1) {
+     var mx = (ax + bx) * 0.5, mz = (az + bz) * 0.5;
+     if (project(mx, y, mz)) {
+      var gxp = Math.floor(PJ.x), gyp = Math.floor(PJ.y), gd = PJ.d - 0.01;
+      emit(f, gxp, gyp - 2, G_CARET, P.stone, lum * fade * 1.3, gd);
+      emit(f, gxp - 1, gyp - 1, G_QUOTE, P.stone, lum * fade, gd);
+      emit(f, gxp + 1, gyp - 1, G_TICK, P.stone, lum * fade, gd);
+     }
+    }
+    built = 1;
+   }
+  }
+
+  var dRidge = Math.sqrt((H + RIDGE_H - V.eyeY) * V.scale * WALK / RIDGE_HZ);
+  if (built && d >= dRidge && d <= RIDGE_FAR) {
+   var rf = d < dRidge + FADE_M ? (d - dRidge) / FADE_M : 1;
+   rf = rf * rf * (3 - 2 * rf);
+
+   if (d > RIDGE_FAR - 14) rf *= (RIDGE_FAR - d) / 14;
+
+   var ry = H + RIDGE_H;
+   var rax, raz, rbx, rbz;
+   var afx = V.fwx < 0 ? -V.fwx : V.fwx, afz = V.fwz < 0 ? -V.fwz : V.fwz;
+   if (afz >= afx) {
+    rax = wx0 + (wx1 - wx0) * 0.12; rbx = wx1 - (wx1 - wx0) * 0.12;
+    raz = rbz = (wz0 + wz1) * 0.5;
+   } else {
+    raz = wz0 + (wz1 - wz0) * 0.12; rbz = wz1 - (wz1 - wz0) * 0.12;
+    rax = rbx = (wx0 + wx1) * 0.5;
+   }
+
+   runEave(f, rax, raz, rbx, rbz, ry, P.pure, 214 * rf, 0, 0);
+
+   var q;
+   for (q = 0; q < 2; q++) {
+    var fxp = q ? rbx : rax, fzp = q ? rbz : raz;
+    if (!project(fxp, ry + 0.55, fzp)) continue;
+    var fxc = Math.floor(PJ.x), fyc = Math.floor(PJ.y), fd = PJ.d;
+    emit(f, fxc, fyc, G_o, P.pure, 255 * rf, fd);
+
+    emit(f, fxc, fyc + 1, G_TICK, P.gold, (150 + 80 * DAYF) * rf, fd - 0.01);
+   }
+  }
+
+  return built;
+ }
+
+ function drawKeeps(f) {
+  var R = KEEP_R;
+  var gx0 = Math.floor((V.ox - R) / STEP_X) * STEP_X;
+  var gx1 = Math.floor((V.ox + R) / STEP_X) * STEP_X;
+  var gz0 = Math.floor((V.oz - R) / STEP_Z) * STEP_Z;
+  var gz1 = Math.floor((V.oz + R) / STEP_Z) * STEP_Z;
+
+  var cone = V.hp * 1.8;
+  var gx, gz, rx, rz, w, sp, rec, k, dup;
+
+  builtN = 0;
+  for (gz = gz0; gz <= gz1; gz += STEP_Z) {
+   for (gx = gx0; gx <= gx1; gx += STEP_X) {
+    rx = gx + 0.5 - V.ox; rz = gz + 0.5 - V.oz;
+    w = rx * V.fwx + rz * V.fwz;
+    if (w < 8) continue;
+    sp = (rx * V.rgx + rz * V.rgz) / w;
+    if (sp > cone || sp < -cone) continue;
+    if (rx * rx + rz * rz > R * R) continue;
+
+    if (CITY.height(gx, gz) <= 0) continue;
+    rec = CITY.cell(gx, gz);
+    if (!rec || rec.district !== 'castle') continue;
+
+    dup = 0;
+    for (k = 0; k < builtN; k++)
+     if (builtX[k] === rec.lotX && builtZ[k] === rec.lotZ) { dup = 1; break; }
+    if (dup) continue;
+
+    if (!drawKeep(f, rec)) continue;
+    builtX[builtN] = rec.lotX; builtZ[builtN] = rec.lotZ; builtN++;
+    if (builtN >= MAX_KEEPS) return;
+   }
+  }
+ }
+
+ CC.ELEMENTS.push({
+  name: 'jp-keep',
+  layer: 15,
+  world: 'japan',
+  init: function (city) { boot(city); },
+  draw: function (f, cam, t) {
+   if (!CITY) return;
+   view(f, cam, t === undefined ? (cam.t || 0) : t);
+   drawKeeps(f);
+  }
+ });
+
+})(CC);
+
+/* src/elements/jp_flora.js */
+(function (CC) {
+
+ var PR = CC.Proj.make(), V = PR.V, PJ = PR.PJ;
+ var project = PR.project, emit = PR.emit, column = PR.column;
+
+ var P = CC.P, hash2 = CC.hash2, vnoise = CC.vnoise;
+
+ var G_PIPE = CC.g('|'), G_DASH = CC.g('-'), G_TICK = CC.g('`'), G_QUOTE = CC.g("'"),
+   G_STAR = CC.g('*'), G_AT = CC.g('@'), G_8 = CC.g('8'), G_o = CC.g('o'),
+   G_SLASH = CC.g('/'), G_BSL = CC.g('\\'), G_Y = CC.g('Y');
+
+ var CITY = null, BASE = 0, JP = null;
+ function boot(city) {
+  CITY = (city && city.aveX && city.world === 'japan') ? city : null;
+  BASE = CITY ? ((Math.imul(CITY.seed | 0, 40503) >>> 6) & 0x3fffff) : 0;
+  JP = null;
+
+  FL.n = 0;
+ }
+
+ var NIGHT = 1, DAYF = 0, LAMP = 1;
+ function view(f, cam, t) {
+  PR.view(f, cam, t);
+
+  if (!JP) JP = (CC.SURFACES && CC.World) ? CC.SURFACES[CC.World.id] : null;
+  NIGHT = (JP && JP.night !== undefined) ? JP.night : 1;
+  DAYF = (JP && JP.dayFill !== undefined) ? JP.dayFill : 0;
+
+  LAMP = CC.Daylight ? CC.Daylight.P.lamp : 1;
+ }
+
+ function wxOf(axis, along, cross) { return axis ? along : cross; }
+ function wzOf(axis, along, cross) { return axis ? cross : along; }
+ function nearIdx(axis) {
+  return Math.round((axis ? V.oz : V.ox) / (axis ? CITY.CROSS : CITY.AVE));
+ }
+ function centreOf(axis, idx) { return axis ? CITY.crossZ(idx) : CITY.aveX(idx); }
+ function halfOf(axis, idx) { return axis ? CITY.crossW(idx) : CITY.aveW(idx); }
+ function alongOf(axis) { return axis ? V.ox : V.oz; }
+
+ function faceOf(axis, idx, side) {
+  return centreOf(axis, idx) + 0.5 + side * (halfOf(axis, idx) + 0.5);
+ }
+
+ var ANC_N = 8;
+ var FL = {
+  n: 0, cap: ANC_N,
+  x: new Float64Array(ANC_N), y: new Float64Array(ANC_N),
+  z: new Float64Array(ANC_N), r: new Float64Array(ANC_N)
+ };
+ CC.JPFlora = FL;
+
+ var TREE_PITCH = 12.0, TREE_R = 42, TREE_ACCEPT = 0.19;
+ var TREE_OK = { garden: 1, temple: 1, machiya: 1, market: 1 };
+
+ var CAN_NEAR = 9.5;
+
+ var UP_FLOOR = 0.60, UP_SPAN = 0.40, RIM_F = 0.88, MID_F = 0.95;
+
+ var Q_CORE = 0.28, Q_MID = 0.62;
+
+ var T_RIM = 0.22, T_MID = 0.07;
+
+ var SH_LO = 0.34, SH_W = 0.18;
+
+ var SH_FAR = 0.12, SH_D0 = 18, SH_DK = 1 / 26, SH_LEAF = 0.16;
+
+ function billow(f, bx, by, bz, rad, ry, salt, base, lampB, cA, cB, shLo, shK, dim) {
+  var rx = bx - V.ox, rz = bz - V.oz;
+  var w = rx * V.fwx + rz * V.fwz;
+  if (w < 1.2 || w > V.far) return;
+
+  var n = Math.ceil(2 * rad * V.colK / w) + 2;
+  if (n < 3) n = 3; else if (n > 120) n = 120;
+
+  var i, r;
+  for (i = 0; i <= n; i++) {
+
+   var uu = ((i / n) * 2 - 1) * rad;
+   var un = uu / rad;
+   var s2 = 1 - un * un; if (s2 < 0) s2 = 0;
+   var hv = ry * Math.sqrt(s2);
+   var wpx = bx + V.rgx * uu, wpz = bz + V.rgz * uu;
+
+   if (!project(wpx, by - hv, wpz)) continue;
+   var x = Math.floor(PJ.x), yb = PJ.y, dc = PJ.d;
+   if (x < 0 || x >= V.cols) continue;
+   if (!project(wpx, by + hv, wpz)) continue;
+   var yt = PJ.y;
+   if (yt > yb) { var sw = yt; yt = yb; yb = sw; }
+   var span = yb - yt; if (span < 1e-4) span = 1e-4;
+
+   var r0 = Math.floor(yt), r1 = Math.floor(yb);
+   if (r1 < 0 || r0 >= V.rows) continue;
+   if (r0 < 0) r0 = 0;
+   if (r1 >= V.rows) r1 = V.rows - 1;
+
+   var fu = vnoise(wpx * 0.62 + wpz * 0.41, salt);
+   var ph = wpx * 0.53 + wpz * 0.29;
+
+   for (r = r0; r <= r1; r++) {
+
+    var wy = by + hv * (1 - 2 * ((r + 0.5 - yt) / span));
+    var vy = (wy - by) / ry;
+
+    var q = un * un + vy * vy;
+    if (q > 1.0) q = 1.0;
+
+    var fv = vnoise(wy * 0.62 + ph, salt ^ 0x2B);
+    var fw = vnoise(wy * 2.7 + ph * 1.9, salt ^ 0x5D);
+    var nf = fu * 0.46 + fv * 0.54;
+
+    var tier = q > Q_MID ? 2 : (q > Q_CORE ? 1 : 0);
+    var shF = (nf - shLo - (tier === 2 ? T_RIM : (tier === 1 ? T_MID : 0))) * shK;
+    if (shF < 0) shF = 0; else if (shF > 1) shF = 1;
+
+    var d = dc - rad * 0.86 * Math.sqrt(1 - q);
+    if (d < 0.6) d = 0.6;
+
+    if (shF <= 0.02) {
+
+     emit(f, x, r, 0, P.shadow, 0, d);
+     continue;
+    }
+
+    var up = (wy - by + ry) * (0.5 / ry);
+    if (up < 0) up = 0; else if (up > 1) up = 1;
+
+    var upF = UP_FLOOR + UP_SPAN * up;
+    upF = upF + (1 - upF) * dim;
+    var tierF = tier === 2 ? RIM_F : (tier === 1 ? MID_F : 1);
+
+    var lum = (base * upF + lampB * (1 - 0.78 * up)) * tierF * shF * (0.90 + 0.20 * fw);
+
+    emit(f, x, r,
+      tier === 2 ? (fw > 0.5 ? G_QUOTE : G_TICK)
+            : (tier === 1 ? (fw > 0.5 ? G_STAR : G_o)
+                   : (nf > 0.52 ? G_AT : G_8)),
+      tier === 1 ? (fw > 0.5 ? cB : cA) : cA,
+      lum, d);
+   }
+  }
+ }
+
+ function drawTrees(f, axis, idx) {
+  var here = alongOf(axis);
+  var lo = Math.floor((here - TREE_R) / TREE_PITCH), hi = Math.floor((here + TREE_R) / TREE_PITCH);
+
+  if (hi - lo > 10) hi = lo + 10;
+
+  var tlum = 4 + 2 * (1 - NIGHT) + 1 * DAYF;
+  var tcol = NIGHT > 0.5 ? P.indigo : P.timber;
+
+  for (var side = -1; side <= 1; side += 2) {
+   var face = faceOf(axis, idx, side);
+   var back = face + side * 0.8;
+   for (var k = lo; k <= hi; k++) {
+
+    var along = k * TREE_PITCH + hash2(k, side, BASE + 0x61) * 4.0;
+
+    if (hash2(k, side * 9 + (axis ? 4 : 0), BASE + 0x62) > TREE_ACCEPT) continue;
+
+    var bx = wxOf(axis, along, back), bz = wzOf(axis, along, back);
+    var D = CITY.DISTRICTS && CITY.DISTRICTS[CITY.districtAt(bx, bz)];
+    if (!D || TREE_OK[D.name] !== 1) continue;
+
+    var hB = CITY.height(bx, bz);
+    var kerb = hB > 1.2;
+    var cross = face + side * (kerb ? -1.35 : 3.2);
+    var px = wxOf(axis, along, cross), pz = wzOf(axis, along, cross);
+
+    if (!kerb && CITY.height(px, pz) > 1.2) continue;
+
+    var rx = px - V.ox, rz = pz - V.oz;
+    var w = rx * V.fwx + rz * V.fwz;
+    if (w < 1.0 || w > TREE_R) continue;
+    var sp = rx * V.rgx + rz * V.rgz, lim = w * V.hp + 14;
+    if (sp < -lim || sp > lim) continue;
+
+    var rr = hash2(k, side, BASE + 0x63);
+    var th = 3.0 + rr * 1.9, cr = 1.9 + rr * 1.5;
+
+    column(f, px, pz, 0, th + 0.16, G_PIPE, tcol, tlum, w < 20 ? 1 : 0);
+
+    if (w < 30) {
+     var ns = Math.ceil(cr * 0.9 * V.colK / w) + 3;
+     if (ns > 14) ns = 14;
+     var b, s2i;
+     for (b = -1; b <= 1; b++) {
+
+      var lx = px + b * 0.62, lz = pz + b * 0.34;
+      var lh = th + cr * (0.50 - 0.10 * (b * b));
+      for (s2i = 1; s2i <= ns; s2i++) {
+       var u2 = s2i / ns;
+       if (!project(px + (lx - px) * u2, th - 0.22 + (lh - th + 0.22) * u2,
+             pz + (lz - pz) * u2)) continue;
+       emit(f, Math.floor(PJ.x), Math.floor(PJ.y),
+         b < 0 ? G_SLASH : (b > 0 ? G_BSL : G_PIPE), tcol, tlum * 0.94, PJ.d);
+      }
+     }
+
+     if (project(px, th + 0.12, pz))
+      emit(f, Math.floor(PJ.x), Math.floor(PJ.y), G_Y, tcol, tlum, PJ.d);
+
+     if (w < 15) {
+      if (project(px, th * 0.42, pz))
+       emit(f, Math.floor(PJ.x), Math.floor(PJ.y), G_DASH, tcol, tlum, PJ.d);
+      if (project(px, th * 0.68, pz))
+       emit(f, Math.floor(PJ.x), Math.floor(PJ.y), G_DASH, tcol, tlum, PJ.d);
+     }
+    }
+
+    if (w < CAN_NEAR) continue;
+
+    var bloom = hash2(k, side * 3, BASE + 0x64) < 0.82;
+
+    var bi;
+    for (bi = 0; bi < 3; bi++) {
+     var ang = bi * 2.0944 + hash2(k, side + bi * 5, BASE + 0x65) * 1.5;
+     var off = cr * 0.40;
+     var cbx = px + Math.cos(ang) * off, cbz = pz + Math.sin(ang) * off;
+     var cby = th + cr * (0.44 + 0.36 * hash2(k, side + bi * 11, BASE + 0x66));
+
+     var lowY = cby - cr * 0.528;
+     var lf = lowY >= 4.2 ? 0 : (lowY <= 2.0 ? 1 : (4.2 - lowY) * 0.4545);
+     var lampT = (kerb && LAMP > 0.02 && lf > 0) ? 148 * LAMP * lf * lf * (3 - 2 * lf) : 0;
+     var cb = (12 + 168 * (1 - NIGHT) + 66 * DAYF) * (bloom ? 1 : 0.62);
+
+     var warmLit = lampT > 18 && NIGHT > 0.5;
+     var cA = warmLit ? P.warm : (bloom ? P.white : P.moss);
+     var cB = warmLit ? P.warm : (bloom ? P.sand : P.moss);
+
+     var far = (w - SH_D0) * SH_DK;
+     if (far < 0) far = 0; else if (far > 1) far = 1;
+
+     billow(f, cbx, cby, cbz, cr * 0.66, cr * 0.66 * 0.80,
+        BASE + 0x67 + bi, cb, lampT * (bloom ? 1 : 0.62), cA, cB,
+        SH_LO + SH_FAR * far + (bloom ? 0 : SH_LEAF), 1 / SH_W, far * 0.85);
+    }
+
+    if (FL.n < ANC_N && w > 13) {
+     FL.x[FL.n] = px; FL.y[FL.n] = th + cr * 1.05;
+     FL.z[FL.n] = pz; FL.r[FL.n] = cr * 1.2;
+     FL.n++;
+    }
+   }
+  }
+ }
+
+ function mk(name, layer, fn) {
+  return {
+   name: name, layer: layer, world: 'japan',
+   init: function (city) { boot(city); },
+   draw: function (f, cam, t) {
+    if (!CITY) return;
+    view(f, cam, t === undefined ? (cam.t || 0) : t);
+    fn(f);
+   }
+  };
+ }
+
+ CC.ELEMENTS.push(mk('jp-sakura', 18, function (f) {
+
+  FL.n = 0;
+
+  var i;
+  for (i = -1; i <= 1; i++) drawTrees(f, 0, nearIdx(0) + i);
+  for (i = -1; i <= 1; i++) drawTrees(f, 1, nearIdx(1) + i);
+ }));
+
+})(CC);
+
+/* src/elements/jp_town.js */
+(function (CC) {
+
+ var PR = CC.Proj.make(), V = PR.V, PJ = PR.PJ;
+ var project = PR.project, emit = PR.emit, column = PR.column, litFace = PR.litFace;
+
+ var P = CC.P, hash2 = CC.hash2, clamp = CC.clamp, vnoise = CC.vnoise;
+
+ var G_PIPE = CC.g('|'), G_DASH = CC.g('-'), G_TICK = CC.g('`'), G_COLON = CC.g(':'),
+   G_EQ = CC.g('='), G_8 = CC.g('8'), G_O = CC.g('O'), G_o = CC.g('o');
+
+ var CITY = null, BASE = 0, JP = null;
+ function boot(city) {
+  CITY = (city && city.aveX && city.world === 'japan') ? city : null;
+  BASE = CITY ? ((Math.imul(CITY.seed | 0, 40503) >>> 6) & 0x3fffff) : 0;
+  JP = null;
+ }
+
+ var W_RAIN = 0, W_WIND = 1, W_WET = 1, NIGHT = 1, LAMP = 1, DAYF = 0;
+ function view(f, cam, t) {
+  PR.view(f, cam, t);
+  if (!JP) JP = (CC.SURFACES && CC.World) ? CC.SURFACES[CC.World.id] : null;
+  W_RAIN = CC.Weather ? CC.Weather.P.rain : 0;
+  W_WIND = CC.Weather ? CC.Weather.rel('wind') : 1;
+  W_WET = CC.Weather ? CC.Weather.rel('wet') : 1;
+  NIGHT = (JP && JP.night !== undefined) ? JP.night : 1;
+  DAYF = (JP && JP.dayFill !== undefined) ? JP.dayFill : 0;
+  LAMP = CC.Daylight ? CC.Daylight.P.lamp : 1;
+ }
+
+ function wxOf(axis, along, cross) { return axis ? along : cross; }
+ function wzOf(axis, along, cross) { return axis ? cross : along; }
+ function nearIdx(axis) {
+  return Math.round((axis ? V.oz : V.ox) / (axis ? CITY.CROSS : CITY.AVE));
+ }
+ function centreOf(axis, idx) { return axis ? CITY.crossZ(idx) : CITY.aveX(idx); }
+ function halfOf(axis, idx) { return axis ? CITY.crossW(idx) : CITY.aveW(idx); }
+
+ function alongOf(axis) { return axis ? V.ox : V.oz; }
+
+ function faceOf(axis, idx, side) {
+  return centreOf(axis, idx) + 0.5 + side * (halfOf(axis, idx) + 0.5);
+ }
+
+ function wallH(axis, along, cross) {
+  return CITY.height(wxOf(axis, along, cross), wzOf(axis, along, cross));
+ }
+
+ var LAN_PITCH = 2.4, LAN_Y = 2.12, LAN_OUT = 0.42;
+
+ function drawLanterns(f, axis, idx) {
+  var here = alongOf(axis);
+  var lo = Math.floor((here - 46) / LAN_PITCH), hi = Math.floor((here + 46) / LAN_PITCH);
+  if (hi - lo > 40) hi = lo + 40;
+
+  var lampK = LAMP;
+
+  for (var side = -1; side <= 1; side += 2) {
+   var face = faceOf(axis, idx, side);
+   var cross = face - side * 0.45;
+   var back = face + side * 0.8;
+   for (var k = lo; k <= hi; k++) {
+    var along = k * LAN_PITCH + hash2(k, side, BASE + 0x11) * 0.7;
+    var h = wallH(axis, along, back);
+    if (h < 2.9) continue;
+    var r = hash2(k, side * 7 + (axis ? 3 : 0), BASE + 0x12);
+    if (r > 0.52) continue;
+    var px = wxOf(axis, along, cross), pz = wzOf(axis, along, cross);
+
+    var y = LAN_Y + hash2(k, side, BASE + 0x13) * 0.30;
+    if (y > h - 0.9) y = h - 0.9;
+    if (y < 1.5) continue;
+
+    if (!project(px, y, pz)) continue;
+    var x = Math.floor(PJ.x), yy = Math.floor(PJ.y), d = PJ.d;
+    if (x < -3 || x >= V.cols + 3) continue;
+
+    var rw = 0.15 * V.colK / d, rh = 0.24 * V.scale / d;
+
+    var flick = CC.reducedMotion ? 1
+         : 0.955 + 0.09 * vnoise(t0 * 0.55 + k * 3.7 + side * 1.9, BASE & 0xffff);
+
+    var red = hash2(k, side * 11 + (axis ? 1 : 0), BASE + 0x15) < 0.30;
+    var warm = (196 + 44 * hash2(k, side, BASE + 0x14)) * (red ? 0.90 : 1);
+    var lum = lampK > 0.02 ? warm * lampK * flick : 0;
+    var col = lampK > 0.02 ? (red ? P.red : P.warm) : P.sand;
+    if (lum < 6) lum = 26 + 60 * DAYF;
+
+    if (project(px, y + 0.34, pz))
+     emit(f, Math.floor(PJ.x), Math.floor(PJ.y), G_DASH, P.timber, 22 + 40 * DAYF, PJ.d);
+
+    if (rw < 0.7) { emit(f, x, yy, G_o, col, lum, d); }
+    else {
+     var iw = rw < 1.4 ? 1 : 2, ih = rh < 1.2 ? 1 : (rh < 2.4 ? 2 : 3), dx, dy;
+     for (dy = -ih; dy <= ih; dy++) for (dx = -iw; dx <= iw; dx++) {
+      var uq = dx / (iw + 0.35), vq = dy / (ih + 0.35);
+      if (uq * uq + vq * vq > 1.05) continue;
+
+      var rib = ((dy + 64) & 1) === 0;
+      var edge = uq * uq + vq * vq > 0.55;
+      emit(f, x + dx, yy + dy, edge ? G_COLON : (rib ? G_EQ : G_8),
+        col, lum * (edge ? 0.52 : (rib ? 0.86 : 1)), d);
+     }
+
+     emit(f, x, yy - ih - 1, G_DASH, P.shadow, 0, d);
+     emit(f, x, yy + ih + 1, G_DASH, P.timber, 30 * (0.4 + DAYF), d);
+
+     if (lampK > 0.4 && rw > 0.7)
+      emit(f, x, yy, G_8, P.pure, lum * 0.86, d);
+    }
+
+    if (lum > 40 && W_WET > 0.5) {
+     var hk = clamp((W_WET - 0.5) * 0.9, 0, 0.5);
+     for (var q = -2; q <= 2; q++) {
+      if (q === 0) continue;
+
+      emit(f, x + q, yy, G_TICK, col, lum * hk * 0.16, d + 0.01);
+      emit(f, x, yy + q, G_TICK, col, lum * hk * 0.13, d + 0.01);
+     }
+    }
+   }
+  }
+ }
+
+ var NOREN_TOP = 1.92, NOREN_BOT = 1.06, NOREN_PITCH = 5.4;
+
+ function drawNoren(f, axis, idx) {
+  var here = alongOf(axis);
+  var lo = Math.floor((here - 34) / NOREN_PITCH), hi = Math.floor((here + 34) / NOREN_PITCH);
+  if (hi - lo > 16) hi = lo + 16;
+
+  for (var side = -1; side <= 1; side += 2) {
+   var wall = faceOf(axis, idx, side);
+   var face = wall - side * 0.14;
+   var back = wall + side * 0.8;
+   for (var k = lo; k <= hi; k++) {
+    var along = k * NOREN_PITCH + hash2(k, side, BASE + 0x21) * 2.2;
+    if (wallH(axis, along, back) < 3.2) continue;
+    if (hash2(k, side * 5 + (axis ? 2 : 0), BASE + 0x22) > 0.46) continue;
+
+    var np = 3, w = 0.40;
+    for (var pi = 0; pi < np; pi++) {
+     var off = (pi - (np - 1) * 0.5) * w;
+     var a = along + off;
+     var sway = CC.reducedMotion ? 0
+         : vnoise(t0 * 0.7 + k * 2.3 + pi * 0.9, BASE + 0x23) * 0.10 * (0.4 + W_WIND);
+
+     column(f, wxOf(axis, a, face), wzOf(axis, a, face),
+        NOREN_BOT + sway, NOREN_TOP, G_PIPE, P.indigo,
+        (26 + 54 * LAMP) + 40 * DAYF, 0);
+     if (project(wxOf(axis, a, face), NOREN_TOP + 0.04, wzOf(axis, a, face)))
+      emit(f, Math.floor(PJ.x), Math.floor(PJ.y), G_DASH, P.stone,
+        54 + 70 * LAMP + 60 * DAYF, PJ.d);
+    }
+   }
+  }
+ }
+
+ var TORII_H = 4.6;
+
+ function drawTorii(f, axis, idx) {
+  var c = centreOf(axis, idx), hw = halfOf(axis, idx);
+
+  var oIdx = nearIdx(axis ? 0 : 1);
+  for (var m = oIdx - 1; m <= oIdx + 1; m++) {
+   var along = centreOf(axis ? 0 : 1, m) + 0.5;
+   var px0 = wxOf(axis, along, c + 0.5), pz0 = wzOf(axis, along, c + 0.5);
+   var di = CITY.districtAt(px0, pz0);
+   var D = CITY.DISTRICTS && CITY.DISTRICTS[di];
+   if (!D || D.name !== 'temple') continue;
+   if (hash2(m, idx, BASE + 0x31) > 0.40) continue;
+
+   var span = hw + 0.35;
+   var lit = litFace(axis ? 1 : 0, axis ? 0 : 1);
+   var shd = litFace(axis ? -1 : 0, axis ? 0 : -1);
+   var base = 96 + 120 * (lit > shd ? lit : shd) * (0.35 + 0.65 * (1 - NIGHT));
+
+   if (base < 84) base = 84;
+
+   var s;
+   for (s = -1; s <= 1; s += 2) {
+    var cx = c + 0.5 + s * span;
+    column(f, wxOf(axis, along, cx), wzOf(axis, along, cx), 0, TORII_H,
+       G_PIPE, P.ember, base, 1);
+   }
+
+   var i, N = 22;
+   for (i = 0; i <= N; i++) {
+    var q = i / N, cxx = c + 0.5 + (q * 2 - 1) * span;
+    if (project(wxOf(axis, along, cxx), TORII_H * 0.80, wzOf(axis, along, cxx)))
+     emit(f, Math.floor(PJ.x), Math.floor(PJ.y), G_DASH, P.ember, base * 0.86, PJ.d);
+
+    var ky = TORII_H + 0.42 * (2 * q - 1) * (2 * q - 1);
+    if (project(wxOf(axis, along, cxx), ky, wzOf(axis, along, cxx)))
+     emit(f, Math.floor(PJ.x), Math.floor(PJ.y), G_EQ, P.ember, base, PJ.d);
+   }
+  }
+ }
+
+ var TORO_PITCH = 7.4;
+ var ISH_OK = { garden: 1, temple: 1, kura: 1, castle: 1 };
+
+ function drawToro(f, axis, idx) {
+  var here = alongOf(axis);
+  var lo = Math.floor((here - 40) / TORO_PITCH), hi = Math.floor((here + 40) / TORO_PITCH);
+  if (hi - lo > 14) hi = lo + 14;
+  var lampK = LAMP;
+
+  for (var side = -1; side <= 1; side += 2) {
+   var face = faceOf(axis, idx, side);
+   var cross = face - side * 0.85;
+   var back = face + side * 0.8;
+   for (var k = lo; k <= hi; k++) {
+    var along = k * TORO_PITCH + hash2(k, side, BASE + 0x41) * 2.6;
+    if (hash2(k, side * 3 + (axis ? 5 : 0), BASE + 0x42) > 0.40) continue;
+    var px = wxOf(axis, along, cross), pz = wzOf(axis, along, cross);
+    var D = CITY.DISTRICTS && CITY.DISTRICTS[CITY.districtAt(wxOf(axis, along, back),
+                                wzOf(axis, along, back))];
+    if (!D || ISH_OK[D.name] !== 1) continue;
+
+    var sun = litFace(0, 1);
+    var scol = sun > 0.55 ? P.stone : P.indigo;
+    var slum = (26 + 132 * sun) * (0.30 + 0.70 * (1 - NIGHT)) + 20;
+    column(f, px, pz, 0, 0.70, G_O, scol, slum, 0);
+    column(f, px, pz, 1.04, 1.32, G_EQ, scol, slum * 1.15, 1);
+
+    if (project(px, 0.90, pz))
+     emit(f, Math.floor(PJ.x), Math.floor(PJ.y), lampK > 0.1 ? G_o : G_COLON,
+       lampK > 0.1 ? P.warm : scol,
+       lampK > 0.1 ? (146 + 64 * lampK) * lampK : slum * 0.7, PJ.d);
+   }
+  }
+ }
+
+ var BR_SPAN = 5.6, BR_RISE = 0.55, BR_N = 30;
+
+ function drawBridge(f, axis, idx) {
+  if (!CITY.rivD) return;
+  var c = centreOf(axis, idx), hw = halfOf(axis, idx);
+  var here = alongOf(axis);
+
+  var cx0 = c + 0.5, best = -1, bd = 1e9, a;
+  for (a = here - 120; a < here + 120; a += 2) {
+   var dd = CITY.rivD(wxOf(axis, a, cx0), wzOf(axis, a, cx0));
+   if (dd < bd) { bd = dd; best = a; }
+  }
+  if (best < 0 || bd > 3.0) return;
+
+  var half = hw + 0.5;
+  var lit = litFace(0, 1);
+
+  var wood = NIGHT > 0.5 ? P.indigo : P.timber;
+
+  var base = 26 + 150 * lit * (0.35 + 0.65 * (1 - NIGHT)) + 40 * DAYF + 96 * LAMP;
+  var i, q, y;
+
+  for (i = 0; i <= BR_N; i++) {
+   q = i / BR_N;
+   y = 0.30 + BR_RISE * (1 - (2 * q - 1) * (2 * q - 1));
+   var aa = best + (q * 2 - 1) * BR_SPAN;
+   column(f, wxOf(axis, aa, cx0 - half), wzOf(axis, aa, cx0 - half), y - 0.22, y,
+      G_EQ, wood, base, 0);
+   column(f, wxOf(axis, aa, cx0 + half), wzOf(axis, aa, cx0 + half), y - 0.22, y,
+      G_EQ, wood, base, 0);
+   if (project(wxOf(axis, aa, cx0), y, wzOf(axis, aa, cx0)))
+    emit(f, Math.floor(PJ.x), Math.floor(PJ.y), G_EQ, wood, base * 0.86, PJ.d - 0.02);
+  }
+
+  var D = CITY.DISTRICTS && CITY.DISTRICTS[CITY.districtAt(wxOf(axis, best, cx0),
+                              wzOf(axis, best, cx0))];
+  var rc = (D && D.name === 'temple') ? P.ember : wood;
+  var rl = (D && D.name === 'temple') ? base * 1.25 + 30 : base;
+  for (i = 0; i <= BR_N; i++) {
+   q = i / BR_N;
+   y = 0.30 + BR_RISE * (1 - (2 * q - 1) * (2 * q - 1));
+   var ab = best + (q * 2 - 1) * BR_SPAN;
+   var ry = y + 0.95 + 0.55 * (1 - (2 * q - 1) * (2 * q - 1));
+   for (var sd2 = -1; sd2 <= 1; sd2 += 2) {
+    var rx = cx0 + sd2 * half;
+    if (project(wxOf(axis, ab, rx), ry, wzOf(axis, ab, rx)))
+     emit(f, Math.floor(PJ.x), Math.floor(PJ.y), G_EQ, rc, rl, PJ.d - 0.03);
+
+    if (i % 5 === 0)
+     column(f, wxOf(axis, ab, rx), wzOf(axis, ab, rx), y, ry, G_PIPE, rc, rl * 0.78, 0);
+   }
+  }
+ }
+
+ var NPET = 30;
+ var pX = null, pY = null, pZ = null, pPh = null, pVy = null, pSp = null, pLife = null;
+
+ function respawn(i, r) {
+  var a = r * 6.2832;
+
+  pX[i] = V.ox + Math.cos(a) * (4 + r * 20);
+  pZ[i] = V.oz + Math.sin(a) * (4 + r * 20);
+  pY[i] = 3.4 + r * 4.2;
+  pPh[i] = r * 6.2832;
+  pVy[i] = 0.32 + r * 0.36;
+  pSp[i] = 0.7 + r * 1.1;
+  pLife[i] = 7 + r * 9;
+ }
+
+ var t0 = 0;
+
+ function mk(name, layer, fn) {
+  return {
+   name: name, layer: layer, world: 'japan',
+   init: function (city) { boot(city); },
+   draw: function (f, cam, t) {
+    if (!CITY) return;
+    t0 = t === undefined ? (cam.t || 0) : t;
+    view(f, cam, t0);
+    fn(f);
+   }
+  };
+ }
+
+ CC.ELEMENTS.push(mk('jp-bridge', 14, function (f) {
+  var i;
+  for (i = -1; i <= 1; i++) drawBridge(f, 0, nearIdx(0) + i);
+  for (i = -1; i <= 1; i++) drawBridge(f, 1, nearIdx(1) + i);
+ }));
+ CC.ELEMENTS.push(mk('jp-torii', 16, function (f) {
+  var i;
+  for (i = -1; i <= 1; i++) drawTorii(f, 0, nearIdx(0) + i);
+  for (i = -1; i <= 1; i++) drawTorii(f, 1, nearIdx(1) + i);
+ }));
+ CC.ELEMENTS.push(mk('jp-stonelantern', 17, function (f) {
+  var i;
+  for (i = -1; i <= 1; i++) drawToro(f, 0, nearIdx(0) + i);
+  for (i = -1; i <= 1; i++) drawToro(f, 1, nearIdx(1) + i);
+ }));
+ CC.ELEMENTS.push(mk('jp-lanterns', 19, function (f) {
+  var i;
+  for (i = -1; i <= 1; i++) drawLanterns(f, 0, nearIdx(0) + i);
+  for (i = -1; i <= 1; i++) drawLanterns(f, 1, nearIdx(1) + i);
+ }));
+ CC.ELEMENTS.push(mk('jp-noren', 20, function (f) {
+  var i;
+  for (i = -1; i <= 1; i++) drawNoren(f, 0, nearIdx(0) + i);
+  for (i = -1; i <= 1; i++) drawNoren(f, 1, nearIdx(1) + i);
+ }));
+
+ CC.ELEMENTS.push({
+  name: 'jp-blossom',
+  layer: 22,
+  world: 'japan',
+  init: function (city, rng) {
+   boot(city);
+   pX = new Float64Array(NPET); pY = new Float64Array(NPET); pZ = new Float64Array(NPET);
+   pPh = new Float64Array(NPET); pVy = new Float64Array(NPET); pSp = new Float64Array(NPET);
+   pLife = new Float64Array(NPET);
+
+   V.ox = city && city.startX !== undefined ? city.startX : 0;
+   V.oz = city && city.startZ !== undefined ? city.startZ : 0;
+   for (var i = 0; i < NPET; i++) respawn(i, rng());
+  },
+  update: function (dt, t, cam) {
+   if (!CITY) return;
+   V.ox = cam.x; V.oz = cam.z;
+   var damp = CC.reducedMotion ? 0.3 : 1;
+   var gust = 0.5 + 1.1 * W_WIND;
+   for (var i = 0; i < NPET; i++) {
+    pLife[i] -= dt;
+
+    pPh[i] += dt * pSp[i] * damp;
+    pY[i] -= pVy[i] * dt * damp;
+    pX[i] += Math.cos(pPh[i]) * 0.42 * dt * gust * damp;
+    pZ[i] += (Math.sin(pPh[i] * 0.7) * 0.30 + 0.22) * dt * gust * damp;
+    var dx = pX[i] - cam.x, dz = pZ[i] - cam.z;
+    if (pY[i] < 0.05 || pLife[i] < 0 || dx * dx + dz * dz > 1600)
+     respawn(i, hash2(i, (t * 2) | 0, BASE + 0x51));
+   }
+  },
+  draw: function (f, cam, t) {
+   if (!CITY) return;
+   t0 = t === undefined ? (cam.t || 0) : t;
+   view(f, cam, t0);
+   if (W_RAIN > 0.35) return;
+
+   if (CC.reducedMotion) return;
+   var fade = clamp(1 - W_RAIN / 0.35, 0, 1);
+   for (var i = 0; i < NPET; i++) {
+    if (!project(pX[i], pY[i], pZ[i])) continue;
+
+    if (PJ.d < 11) continue;
+    var near = PJ.d < 16 ? (PJ.d - 11) / 5 : 1;
+
+    var e = Math.cos(pPh[i]);
+    var flat = e > 0.3 || e < -0.3;
+    var warm = hash2(i, 0, BASE + 0x52) < 0.34;
+
+    emit(f, Math.floor(PJ.x), Math.floor(PJ.y),
+      flat ? G_o : G_TICK, warm ? P.sand : P.white,
+      (flat ? 96 : 62) * fade * near * (0.42 + 0.58 * (1 - 0.6 * NIGHT)), PJ.d);
+   }
+  }
+ });
+
+})(CC);
+
 /* src/elements/market.js */
 (function (CC) {
- 'use strict';
 
  var P = CC.P, hash2 = CC.hash2, put = CC.put, vnoise = CC.vnoise;
 
@@ -5809,7 +7554,6 @@ var CC = (function () {
 
 /* src/elements/moon_craft.js */
 (function (CC) {
- 'use strict';
 
  var PR = CC.Proj.make(), V = PR.V, PJ = PR.PJ;
  var project = PR.project, emit = PR.emit, column = PR.column;
@@ -6587,7 +8331,6 @@ var CC = (function () {
 
 /* src/elements/moon_ground.js */
 (function (CC) {
- 'use strict';
 
  var P = CC.P, g = CC.g, put = CC.put, hash1 = CC.hash1, hash2 = CC.hash2, clamp = CC.clamp;
 
@@ -7355,7 +9098,6 @@ var CC = (function () {
 
 /* src/elements/optics.js */
 (function (CC) {
- 'use strict';
 
  var P = CC.P, put = CC.put, hash2 = CC.hash2, clamp = CC.clamp, vnoise = CC.vnoise,
    lerp = CC.lerp, smoothstep = CC.smooth;
@@ -7400,7 +9142,7 @@ var CC = (function () {
   name: 'lightshafts',
   layer: 78,
 
-  world: ['cyber', 'west'],
+  world: ['cyber', 'west', 'japan'],
 
   init: function (city, rng) {
    this.seed = ((rng() * 4294967296) | 0) ^ 0x5A17;
@@ -7602,7 +9344,7 @@ var CC = (function () {
   name: 'lightwash',
   layer: 79,
 
-  world: ['cyber', 'west'],
+  world: ['cyber', 'west', 'japan'],
 
   init: function (city, rng) {
 
@@ -7786,7 +9528,7 @@ var CC = (function () {
   name: 'mistfar',
   layer: 80,
 
-  world: ['cyber', 'west'],
+  world: ['cyber', 'west', 'japan'],
 
   init: function (city, rng) { this.seed = (rng() * 30011) | 0; },
 
@@ -7895,7 +9637,7 @@ var CC = (function () {
   name: 'lensrain',
   layer: 94,
 
-  world: ['cyber', 'west'],
+  world: ['cyber', 'west', 'japan'],
 
   init: function (city, rng) {
    var s = ((rng() * 4294967296) | 0) ^ 0x0F71C5;
@@ -8148,7 +9890,6 @@ var CC = (function () {
 
 /* src/elements/police.js */
 (function (CC) {
- 'use strict';
 
  var P = CC.P, g = CC.g, hash2 = CC.hash2, put = CC.put;
 
@@ -8902,7 +10643,6 @@ var CC = (function () {
 
 /* src/elements/signage.js */
 (function (CC) {
- 'use strict';
 
  var P = CC.P, g = CC.g, hash2 = CC.hash2, vnoise = CC.vnoise, clamp = CC.clamp, put = CC.put;
 
@@ -9960,7 +11700,6 @@ var CC = (function () {
 
 /* src/elements/sky.js */
 (function (CC) {
- 'use strict';
 
  var P = CC.P, g = CC.g, put = CC.put, hash2 = CC.hash2, hash1 = CC.hash1, vnoise = CC.vnoise;
 
@@ -10054,7 +11793,7 @@ var CC = (function () {
   name: 'cloudbase',
   layer: 3,
 
-  world: ['cyber', 'west'],
+  world: ['cyber', 'west', 'japan'],
   draw: function (frame, cam, t) {
    setup(frame, cam);
 
@@ -10107,7 +11846,7 @@ var CC = (function () {
   name: 'stars',
   layer: 4,
 
-  world: ['cyber', 'west'],
+  world: ['cyber', 'west', 'japan'],
   init: function (city, rng) {
    var r = fork(rng), i;
    stX = new Float32Array(NSTAR); stY = new Float32Array(NSTAR); stZ = new Float32Array(NSTAR);
@@ -10156,7 +11895,7 @@ var CC = (function () {
   name: 'moon',
   layer: 5,
 
-  world: ['cyber', 'west'],
+  world: ['cyber', 'west', 'japan'],
   init: function (city, rng) {
    var r = fork(rng);
    moAz0 = (r() - 0.5) * 0.26;
@@ -10648,7 +12387,6 @@ var CC = (function () {
 
 /* src/elements/skylanes.js */
 (function (CC) {
- 'use strict';
 
  var P = CC.P, g = CC.g, put = CC.put, hash2 = CC.hash2;
 
@@ -10927,7 +12665,6 @@ var CC = (function () {
 
 /* src/elements/street.js */
 (function (CC) {
- 'use strict';
 
  var P = CC.P, g = CC.g, hash2 = CC.hash2, clamp = CC.clamp, vnoise = CC.vnoise, put = CC.put;
 
@@ -11325,10 +13062,15 @@ var CC = (function () {
   }
  })();
 
- var PED_WEST = 0;
+ var PED_ARCH   = { west: 1 };
+ var PED_PRE_W = { west: 1, japan: 1 };
+
+ var UMB_HUE = { japan: [P.ember, P.ember, P.warm, P.indigo, P.white] };
+ var UMB_W = null;
+ var PED_ARCH_W = 0, PED_PRE = 0;
  function archPick(h) {
   var i;
-  if (PED_WEST) {
+  if (PED_ARCH_W) {
    var rw = h * ARCH_TOT_W;
    for (i = 0; i < ARCH.length - 1; i++) if (rw < ARCH[i].acc1) return ARCH[i];
    return ARCH[ARCH.length - 1];
@@ -11474,18 +13216,20 @@ var CC = (function () {
 
   var scr = bestH === P.azure;
 
-  p.rim = PED_WEST ? ((h10 < 0.80) ? P.amber : P.warm)
+  p.rim = PED_PRE ? ((h10 < 0.80) ? P.amber : P.warm)
           : ((h10 < 0.80 ? scr : !scr) ? P.azure : P.amber);
 
-  if (!PED_WEST && bestS >= 0 && h18 < 0.34 &&
+  if (!PED_PRE && bestS >= 0 && h18 < 0.34 &&
     bestS !== P.white && bestS !== P.slate && bestS !== P.shadow && bestS !== P.violet &&
     bestS !== P.stone && bestS !== P.timber && bestS !== P.sand &&
     bestS !== P.moss && bestS !== P.indigo) p.rim = bestS;
 
   p.umbOwn = A.umb && h9 < 0.62 ? 1 : 0;
+
+  p.umbHue = (p.umbOwn && UMB_W) ? UMB_W[(h9 / 0.62 * UMB_W.length) | 0] : p.rim;
   p.uRate = 0.20 + h1 * 0.26;
 
-  if (h12 < 0.18 && !PED_WEST) {
+  if (h12 < 0.18 && !PED_PRE) {
    var q = h12 / 0.18;
    p.phone = q < 0.70 ? P.azure : (q < 0.88 ? P.ice : P.violet);
   } else p.phone = -1;
@@ -11493,9 +13237,9 @@ var CC = (function () {
   if (h8 < A.accP) {
    var qa = h8 / A.accP;
 
-   p.acc = PED_WEST ? ((A.acc === 1 || A.acc === 2 || A.acc === 5) ? 3 : A.acc) : A.acc;
+   p.acc = PED_PRE ? ((A.acc === 1 || A.acc === 2 || A.acc === 5) ? 3 : A.acc) : A.acc;
 
-   p.accHue = PED_WEST ? (qa < 0.42 ? P.red : (qa < 0.76 ? P.ember : P.white))
+   p.accHue = PED_PRE ? (qa < 0.42 ? P.red : (qa < 0.76 ? P.ember : P.white))
        : A.acc === 1 ? (qa < 0.34 ? P.spring : P.violet)
        : A.acc === 2 ? P.ice
        : A.acc === 3 ? P.ember
@@ -11507,10 +13251,10 @@ var CC = (function () {
    var qw = h19 / 0.20;
    p.wear = qw < 0.34 ? 1 : (qw < 0.72 ? 2 : 3);
 
-   if (PED_WEST && p.wear === 3) p.wear = 2;
+   if (PED_PRE && p.wear === 3) p.wear = 2;
   } else p.wear = 0;
 
-  if (h17 < A.visP && !PED_WEST) {
+  if (h17 < A.visP && !PED_PRE) {
    var qv = h17 / A.visP;
    p.vis = 1;
    p.visHue = qv < 0.46 ? P.azure : (qv < 0.74 ? P.ember : (qv < 0.87 ? P.ice
@@ -11523,11 +13267,13 @@ var CC = (function () {
   name: 'pedestrians',
   layer: 20,
 
-  world: ['cyber', 'west'],
+  world: ['cyber', 'west', 'japan'],
   init: function (city, rng, dims) {
    this.city = city;
 
-   PED_WEST = (city && city.world === 'west') ? 1 : 0;
+   PED_ARCH_W = (city && PED_ARCH[city.world]) ? 1 : 0;
+   PED_PRE = (city && PED_PRE_W[city.world]) ? 1 : 0;
+   UMB_W = (city && UMB_HUE[city.world]) || null;
 
    this.seed = (rng() * 30011) | 0;
    this.boot = 0;
@@ -11539,7 +13285,7 @@ var CC = (function () {
     peds[i] = { x: 0, z: 0, vx: 0, vz: 0, dx: 0, dz: 0, dodge: 0, n: i * 91, tall: 1.7,
           phase: 0, cross: 0, goSide: 1, shelter: 0, side: 1, rim: P.amber, phone: -1,
           acc: 0, accHue: P.amber, vis: 0, visHue: P.azure, walked: 0, live: 0, wait: 0,
-          umbOwn: 0, umb: 0, uRate: 0.3, hunch: 0, wear: 0, A: ARCH[0] };
+          umbOwn: 0, umb: 0, umbHue: 0, uRate: 0.3, hunch: 0, wear: 0, A: ARCH[0] };
   },
   update: function (dt, t, cam) {
 
@@ -11984,7 +13730,7 @@ var CC = (function () {
       var ul = rim * (0.46 - 0.30 * f2 * f2) * (0.5 + 0.5 * p.umb);
       put(frame, Math.round(cx) + q,
         Math.round(rApex + f2 * f2 * tallRows * 0.17 + q * uTilt * 0.30),
-        (q === -ruI || q === ruI) ? G_TICK : G_DASH, p.rim, ul, nearer(dist));
+        (q === -ruI || q === ruI) ? G_TICK : G_DASH, p.umbHue, ul, nearer(dist));
      }
 
      bar(frame, Math.round(cx), rApex + 1, rHead - 1, 0, P.shadow, 0, nearer(dist));
@@ -12014,7 +13760,7 @@ var CC = (function () {
   name: 'cat',
   layer: 21,
 
-  world: ['cyber', 'west'],
+  world: ['cyber', 'west', 'japan'],
   init: function (city, rng) {
    this.city = city;
    this.seed = (rng() * 2147483647) | 0;
@@ -12326,7 +14072,6 @@ var CC = (function () {
 
 /* src/elements/structure.js */
 (function (CC) {
- 'use strict';
 
  var P = CC.P, hash2 = CC.hash2, vnoise = CC.vnoise, put = CC.put;
 
@@ -13182,7 +14927,6 @@ var CC = (function () {
 
 /* src/elements/weather.js */
 (function (CC) {
- 'use strict';
 
  var P = CC.P, put = CC.put, hash1 = CC.hash1, hash2 = CC.hash2,
    clamp = CC.clamp, lerp = CC.lerp, smooth = CC.smooth, vnoise = CC.vnoise;
@@ -13326,7 +15070,7 @@ var CC = (function () {
   name: 'rain',
   layer: 12,
 
-  world: ['cyber', 'west'],
+  world: ['cyber', 'west', 'japan'],
   init: function (city, rng) {
    bindWorld(city, rng);
 
@@ -13665,7 +15409,7 @@ var CC = (function () {
   name: 'fogbank',
   layer: 8,
 
-  world: ['cyber', 'west'],
+  world: ['cyber', 'west', 'japan'],
   init: function (city, rng) {
    bindWorld(city, rng);
    fgSeed = smallSeed(rng);
@@ -13791,7 +15535,7 @@ var CC = (function () {
   name: 'lowcloud',
   layer: 7,
 
-  world: ['cyber', 'west'],
+  world: ['cyber', 'west', 'japan'],
   init: function (city, rng) {
    bindWorld(city, rng);
    clSeed = smallSeed(rng);
@@ -13869,7 +15613,7 @@ var CC = (function () {
   name: 'lightning',
   layer: 40,
 
-  world: ['cyber', 'west'],
+  world: ['cyber', 'west', 'japan'],
   init: function (city, rng) {
    bindWorld(city, rng);
    lgSeed = smallSeed(rng);
@@ -13996,7 +15740,6 @@ var CC = (function () {
 
 /* src/elements/west_desert.js */
 (function (CC) {
- 'use strict';
 
  var PR = CC.Proj.make(), V = PR.V, PJ = PR.PJ;
  var project = PR.project, emit = PR.emit, column = PR.column, litFace = PR.litFace;
@@ -14525,7 +16268,6 @@ var CC = (function () {
 
 /* src/elements/west_range.js */
 (function (CC) {
- 'use strict';
 
  var PR = CC.Proj.make(), V = PR.V, PJ = PR.PJ;
  var project = PR.project, emit = PR.emit, column = PR.column, litFace = PR.litFace;
@@ -14806,7 +16548,6 @@ var CC = (function () {
 
 /* src/elements/west_sky.js */
 (function (CC) {
- 'use strict';
 
  var P = CC.P, g = CC.g, put = CC.put, hash2 = CC.hash2, vnoise = CC.vnoise, clamp = CC.clamp;
 
@@ -15064,7 +16805,6 @@ var CC = (function () {
 
 /* src/elements/west_stock.js */
 (function (CC) {
- 'use strict';
 
  var PR = CC.Proj.make(), V = PR.V, PJ = PR.PJ;
  var project = PR.project, emit = PR.emit, column = PR.column, litFace = PR.litFace;
@@ -15630,7 +17370,6 @@ var CC = (function () {
 
 /* src/elements/west_town.js */
 (function (CC) {
- 'use strict';
 
  var PR = CC.Proj.make(), V = PR.V, PJ = PR.PJ;
  var project = PR.project, emit = PR.emit, column = PR.column, litFace = PR.litFace;
@@ -16027,7 +17766,6 @@ var CC = (function () {
 
 /* src/render_canvas.js */
 (function (CC) {
- 'use strict';
 
  var PALETTE = CC.PALETTE, GLYPHS = CC.GLYPHS;
  var NG = GLYPHS.length, NP = PALETTE.length;
@@ -16212,7 +17950,6 @@ var CC = (function () {
 
 /* src/main.js */
 (function (CC) {
- 'use strict';
 
  var HAS_DOM = typeof document !== 'undefined' && typeof window !== 'undefined' &&
         !!(document && document.createElement);

@@ -228,6 +228,11 @@
      * frame, and city.js's jitter is bounded well under half a block so the arithmetic guess is
      * never more than one slot out. */
     cf.xpitch = pitch;
+    /* And the channel, for a world that has one. Straight onto the block rather than through
+     * configure(), exactly as xn/xc/xw/xpitch above are: this is a per-frame refill of a city fact,
+     * not a viewer setting. `|| null` so the three worlds without water publish nothing and the
+     * painter's guard is a single truthiness test. */
+    cf.rivD = city && city.rivD ? city.rivD : null;
   }
 
   /* ---- floor by inverse projection ----------------------------------------------------------

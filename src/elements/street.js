@@ -909,7 +909,7 @@
        *   wheels   0.015 kept. A cane-and-iron invalid chair is period and was rare; 0.015 of the
        *            crowd is about one figure in a hundred, which is the rate it should be
        * The new sum is 0.495 of 1.600. What the eight do NOT change is anything sci-fi: their
-       * accents, rims and linings all run through the PED_WEST gates below like everyone else's,
+       * accents, rims and linings all run through the PED_PRE gates below like everyone else's,
        * and a west night frame carries no non-period swatch from this file at all. */
       ARCH_TOT_W += (A.ww === undefined ? A.w : A.ww); A.acc1 = ARCH_TOT_W;
     }
@@ -917,10 +917,42 @@
   /* Which crowd this is. Read off the CITY rather than off CC.World, for the reason world.js
    * gives: between a keypress and the rebuild those are two different answers, and this one has to
    * match the map the walkers are standing on. */
-  var PED_WEST = 0;
+  /* ---- TWO FLAGS, NOT ONE, AND BOTH COME OUT OF A TABLE ------------------------------------------
+   * This was a single `PED_WEST = city.world === 'west'`, which is the shape world.js and city.js
+   * both spend a paragraph forbidding: a boolean meaning "is west" that a third world silently
+   * falls off the end of. It was doing two unrelated jobs and a fourth world needs one of them and
+   * not the other, which is exactly how that kind of flag fails.
+   *
+   *   PED_ARCH_W picks the FRONTIER COSTUME WEIGHTS — the duster, the brimmed hat, the bedroll high
+   *     on the back. Those are that world's silhouettes and nobody else's.
+   *   PED_PRE says the crowd is PRE-ELECTRIC. No phone at chest height, no electroluminescent
+   *     piping, no retroreflective courier strip, no hi-vis; rims go warm; a lit thing carried in
+   *     the hand is a flame. That is true of 1885 Kansas and it is true of Edo, and it is the half
+   *     of the old flag the fourth world needs.
+   *
+   * Both are looked up by world id off a table, so a world that is not in it gets the modern
+   * default rather than whatever the last `else` happened to be. The DRAWS are unchanged in either
+   * case — every gate below still takes its hash and throws the result away rather than skipping
+   * it — so the crowd's noise stream is identical across worlds and one world's walkers are not a
+   * reshuffle of another's. */
+  var PED_ARCH   = { west: 1 };
+  var PED_PRE_W = { west: 1, japan: 1 };
+  /* ---- AND WHAT COLOUR THE UMBRELLA IS, WHICH IS THE THIRD THING KEYED BY WORLD ------------------
+   * A wagasa is oiled paper on a bamboo frame and it is one of the few objects in Edo that was
+   * allowed to be loud — two vermilion, one kakishibu-oiled natural, one aizome indigo, one plain,
+   * which is what a wet street of them looks like. Everywhere else the canopy keeps taking `p.rim`,
+   * so a world absent from this table renders byte-for-byte as before: verified over all 27
+   * cyber/west/moon fixtures.
+   *
+   * It is census-NEUTRAL and bought entirely for the picture — the canopy's own luminance is
+   * 30-55, under every printed threshold in the table — which is the honest description of what a
+   * colour that only shows in the rain is worth. */
+  var UMB_HUE = { japan: [P.ember, P.ember, P.warm, P.indigo, P.white] };
+  var UMB_W = null;
+  var PED_ARCH_W = 0, PED_PRE = 0;
   function archPick(h) {
     var i;
-    if (PED_WEST) {
+    if (PED_ARCH_W) {
       var rw = h * ARCH_TOT_W;
       for (i = 0; i < ARCH.length - 1; i++) if (rw < ARCH[i].acc1) return ARCH[i];
       return ARCH[ARCH.length - 1];
@@ -1213,7 +1245,7 @@
      * the last of the sun — both warm. One in five still breaks the rule, as in the city, because
      * a street has more light in it than the wall behind you; it just breaks it towards warm
      * rather than towards a shopfront monitor. */
-    p.rim = PED_WEST ? ((h10 < 0.80) ? P.amber : P.warm)
+    p.rim = PED_PRE ? ((h10 < 0.80) ? P.amber : P.warm)
                      : ((h10 < 0.80 ? scr : !scr) ? P.azure : P.amber);
     /* ---- AND THE SIGN OVERHEAD BEATS THE WALL BEHIND ------------------------------------------
      * The rim has always followed the FRONTAGE, which is right as far as it goes: a screen block
@@ -1236,12 +1268,20 @@
      * NOT ON THE FRONTIER, and the draw is still TAKEN so the noise stream downstream of it does
      * not move between worlds — the same discipline the phone and the visor keep. Out there the
      * signs are painted boards under a porch lantern and the rim is warm, which h10 already said. */
-    if (!PED_WEST && bestS >= 0 && h18 < 0.34 &&
+    if (!PED_PRE && bestS >= 0 && h18 < 0.34 &&
         bestS !== P.white && bestS !== P.slate && bestS !== P.shadow && bestS !== P.violet &&
         bestS !== P.stone && bestS !== P.timber && bestS !== P.sand &&
         bestS !== P.moss && bestS !== P.indigo) p.rim = bestS;
     /* Umbrellas. Owning one is not the same as having it up — see the easing in update(). */
     p.umbOwn = A.umb && h9 < 0.62 ? 1 : 0;
+    /* THE CANOPY'S OWN HUE, AND THE ASSIGNMENT IS INSIDE THE GATE FOR A REASON. `h9/0.62` is uniform
+     * on 0..1 only for the figures the line above accepted, so indexing the table with it outside
+     * the gate runs off the end of the array for every h9 >= 0.62 and yields `undefined` — which a
+     * Uint8Array coerces to slot 0, amber. That is not hypothetical: pedSpawn does not reset p.umb,
+     * so a walker recycled while its canopy is still easing shut would have drawn an amber umbrella
+     * for a second or so. Conditional-on-the-gate is the same free-draw idiom the phone above uses
+     * and it costs no extra hash. */
+    p.umbHue = (p.umbOwn && UMB_W) ? UMB_W[(h9 / 0.62 * UMB_W.length) | 0] : p.rim;
     p.uRate = 0.20 + h1 * 0.26;              // seconds-scale, and different for every figure
     /* A phone is a screen, which is the one thing violet is licensed for. Conditional on the gate,
      * h12/0.18 is itself uniform on 0..1 and independent of it, so the colour needs no extra
@@ -1251,7 +1291,7 @@
      * at chest height, which is a phone, which is a hundred and thirty years early. The draw is
      * still TAKEN so the hash stream downstream of it is unchanged between worlds — only the
      * result is thrown away. */
-    if (h12 < 0.18 && !PED_WEST) {
+    if (h12 < 0.18 && !PED_PRE) {
       var q = h12 / 0.18;
       p.phone = q < 0.70 ? P.azure : (q < 0.88 ? P.ice : P.violet);
     } else p.phone = -1;
@@ -1268,7 +1308,7 @@
        * All three fall back to acc 3, which is a cigarette: an ember dot at the face, which is
        * period-correct, is the same one-cell cost, and is a better read on a frontier figure than
        * any of them. acc 4 (something carried and lit — a lantern) is kept as it is. */
-      p.acc = PED_WEST ? ((A.acc === 1 || A.acc === 2 || A.acc === 5) ? 3 : A.acc) : A.acc;
+      p.acc = PED_PRE ? ((A.acc === 1 || A.acc === 2 || A.acc === 5) ? 3 : A.acc) : A.acc;
       /* Piping leans violet rather than spring, and that is a PRINT decision, not a taste one:
        * core.js gives spring an exposure weight of 1.55 against violet's 0.70, so the same lum
        * prints spring more than twice as hot and a green seam was reading as the brightest thing
@@ -1277,7 +1317,7 @@
        * neckerchief, an ember bandana, a white collar. Spring, violet and ice all come off the
        * ladder there — the first two are the city's signage garnish and the third is a glint on
        * something manufactured. */
-      p.accHue = PED_WEST ? (qa < 0.42 ? P.red : (qa < 0.76 ? P.ember : P.white))
+      p.accHue = PED_PRE ? (qa < 0.42 ? P.red : (qa < 0.76 ? P.ember : P.white))
                : A.acc === 1 ? (qa < 0.34 ? P.spring : P.violet)
                : A.acc === 2 ? P.ice
                : A.acc === 3 ? P.ember
@@ -1313,7 +1353,7 @@
       /* Brass and wool are both entirely 1880s and both stay. An indigo hood LINING is a hood,
        * and out there a hood is a serape hood, so it falls back to the collar rather than being
        * dropped — the draw is still taken either way, so no downstream stream moves. */
-      if (PED_WEST && p.wear === 3) p.wear = 2;
+      if (PED_PRE && p.wear === 3) p.wear = 2;
     } else p.wear = 0;
     /* THE VISOR — its own independent draw, because welding it to the accent roll is the bug this
      * file has already been caught with three times (a crossing draw reused for a rim colour made
@@ -1329,7 +1369,7 @@
      * licence covers, and red is hazard, which is what a targeting overlay is. At 15.9% of the
      * crowd wearing one, red at 0.07 of those is under 1 figure in 90 and does not move red's
      * 0.3% share of lit energy measurably. */
-    if (h17 < A.visP && !PED_WEST) {
+    if (h17 < A.visP && !PED_PRE) {
       var qv = h17 / A.visP;
       p.vis = 1;
       p.visHue = qv < 0.46 ? P.azure : (qv < 0.74 ? P.ember : (qv < 0.87 ? P.ice
@@ -1344,12 +1384,14 @@
     /* THE TWO WORLDS WITH AIR IN THEM. Nobody walks a lunar plain in shirtsleeves; the crowd is an atmospheric-world
      * object and a suited figure is a different silhouette that this element cannot draw.
      * See src/world.js: `world` may be a string or a set, and absent means every world. */
-    world: ['cyber', 'west'],
+    world: ['cyber', 'west', 'japan'],
     init: function (city, rng, dims) {
       this.city = city;
       /* Which world's costume weights the crowd draws from — see archPick. Set here, at the one
        * moment the map is handed over, rather than read per walker. */
-      PED_WEST = (city && city.world === 'west') ? 1 : 0;
+      PED_ARCH_W = (city && PED_ARCH[city.world]) ? 1 : 0;
+      PED_PRE = (city && PED_PRE_W[city.world]) ? 1 : 0;
+      UMB_W = (city && UMB_HUE[city.world]) || null;
       /* Small seed and additive offsets, per the house rule for hash2 — and the draw is still one
        * rng() call, so no downstream element's stream moves. */
       this.seed = (rng() * 30011) | 0;
@@ -1362,7 +1404,7 @@
         peds[i] = { x: 0, z: 0, vx: 0, vz: 0, dx: 0, dz: 0, dodge: 0, n: i * 91, tall: 1.7,
                     phase: 0, cross: 0, goSide: 1, shelter: 0, side: 1, rim: P.amber, phone: -1,
                     acc: 0, accHue: P.amber, vis: 0, visHue: P.azure, walked: 0, live: 0, wait: 0,
-                    umbOwn: 0, umb: 0, uRate: 0.3, hunch: 0, wear: 0, A: ARCH[0] };
+                    umbOwn: 0, umb: 0, umbHue: 0, uRate: 0.3, hunch: 0, wear: 0, A: ARCH[0] };
     },
     update: function (dt, t, cam) {
       /* The full screen basis, not just camBasis, because the retirement below is written in screen
@@ -2187,7 +2229,7 @@
             var ul = rim * (0.46 - 0.30 * f2 * f2) * (0.5 + 0.5 * p.umb);
             put(frame, Math.round(cx) + q,
                 Math.round(rApex + f2 * f2 * tallRows * 0.17 + q * uTilt * 0.30),
-                (q === -ruI || q === ruI) ? G_TICK : G_DASH, p.rim, ul, nearer(dist));
+                (q === -ruI || q === ruI) ? G_TICK : G_DASH, p.umbHue, ul, nearer(dist));
           }
           /* The shaft, and only the stretch between the canopy and the crown: below that it runs
            * inside a cut-out that is already black, so drawing it again would cost and show
@@ -2232,7 +2274,7 @@
     layer: 21,
     /* THE TWO WORLDS WITH AIR IN THEM. For the same reason as the crowd, and more so.
      * See src/world.js: `world` may be a string or a set, and absent means every world. */
-    world: ['cyber', 'west'],
+    world: ['cyber', 'west', 'japan'],
     init: function (city, rng) {
       this.city = city;
       this.seed = (rng() * 2147483647) | 0;

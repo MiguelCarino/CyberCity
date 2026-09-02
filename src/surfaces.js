@@ -88,6 +88,18 @@
     xw: new Float64Array(8),
     xz0: 0, xpitch: 26,   // xc[0] and the city's block pitch, so the nearest entry can be INDEXED
                           // rather than searched: this runs twenty thousand times a frame
+    /* ---- THE ONE THING THE TEXTURE LAYER CANNOT DERIVE AND CANNOT BE TOLD PER CELL --------------
+     * A world with WATER in its map needs its floor painter to know where the water is, and
+     * floorTex is handed (wx, wz, dist, t) and nothing else — no city, no seed. The precedent for
+     * this is three fields up: the cross-street table is a city fact that the world pass loads in
+     * once per frame because the painter has no city to ask.
+     *
+     * So the map may publish a channel-distance function and raycast.js hangs it here. `null` in
+     * every world that has no water, which is the only value the other three ever see, so this is
+     * one property read per floor cell in the city, the frontier and the Moon and nothing else.
+     * It is a FUNCTION rather than a table of coefficients because the meander already exists,
+     * correctly, in city.js, and two copies of a curve is how they stop matching. */
+    rivD: null,
     /* Whether THIS street carries tram rails. Rolled once per configure() rather than per cell:
      * a rail that appears for some cells of a street and not others is not a rail. */
     rail: 0,
