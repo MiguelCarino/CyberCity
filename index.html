@@ -3124,7 +3124,7 @@ var CC = (function () {
   return ROUT;
  }
 
- function water(wx, wz) {
+ function puddle(wx, wz) {
   var a = vnoise(wx * 0.62, wz * 0.41 + 11.3);
   var b = vnoise(wx * 1.9 + 5.1, wz * 1.4);
   var n = a * 0.7 + b * 0.3;
@@ -3217,7 +3217,7 @@ var CC = (function () {
 
   var rut = Math.abs(al - half * 0.52);
   var inRut = rut < 0.42;
-  var w = water(wx, wz) * (inRut ? 1.35 : 0.82) * clamp(0.4 + 0.8 * wWet, 0, 1.4);
+  var w = puddle(wx, wz) * (inRut ? 1.35 : 0.82) * clamp(0.4 + 0.8 * wWet, 0, 1.4);
 
   if (w > 0.20) {
 

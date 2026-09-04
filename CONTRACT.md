@@ -226,10 +226,36 @@ what each world actually measures at each hour.
 
 The gates, in the order they are worth running: `node build.js`, `node tools/domshim.cjs`,
 `node tools/flicker-rate.cjs`, `node tools/lightning-rate.cjs`, `node tools/west-flicker.cjs 4`,
-`node tools/canal-flicker.cjs`, `node tools/sakura-flicker.cjs 10`,
-`node tools/sakura-flicker.cjs 10 jp-blossom --cells=4`,
+`node tools/canal-flicker.cjs`, `node tools/road-flicker.cjs`,
+`node tools/sakura-flicker.cjs 10`, `node tools/sakura-flicker.cjs 10 jp-blossom --cells=4`,
 the census, and a determinism check (the same seed, frame, world and hour rendered twice must be
 byte-identical).
+
+THE THIRD TIME THIS RULE BIT, AND THE FIRST TIME IT BIT A FEATURE THAT WAS NOT RUNNING AT ALL.
+`surf_japan.js` declared `function water` twice at one scope. Declarations do not shadow by
+position — the last one hoists and wins — so every call from the road reached the CANAL's
+five-argument painter with three arguments missing, `w` came out NaN, and the entire standing
+water branch was unreachable for its whole life. It was worse than dead: the canal painter
+assigns `mirNow` before it returns, so NaN was copied onto every carriageway cell, and
+raycast.js's `if (m < 0.06) continue` does not reject NaN — those cells entered the reflect
+pass and were blanked rather than skipped.
+
+WHAT THE GATES SAID WHILE THAT WAS TRUE IS THE POINT. Every probe passed, every census was
+in budget, and 27 fixtures were byte-identical, because a feature that never executes cannot
+fail a measurement. A GATE CANNOT SEE A BRANCH THAT DOES NOT RUN, so the branch's own
+reasoning goes unchecked with it: the `rip` rate in there carries a comment tuning it from
+2.4 to 0.6 "because at 2.4 a downpour drove it to 4.5 Hz", a number that had been argued
+and never once measured. Turning the branch on is therefore not a bug fix on its own — it is
+a new feature entering the photosensitivity budget, and it needs a probe that can see it
+before it may ship. `tools/road-flicker.cjs` is that probe.
+
+A PROBE DOES NOT HAVE TO WALK TO BE A GATE, which is the corollary and is worth stating so the
+pattern is not cargo-culted. The cherry and the canal are somewhere, so their probes walk. The
+road is underfoot everywhere, so road-flicker pins at the start pose on some seeds and that is
+not blindness. What makes it a gate the others are not is that it scores ONLY floor cells and
+runs the WET presets — the cell selection and the conditions, not the pose. It prints a lit
+count per row for exactly that reason: that is the number saying the road in shot had water on
+it.
 
 A GATE THAT CANNOT SEE THE FEATURE IS NOT A GATE, and this is the newest hard-won rule here. Both
 photosensitivity tools PIN THE CAMERA at the map's start, so anything the walk only reaches later is

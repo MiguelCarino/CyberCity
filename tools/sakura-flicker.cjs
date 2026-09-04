@@ -332,8 +332,18 @@ if (thin.length) {
 const wBig = Math.max(...seen.map(r => r.big)), wBand = Math.max(...seen.map(r => r.band));
 const rmBad = !rm.notFound && (rm.big > 0 || rm.band > 0.5);
 const judging = SECONDS === REF_WINDOW;
+/* A BIG-STEP RATE IS NOT A FLASH RATE, and the RESULT line has to say so or the two get quoted
+   as if they were the same number. `big` counts frame-to-frame jumps over 85/255 on the worst
+   cell, so a rate of r/s is about r/2 on-off events a second: the drift's 1.00/s is roughly half
+   a hertz, an object crossing a cell, and the flash band this project actually rules on starts at
+   3 Hz — which is what the separate 3-20 Hz figure measures. RATE_CAP is this file's house limit
+   at an eighth of west-flicker's 8.0/s backstop, and the header above already says to name which
+   rule a failure is under; until now the verdict line did not. */
+const impliedHz = wBig / 2;
 const bad = judging
-  ? ((wBig > RATE_CAP ? ` big steps ${wBig.toFixed(2)}/s over ${RATE_CAP.toFixed(2)}/s` : '') +
+  ? ((wBig > RATE_CAP ? ` big steps ${wBig.toFixed(2)}/s over this file's house limit of ` +
+      `${RATE_CAP.toFixed(2)}/s (~${impliedHz.toFixed(2)} Hz of switching; the project's own ` +
+      `backstop is 8.0/s and its flash band starts at 3 Hz)` : '') +
      (wBand > BAND_CAP ? ` 3-20Hz ${wBand.toFixed(2)}% over ${BAND_CAP.toFixed(2)}%` : '') +
      (rmBad ? ' reduced motion is not still' : ''))
   : '';
@@ -342,6 +352,7 @@ const wLit = Math.min(...seen.map(r => r.lit));   // the thinnest row a verdict 
 console.log(`\nRESULT: ${!judging ? 'NOT_JUDGED' : bad ? 'FAIL' + bad : 'PASS'}  ` +
             `(worst big steps ${wBig.toFixed(2)}/s, worst 3-20Hz ${wBand.toFixed(2)}%` +
             `${judging ? '' : `; both PRINTED NOT JUDGED — a verdict is only taken at the ${REF_WINDOW}s reference window`}` +
+            `, i.e. ~${impliedHz.toFixed(2)} Hz of switching on the worst cell` +
             `, over a ${SECONDS}s window; thinnest row ${wLit} lit cells; ${walked}/${seen.length} rows walked off the start pose` +
             `${rm.notFound ? '; reduced-motion row found nothing — frozen by design, NOT a measured pass' : ''})`);
 if (!judging) process.exit(3);

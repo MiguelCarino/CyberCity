@@ -94,8 +94,15 @@ and it moves the other way. Both, measured at 200x60 on frame 300 at two seeds, 
 | **frontier** seed 7 | 26.5 / 0.24 | 38.7 / 1.03 | 40.9 / 7.16 |
 | **Moonwalk** seed 42 | 5.5 / 1.64 | 6.6 / 2.27 | 5.0 / 2.85 |
 | **Moonwalk** seed 7 | 11.8 / 1.27 | 7.2 / 3.88 | 6.2 / 3.60 |
-| **Edo** seed 42 | 36.3 / 0.70 | 43.8 / 3.08 | 51.6 / 3.23 |
-| **Edo** seed 7 | 29.5 / 0.03 | 34.9 / 2.23 | 44.7 / 1.17 |
+| **Edo** seed 42 | 37.1 / 0.70 | 44.8 / 3.06 | 52.5 / 3.23 |
+| **Edo** seed 7 | 30.1 / 0.03 | 36.0 / 2.11 | 45.6 / 1.17 |
+
+Edo's row moved about a point at every hour when the standing water on its road started
+working. The puddle field had been unreachable since it was written — a duplicate function name
+meant every call from the road landed on the canal painter — so the numbers above it were taken
+from a world whose largest wet surface was never drawn. A wet road is mid-luminance almost
+everywhere, which is the muddy band by definition, and that is the honest price of the feature
+existing.
 
 Four things in that table are worth saying out loud rather than leaving for someone to notice.
 
@@ -539,6 +546,7 @@ Everything here runs without a browser, which is how the thing gets verified at 
 | `tools/lightning-rate.cjs` | the same, for storms |
 | `tools/west-flicker.cjs` | the same, for every world that is not the city — pinned camera, per cell, against the city as its baseline |
 | `tools/canal-flicker.cjs` | the same, for Edo's canal — pins the camera **on the water**, which the gate above structurally cannot do |
+| `tools/road-flicker.cjs` | the same, for the standing water on Edo's road — walks clear of the channel, scores only floor cells, and runs the wet presets, because the puddle field is only there when the world is wet |
 | `tools/sakura-flicker.cjs` | the same, for the cherry — **walks** until the element's own cells PRINT in the frame, then pins, and scores only those cells. `[seconds] [element] [--cells=n] [--time=]`, and a verdict is only taken at the 10 s reference window. Run it twice: `10` for the crown and `10 jp-blossom --cells=4` for the drift |
 | `tools/domshim.cjs` | runs the built page against a fake DOM — boot, resize, input, worlds, tab loss |
 

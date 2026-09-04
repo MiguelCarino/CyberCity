@@ -818,8 +818,18 @@
    * lattice, thresholded — so a puddle has an EDGE, which is what makes it read as water rather
    * than as a wet patch — and the threshold moves with how wet the world is, so a road under
    * `kiri` has a few pools in the ruts and a road under `typhoon` is a sheet. Keyed on world
-   * coordinates alone, so it holds still while the camera walks through it. */
-  function water(wx, wz) {
+   * coordinates alone, so it holds still while the camera walks through it.
+   *
+   * IT IS CALLED `puddle` AND NOT `water` BECAUSE THE CANAL PAINTER BELOW IS ALSO CALLED water,
+   * AND THAT COLLISION MADE THIS WHOLE BRANCH DEAD CODE. Two function declarations at one scope
+   * do not shadow by position — the LAST one hoists and wins — so every call to `water(wx, wz)`
+   * from the road reached the canal's five-argument painter with ed, L and lod undefined. It
+   * returned the ROUT object, `w` came out NaN, `w > 0.20` was false, and the standing water was
+   * never drawn anywhere in the world. Worse than dead: the canal painter assigns before it
+   * returns, so `mirNow` was set to NaN and the wet-earth branch below copied that onto every
+   * carriageway cell, where raycast.js's `if (m < 0.06) continue` does not reject NaN and the
+   * reflect pass blanked the cell instead of skipping it. */
+  function puddle(wx, wz) {
     var a = vnoise(wx * 0.62, wz * 0.41 + 11.3);
     var b = vnoise(wx * 1.9 + 5.1, wz * 1.4);
     var n = a * 0.7 + b * 0.3;
@@ -1044,7 +1054,7 @@
      * standing water reading as random blobs and makes it read as a road that has been used. */
     var rut = Math.abs(al - half * 0.52);
     var inRut = rut < 0.42;
-    var w = water(wx, wz) * (inRut ? 1.35 : 0.82) * clamp(0.4 + 0.8 * wWet, 0, 1.4);
+    var w = puddle(wx, wz) * (inRut ? 1.35 : 0.82) * clamp(0.4 + 0.8 * wWet, 0, 1.4);
 
     if (w > 0.20) {
       /* WATER. The mirror strength is the payoff of the whole world and it is capped well under 1:
