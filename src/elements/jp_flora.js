@@ -74,7 +74,7 @@
    * those are two different answers and this file has to agree with the map it is standing on.
    * BASE goes through the same imul-and-shift spread city.js:14-34 argues for — a raw adjacent salt
    * is how two "independent" streams end up drawing the same numbers. */
-  var CITY = null, BASE = 0, JP = null;
+  var CITY = null, BASE = 0, JP = null, LAT = 3.93;
   function boot(city) {
     CITY = (city && city.aveX && city.world === 'japan') ? city : null;
     BASE = CITY ? ((Math.imul(CITY.seed | 0, 40503) >>> 6) & 0x3fffff) : 0;
@@ -106,6 +106,9 @@
      * already carries the hysteresis, and a second night crossfade over the top of it put the whole
      * town out an hour before dusk. */
     LAMP = CC.Daylight ? CC.Daylight.P.lamp : 1;
+    /* The lateral cull's slack, once a frame, because it is a function of the LIVE fov and the
+     * viewer can change that. See the derivation above the cull itself. */
+    LAT = RAD_F * CR_MAX + OFF_F * CR_MAX * Math.sqrt(1 + V.hp * V.hp);
   }
 
   /* The street-lattice helpers, in the same shape jp_town.js and west_range.js use them. They are
@@ -195,8 +198,69 @@
    * structure collapses into the muddy band faster than the gap threshold's distance walk can
    * rescue it. Measured, extending the reach from 42 to 54 m added 6% more cells and moved neither
    * the census nor the picture. It is also 12 m inside the projection's own cull at
-   * CC.Surf.FOG_END = 125, so nothing here is ever fighting the far plane. */
-  var TREE_PITCH = 12.0, TREE_R = 42, TREE_ACCEPT = 0.19;
+   * CC.Surf.FOG_END = 125, so nothing here is ever fighting the far plane.
+   *
+   * THE ACCEPT RATE WAS RAISED 0.19 -> 0.32, AND THIS MOVES THE EDO NIGHT, DAWN AND DUSK FRAMES.
+   * All three, said plainly: the contract gives a declared signature hour the same protection as
+   * night, EDO's dawn and dusk differ from the previous tree at five of six seeds, and the only
+   * other place in this pass that discusses those two stops is surf_japan.js's note arguing that
+   * its daylight FILL leaves them byte-identical. That argument is true and it is about a different
+   * term; what moves the golden hours is this constant and the two edits below it. Said here because
+   * CONTRACT.md's rule is that a MATERIAL change may move the night frame provided the source
+   * declares it; this one is material (there is more tree) and is not read off the clock, so it is
+   * not the scale case that rule forbids.
+   *
+   * WHAT IT BUYS AT NOON, WHICH IS THE HALF THAT GENERALISES. The sunlit crown is this world's only
+   * day-hot surface and there is now reliably one in shot: at seed 42 the visible crown roughly
+   * quadruples (measured 29.4 -> 133.7 cells a frame over a 601-frame walk at 200x60) and the same
+   * holds at every seed looked at, including seed 512 where it goes from a few cells to nearly two
+   * hundred. Census at 200x60 f300 seed 42 noon: muddy 49.6 -> 48.5, hot 2.67 -> 3.40, lit p90
+   * 117 -> 139.
+   *
+   * WHAT IT BUYS AT NIGHT IS ONE SEED, AND THE FIRST VERSION OF THIS NOTE PRESENTED THAT AS THE
+   * GENERAL RESULT. It is not. At seed 42 — the seed in every fixture and every README table — the
+   * night crown goes from ZERO cells above the v = 9 black line (330.7 owned cells a frame, max
+   * printed value 4: a hole in the frontage, not a tree) to a legible cherry in 82.2% of frames at
+   * max printed v 91, because the lamp exception below finally has a kerb trunk near enough to fire
+   * on. At seeds 7, 1337, 512 and 3 the night crown is STILL exactly zero cells above the black
+   * line. The tree got bigger at four of six seeds and stayed invisible at four of six.
+   *
+   * AND AT ONE SEED THAT COSTS THE PICTURE. At seed 512, frame 300, night, the change is a pure
+   * subtraction: 428 cells darker by more than 8, ZERO cells brighter, all of it one crown-shaped
+   * bite taken out of the lit frontage by a canopy that prints nothing. The night census reads
+   * better for it (muddy 36.4 -> 32.9) because deleting dim texture always does, which is a good
+   * demonstration that the census cannot see this class of defect at all. The honest lever for the
+   * night image is not this constant — it is the lamp exception's REACH, which is where a later
+   * pass should go; the accept rate is kept because the noon result above stands on its own.
+   *
+   * The density argument above is unchanged in kind — 0.79 trees per side per street index becomes
+   * 1.33, which is still a town with cherries in it and not an avenue of them. The pitch was
+   * deliberately NOT touched; the boulevard argument above still holds. */
+  var TREE_PITCH = 12.0, TREE_R = 42, TREE_ACCEPT = 0.32, CR_MAX = 3.4;
+
+  /* ---- THE CROWN'S PROPORTIONS, named because FOUR places read them and two of them used to
+   * carry their own copy of the number. The lateral cull's slack (LAT) and the night lamp
+   * exception's underside (lowY) are both functions of this shape, and when the factors lived
+   * as literals at the billow call the cull deleted crowns that were still on screen and the
+   * lamp fired against an underside the crown no longer had.
+   *
+   * A SOMEIYOSHINO IS MUCH WIDER THAN IT IS TALL AND IT IS MOUNDED. The first cut of this file
+   * put three equal billows on a 120-degree ring at a flat random height, which unions to
+   * 1.42:1 — near enough a ball, and a ball on a post is a lollipop whatever the trunk does.
+   * The reference read is 1.6-2.0:1 with the mass high in the middle and sweeping down and out
+   * to thin ragged edges, so: one billow pulled IN to the axis and raised (MOUND[0], OFF_MID)
+   * and two pushed OUT and dropped. RAD_F and RY_F are chosen to hold rad*ry constant against
+   * the old 0.66/0.528 pair — 0.76*0.456 = 0.347 against 0.348 — so the billow's own cell count
+   * and therefore its census contribution is unchanged; only the SHAPE moves. */
+  /* The three centres, hoisted to module scope and filled once per tree. They are computed
+   * BEFORE anything is drawn because the leaders have to aim at them, and they are module-level
+   * typed arrays rather than a per-tree literal because this file allocates nothing inside
+   * view() — the same rule the anchor block and the billow walk already keep. */
+  var CBX = new Float64Array(3), CBY = new Float64Array(3), CBZ = new Float64Array(3);
+
+  var RAD_F = 0.76, RY_F = 0.60;         // horizontal radius, and vertical as a fraction of it
+  var OFF_F = 0.50, OFF_MID = 0.16;      // ring offset for the outer billows, and for the peak
+  var MOUND = [0.60, 0.42, 0.42];        // billow 0 is the peak; 1 and 2 are the shoulders
   var TREE_OK = { garden: 1, temple: 1, machiya: 1, market: 1 };
 
   /* THE NEAR CUT, and it is the single most load-bearing constant in this file. Inside CAN_NEAR the
@@ -289,6 +353,28 @@
    * reads flat; they are a shading nudge now rather than the tier's whole identity, and
    * 0.60 * 0.88 = 0.53 of base is raw lum 130 at noon, comfortably the first clean rung. */
   var T_RIM = 0.22, T_MID = 0.07;
+  /* THE UNDERSIDE IS NOT THE TOP EDGE, and until this the rim thinned identically all the way
+   * round because the tier is a function of q — normalised radius — alone. A cherry's top is a
+   * clean mound and its bottom is ragged: clumps of blossom hanging BELOW the mass with gaps
+   * where the branches show through. Tilting the RIM THRESHOLD with the cell's own normalised
+   * world height buys exactly that, and it costs nothing to key: vy is already computed for q.
+   * It is asymmetric on purpose — the underside gets the full tilt and the top three tenths of
+   * it — so the mound's upper edge stays clean and almost no hot core cells are lost.
+   * SCALLOPS RATHER THAN A FRINGE, because nf is a CLUSTERED field: lowering the threshold
+   * under a clustered field lets whole clumps survive where a uniform one would grow an even
+   * fuzz. The ramp width SH_W is deliberately untouched — this shifts the threshold, it does
+   * not widen the transition, so no cell's ramp gets faster and no rate can move.
+   *
+   * WHAT IT COSTS, MEASURED AND NOT ARGUED, because lowering a threshold under a clustered
+   * field lands cells anywhere on the ramp and the rim is painted in `blossom`, not white —
+   * so the cells this buys arrive at raw lum 0..73, which is squarely inside the muddy band.
+   * At 200x60 frame 300: seed 42 moves muddy 51.2 -> 51.5 at noon and 43.6 -> 43.8 at dusk,
+   * hot 3.28 -> 3.23, and night is unchanged because the crown is black there anyway; seed 7
+   * does not move at any hour. That is 0.3 points of mud for the one feature that separates
+   * a cherry's silhouette from a shrub's, and it is spent knowingly. If a later pass needs
+   * the budget back, damp T_LOB rather than widening SH_W — the ramp width is load-bearing
+   * for the rate gate and the threshold is not. */
+  var T_LOB = 0.10;
 
   /* THE CLUSTER FIELD'S RAMP. `nf` below is a smooth world-space value-noise field in 0..1; cells
    * under SH_LO are the gaps between clusters and are written as BLACK OCCLUDING MASS, cells over
@@ -523,7 +609,9 @@
         /* The tier the cell is in, decided in world units on both axes, and it shifts the gap
          * threshold rather than scaling the luminance — see the T_RIM note above. */
         var tier = q > Q_MID ? 2 : (q > Q_CORE ? 1 : 0);
-        var shF = (nf - shLo - (tier === 2 ? T_RIM : (tier === 1 ? T_MID : 0))) * shK;
+        var lob = vy < 0 ? T_LOB * vy : T_LOB * 0.30 * vy;
+        var rimT = tier === 2 ? T_RIM + lob : (tier === 1 ? T_MID + 0.45 * lob : 0);
+        var shF = (nf - shLo - rimT) * shK;
         if (shF < 0) shF = 0; else if (shF > 1) shF = 1;
 
         /* Convex depth: this cell is on the NEAR surface of the ellipsoid, so it sits up to `rad`
@@ -567,14 +655,21 @@
         var lum = (base * upF + lampB * (1 - 0.78 * up)) * tierF * shF * (0.90 + 0.20 * fw);
 
         /* Colour and glyph, both off the smooth fields and the tier — no per-cell hash. The mid
-         * tier picks between the two swatches on `fw`, which for a blossom tree is white against
-         * sand: jp_town.js's drift already uses that pair as "a petal with the light behind it"
-         * (line 400-402) and the canopy uses it for the same reason. */
+         * tier flecks the pink mass with its highlight swatch on `fw`. */
         emit(f, x, r,
              tier === 2 ? (fw > 0.5 ? G_QUOTE : G_TICK)
                         : (tier === 1 ? (fw > 0.5 ? G_STAR : G_o)
                                       : (nf > 0.52 ? G_AT : G_8)),
-             tier === 1 ? (fw > 0.5 ? cB : cA) : cA,
+             /* 0.72 AND NOT 0.5: the highlight is a FLECK, so it gets under a third of the mid
+              * tier and the pink keeps the rest. At 0.5 the crown read as two interleaved bands of
+              * equal weight rather than as a pink mass with light coming through it. The glyph
+              * split above stays at 0.5 deliberately — mark and hue changing on different isolines
+              * of `fw` is what stops the canopy banding, since a cell that changed shape AND colour
+              * together drew the two fields as one edge.
+              * THIS MOVES THE EDO NIGHT, DAWN AND DUSK FRAMES, declared as the contract requires;
+              * `fw` is spatial noise on world height and not a clock quantity, so it is the
+              * material case and not the forbidden scale one. */
+             tier === 1 ? (fw > 0.72 ? cB : cA) : cA,
              lum, d);
       }
     }
@@ -615,6 +710,53 @@
    *     and TH_JAPAN is setbackMode 'podium' with lots 5-9 m deep, so "outer ring clear" and
    *     "trunk cell clear" are genuinely different questions.
    */
+  /* ================================================================================ A LEADER ===
+   * One woody stroke from (x0,y0,z0) to (x1,y1,z1), sampled in WORLD space and projected per
+   * sample, which is what the three straight stubs this replaced could not be: column() takes
+   * one ground position and two heights, so three of them at offset bases draw three parallel
+   * vertical bars beside the trunk and the object stays a lollipop. Same method as
+   * west_range.js's catenary and jp_town.js's kasagi curve, and it takes the perspective free.
+   *
+   * THE CURVE IS TWO SEPARATED EXPONENTS AND THAT IS THE WHOLE OF THE S. A cherry leader leaves
+   * the fork close to horizontal and arrives at the crown close to vertical; interpolating both
+   * axes linearly gives a straight ray, which is a fan, not a tree. Advancing the horizontal on
+   * u^0.55 and the vertical on u^1.6 spends the early samples going OUT and the late ones going
+   * UP, so the stroke leaves the bole shallow and stands up under the mass it carries.
+   *
+   * u0 lets the caller re-walk only the upper section — see the through-crown pass, which draws
+   * the same world line a second time with a depth bias so it prints INSIDE the blossom.
+   *
+   * THE GLYPH COMES OFF THE PROJECTED STEP, which is the one place in this file that reads a
+   * screen delta, and it is allowed here for a reason the crown could never claim: tlum is a
+   * constant across all three glyphs, so a glyph that changes as the camera walks carries NO
+   * luminance step with it. The header's world-keying rule exists to stop a cell's BRIGHTNESS
+   * crawling; a '/' becoming a '|' at the same value cannot register on a rate gate. */
+  function leader(f, x0, y0, z0, x1, y1, z1, u0, w, bias, col, lum) {
+    var dh = Math.sqrt((x1 - x0) * (x1 - x0) + (z1 - z0) * (z1 - z0));
+    /* Sample off the PROJECTED span, and the vertical dominates it: 3.5 m of rise at 14 m with
+     * V.scale 77.4 is 19 rows, which the eight-to-fourteen samples the stubs used could not
+     * cover without dashing the stroke. */
+    var ns = Math.ceil((Math.abs(y1 - y0) * V.scale + 1.4 * dh * V.colK) / w) + 4;
+    if (ns > 30) ns = 30;
+    var lx = -1, ly = -1, i;
+    for (i = 0; i <= ns; i++) {
+      var u = u0 + (1 - u0) * (i / ns);
+      var hu = Math.pow(u, 0.55), vu = Math.pow(u, 1.6);
+      if (!project(x0 + (x1 - x0) * hu, y0 + (y1 - y0) * vu, z0 + (z1 - z0) * hu)) { lx = -1; continue; }
+      var xx = Math.floor(PJ.x), yy = Math.floor(PJ.y), g = G_PIPE;
+      if (lx >= 0) {
+        var ddx = xx - lx, ddy = yy - ly;
+        /* The lean is the SIGN PAIR, not the sign of ddx: '\\' runs top-left to bottom-right, so a
+         * stroke leans that way whenever x and y move together on screen. Keying on ddx alone was
+         * right for the leaders, which always rise, and inverted for the root flare, which does
+         * not — the buttresses came out leaning into the trunk instead of away from it. */
+        if (Math.abs(ddx) * 1.6 > Math.abs(ddy)) g = (ddx > 0) === (ddy > 0) ? G_BSL : G_SLASH;
+      }
+      emit(f, xx, yy, g, col, lum, bias > 0 ? Math.max(0.6, PJ.d - bias) : PJ.d);
+      lx = xx; ly = yy;
+    }
+  }
+
   function drawTrees(f, axis, idx) {
     var here = alongOf(axis);
     var lo = Math.floor((here - TREE_R) / TREE_PITCH), hi = Math.floor((here + TREE_R) / TREE_PITCH);
@@ -666,13 +808,53 @@
 
         /* Is it worth any work at all? The same three tests moon_craft.js's seeAt() makes: in front
          * of the eye plane, inside the walk's own reach, and not so far off to the side that
-         * nothing it owns can land in the frame. The +14 on the lateral limit is a crown's own
-         * half-width in columns at close range — a tree whose trunk is off the edge can still have
-         * half its canopy in shot. */
+         * nothing it owns can land in the frame.
+         *
+         * THE SLACK IS ADDITIVE AND IT IS SIZED IN METRES OFF THE OBJECT, which is the correction
+         * a proportional version taught. The exact frustum edge is |sp| = w * V.hp.
+         *
+         * THE DERIVATION, and the first version of this note got it wrong twice. It said the reach
+         * was 0.40*cr of billow offset plus 0.66*cr of billow radius = 1.06*cr = 3.60 m at the cr
+         * ceiling, and shipped 3.6 — which is under even its own figure of 3.604, and the figure
+         * itself was wrong. The billow offset points in an ARBITRARY world direction, not a lateral
+         * one, so a billow pushed partly away from the eye sits at a larger w and is judged against
+         * a WIDER frustum. A sample is visible while |sp + off*cS + uu| < hp*(w + off*cF) with
+         * cF^2 + cS^2 = 1 and |uu| <= 0.66*cr, and the worst case over that circle is
+         *   0.66*cr + 0.40*cr*sqrt(1 + hp^2) = 1.1544*cr at the default fov = 3.93 m at cr 3.4.
+         * That is why LAT is computed in view() from the LIVE V.hp rather than frozen: the viewer
+         * can change fov, and a slack fitted to one fov is wrong at the others.
+         *
+         * The 0.33 m that 3.6 was short cost four poses out of 46,128 scanned per seed, one cell
+         * each, every one of them fogged to lum 0 — measured, not assumed. It is corrected anyway
+         * because a note that states a bound as proven should state the right one.
+         *
+         * The version this replaced, `w * (V.hp + 0.10)`, was written as a tightening of a slack
+         * that said 14 metres where the line above it said "a crown's own half-width", and it is
+         * recorded here because it looked equivalent and was not. 0.10*w only reaches 3.6 m at
+         * w = 36 m, so across almost the whole operating range (CAN_NEAR 9.5 m to TREE_R 42 m) a
+         * tree whose trunk was just outside the frustum but whose canopy was inside it was culled
+         * ENTIRELY — and this cull is per-tree and all-or-nothing, so the canopy did not fade at
+         * the frame edge, it vanished between two frames. Measured at seed 42 over 1201 frames,
+         * 16 frames differed and the worst lost 316 cells at once across 33 columns; on the cells
+         * the tree owned the frame before, that pop is a step of 153/255 with 61 cells over
+         * west-flicker's own 85/255 big-step line, at noon. A cull that is invisible to both pinned
+         * gates is exactly where a rate defect hides. At this slack the tree draws the same cells as
+         * the old +14 rule on every one of 1201 frames at seeds 42, 7 and 404, and still culls far
+         * earlier than 14 m of slack ever did.
+         *
+         * THIS CULL IS NOW LOAD-BEARING FOR SOMETHING ELSE, and that is worth knowing before anyone
+         * tunes it again. The anchor publish at the foot of this loop sits BELOW this `continue`, so
+         * jp_town.js's petal drift can only shed from crowns that survive this test: a drawing
+         * optimisation is now simulation input, and a change here moves the frame through the
+         * petals even where it moves no canopy. Measured: +3.6 and +14 give byte-identical EDO
+         * frames at f300 and f600 and differ at f900, f1200, f1500 and f1800, and the differing
+         * cells are mostly kind 3 while the tree's own owned-cell set is identical at all but 7 of
+         * 184,512 scanned poses. If that coupling is ever unwanted, publish the anchor above this
+         * line rather than below it. */
         var rx = px - V.ox, rz = pz - V.oz;
         var w = rx * V.fwx + rz * V.fwz;
         if (w < 1.0 || w > TREE_R) continue;
-        var sp = rx * V.rgx + rz * V.rgz, lim = w * V.hp + 14;
+        var sp = rx * V.rgx + rz * V.rgz, lim = w * V.hp + LAT;
         if (sp < -lim || sp > lim) continue;
 
         /* HEIGHT AND CROWN RADIUS SHARE ONE HASH, which saves a draw and is physically right: a
@@ -684,55 +866,132 @@
          * the read. Crown top is th + cr*1.3 = 5.5-9.3 m, above garden's hMax of 5.0 so the setback
          * tree clears its own quarter's wall. */
         var rr = hash2(k, side, BASE + 0x63);
-        var th = 3.0 + rr * 1.9, cr = 1.9 + rr * 1.5;
+        var th = 3.0 + rr * 1.9, cr = 1.9 + rr * 1.5;   // CR_MAX below is this line's ceiling
 
-        /* ---- the trunk, the bark, the limbs and the fork ---------------------------------------
-         * The trunk goes through column(), which projects the two ENDS and fills between them —
-         * the only way a vertical stays one cell wide and does not shear as the camera pans. Two
-         * cells wide inside 20 m, where a 0.35 m trunk genuinely is two columns. */
-        column(f, px, pz, 0, th + 0.16, G_PIPE, tcol, tlum, w < 20 ? 1 : 0);
+        /* ---- WHERE THE THREE BILLOWS ARE, computed before anything is drawn ------------------
+         * The leaders aim at the crown, so the crown's centres have to exist first. This is the
+         * same arithmetic the billow loop used to do inline; it moved up here and the loop below
+         * now reads the arrays rather than re-deriving them, so there is exactly one definition of
+         * where a billow sits and the woody structure cannot drift away from the mass it carries. */
+        /* THE SHOULDERS SPREAD ACROSS THE LANE, NOT ON A FREE RING, and this is what makes the
+         * fork legible rather than merely present. On a uniform 120-degree ring the two shoulders
+         * take a random world bearing, so about as often as not a leader points along the street —
+         * which is the view direction for a camera walking it — and a leader that runs into DEPTH
+         * projects to no screen spread at all. Measured on the free-ring version: the leaders came
+         * out as near-vertical parallel bars, i.e. the fan-seen-edge-on failure the old three-stub
+         * comment worried about, reproduced by a different route.
+         * Anchoring the two shoulders to the CROSS-street axis is also the truer shape — a lane
+         * cherry spreads over the road and into the frontage, not along the kerb — and it is still
+         * world-keyed: crossAng is a property of the street, and the jitter is the tree's own hash.
+         * The peak keeps a free bearing because at OFF_MID it barely leaves the axis anyway. */
+        var crossAng = axis ? 1.5708 : 0;
+        var bi;
+        for (bi = 0; bi < 3; bi++) {
+          var bang = bi === 0
+            ? hash2(k, side + 5, BASE + 0x65) * 6.2832
+            : crossAng + (bi === 1 ? 0 : 3.1416) + (hash2(k, side + bi * 5, BASE + 0x65) - 0.5) * 1.2;
+          /* The peak sits close to the axis; the shoulders swing out. The jitter is halved from the
+           * old 0.36 because it is now a jitter ON a profile rather than the profile itself — at
+           * 0.36 a shoulder still out-topped the peak on a third of the rolls. */
+          var boff = cr * (bi === 0 ? OFF_MID : OFF_F);
+          CBX[bi] = px + Math.cos(bang) * boff;
+          CBZ[bi] = pz + Math.sin(bang) * boff;
+          CBY[bi] = th + cr * (MOUND[bi] + 0.18 * hash2(k, side + bi * 11, BASE + 0x66));
+        }
 
-        /* THE LIMBS ARE NOT column() CALLS. column() takes ONE ground position and two heights, so
-         * three of them at offset bases would draw three PARALLEL VERTICAL BARS beside the trunk,
-         * not a splay — the object would still be a lollipop. A slanted limb needs a line in screen
-         * space, so each limb is sampled in WORLD space and projected per sample, which is the same
-         * thing west_range.js's catenary and this world's own kasagi curve do (jp_town.js:322-332)
-         * and it takes the perspective for free. Sample count off the projected length so it never
-         * dashes: the limbs are short, so eight to twelve samples covers them at any range that
-         * still draws them at all.
+        /* ---- the bole, the fork, the leaders, the flare and the bark -------------------------
+         * THE BOLE STOPS AT THE FORK AND THE FORK IS LOW. What this replaced ran one unbroken
+         * vertical from the ground to the crown's own underside and then splayed three 0.62 m stubs
+         * off the top of it — a post with a ball on it, which is the lollipop read exactly, and the
+         * stubs were six screen columns at 14 m inside a crown fifty columns wide. A cherry divides
+         * its bole at a third to a half of its height into TWO heavy leaders that carry the rest,
+         * and everything the eye uses to name the tree is in that division.
          *
-         * They stop at 30 m. Inside that a limb is 4-8 cells of real structure between the trunk
-         * and the mass; beyond it, it is one or two cells buried inside a canopy that is already
+         * fh is 0.40 of the whole tree — bole to crown top is th + cr*1.24 with the mound above —
+         * so the fork lands at 2.2-3.7 m, below the crown's underside at th - 0.036cr, which is
+         * what puts a visibly FORKED silhouette in the gap between the street and the mass. */
+        var fh = 0.40 * (th + cr * 1.24);
+        column(f, px, pz, 0, fh + 0.10, G_PIPE, tcol, tlum, 0);
+
+        /* THE FLARE, and the bole's real width, both in WORLD metres on the CROSS-street axis.
+         * The `wide` flag column() carries is a step function in apparent thickness — two cells at
+         * 19.9 m and one at 20.1 — where a bole is a continuous taper, and at 6 m a 0.35 m trunk
+         * genuinely subtends eight columns and was drawn as two. Two short columns straddling the
+         * bole give it width that shrinks with distance for free, and they stop at 0.80 of the fork
+         * so the bole is three cells at the foot and one at the fork: a taper, not a slab. They
+         * REPLACE column()'s `wide` flag rather than adding to it — carrying both made the foot four
+         * cells across, which is a pillar.
+         *
+         * THE AXIS IS THE CROSS-STREET ONE AND THAT IS NOT A DETAIL. Along-street is the view
+         * direction for a camera walking the lane, so an along-street offset differs almost purely
+         * in DEPTH and lands in the same screen column, widening nothing. They are drawn
+         * unconditionally rather than under a distance gate, because a gate only relocates the step
+         * it was meant to remove — past a few tens of metres their separation falls under a column
+         * and the depth test dedupes them at no cost. */
+        var hb = 0.16;
+        /* HOW MANY COLUMNS THE HALF-WIDTH IS WORTH, rather than two fixed world offsets. A bole is
+         * a solid, so its width has to be FILLED in screen terms: at 0.16 m and colK 137.6 the two
+         * offsets are one column apart only near 22 m, and closer in they separate — the first cut
+         * of this drew three posts with gaps between them at every near tree, which is worse than
+         * the slab it replaced. Stepping the offsets so their projections land about a column apart
+         * fills it at any range, and the count collapses to one pair far out, where the depth test
+         * dedupes them for free. Capped at four pairs: nine cells is the widest a 0.35 m bole is
+         * ever worth, and the cap is what stops a degenerate near camera asking for hundreds. */
+        var hbc = Math.ceil(hb * V.colK / w);
+        if (hbc < 1) hbc = 1; else if (hbc > 4) hbc = 4;
+        var q, qo;
+        for (q = 1; q <= hbc; q++) {
+          qo = hb * (q / hbc);
+          /* The outer pairs stop shorter, so the bole narrows as it rises instead of ending in a
+           * flat shoulder — the taper is in the silhouette, not only in the count. */
+          var qh = fh * (0.82 - 0.10 * (q / hbc));
+          column(f, wxOf(axis, along, cross + qo), wzOf(axis, along, cross + qo),
+                 0, qh, G_PIPE, tcol, tlum, 0);
+          column(f, wxOf(axis, along, cross - qo), wzOf(axis, along, cross - qo),
+                 0, qh, G_PIPE, tcol, tlum, 0);
+        }
+        if (w < 15) {
+          /* The root flare, as two short leaders rather than two columns of '/': column() with a
+           * diagonal glyph draws a vertical stack of them, which reads as a dashed post and not as
+           * a buttress leaning out of the foot. Sampled in world space, so they lean. */
+          leader(f, px, 0.34, pz, wxOf(axis, along, cross + 0.36), 0.02,
+                 wzOf(axis, along, cross + 0.36), 0, w, 0, tcol, tlum);
+          leader(f, px, 0.34, pz, wxOf(axis, along, cross - 0.36), 0.02,
+                 wzOf(axis, along, cross - 0.36), 0, w, 0, tcol, tlum);
+        }
+
+        /* THE LEADERS. Two off the fork to the two shoulder billows, and one tertiary off the first
+         * leader's midpoint to the peak — so the bole divides in two, which is what the eye reads,
+         * and the middle of the crown is carried by a branch rather than by a third ray from the
+         * same point. Three rays from one point is the fan this file started with.
+         *
+         * They stop at 30 m, where a leader is one or two cells inside a canopy that is already
          * writing every one of them. */
         if (w < 30) {
-          var ns = Math.ceil(cr * 0.9 * V.colK / w) + 3;
-          if (ns > 14) ns = 14;
-          var b, s2i;
-          for (b = -1; b <= 1; b++) {
-            /* Out in the cross-street direction AND in the along-street direction, so the three
-             * read as a splay in both axes rather than as a fan seen edge-on from one bearing. */
-            var lx = px + b * 0.62, lz = pz + b * 0.34;
-            var lh = th + cr * (0.50 - 0.10 * (b * b));
-            for (s2i = 1; s2i <= ns; s2i++) {
-              var u2 = s2i / ns;
-              if (!project(px + (lx - px) * u2, th - 0.22 + (lh - th + 0.22) * u2,
-                           pz + (lz - pz) * u2)) continue;
-              emit(f, Math.floor(PJ.x), Math.floor(PJ.y),
-                   b < 0 ? G_SLASH : (b > 0 ? G_BSL : G_PIPE), tcol, tlum * 0.94, PJ.d);
-            }
-          }
+          leader(f, px, fh, pz, CBX[1], CBY[1], CBZ[1], 0, w, 0, tcol, tlum);
+          leader(f, px, fh, pz, CBX[2], CBY[2], CBZ[2], 0, w, 0, tcol, tlum);
+          /* The tertiary leaves leader 1 at its u = 0.45 point, evaluated on the same two exponents
+           * so it starts ON the curve it branches from and not beside it. */
+          var mhu = Math.pow(0.45, 0.55), mvu = Math.pow(0.45, 1.6);
+          var mx = px + (CBX[1] - px) * mhu, mz = pz + (CBZ[1] - pz) * mhu;
+          var my = fh + (CBY[1] - fh) * mvu;
+          leader(f, mx, my, mz, CBX[0], CBY[0], CBZ[0], 0, w, 0, tcol, tlum);
+
           /* One cell at the crotch. 'Y' is the last glyph in GLYPHS and it is literally a fork. */
-          if (project(px, th + 0.12, pz))
+          if (project(px, fh + 0.06, pz))
             emit(f, Math.floor(PJ.x), Math.floor(PJ.y), G_Y, tcol, tlum, PJ.d);
+
           /* THE BARK, inside 15 m, and it is what names the species. Sakura is horizontally
            * lenticelled where cryptomeria is vertically fibred, so two rows of '-' across the near
-           * trunk is the difference between a cherry and a cedar at a glance. Placed at FIXED WORLD
+           * bole is the difference between a cherry and a cedar at a glance. Placed at FIXED WORLD
            * HEIGHTS rather than on a screen-row parity, so the banding cannot crawl up the trunk as
-           * the camera walks — the same world-keying rule the canopy is built on, for two cells. */
+           * the camera walks — the same world-keying rule the canopy is built on, for two cells.
+           * Keyed to fh and not to th now that the bole ends at the fork, or both dashes would land
+           * above the wood they are meant to be on. */
           if (w < 15) {
-            if (project(px, th * 0.42, pz))
+            if (project(px, fh * 0.42, pz))
               emit(f, Math.floor(PJ.x), Math.floor(PJ.y), G_DASH, tcol, tlum, PJ.d);
-            if (project(px, th * 0.68, pz))
+            if (project(px, fh * 0.72, pz))
               emit(f, Math.floor(PJ.x), Math.floor(PJ.y), G_DASH, tcol, tlum, PJ.d);
           }
         }
@@ -758,7 +1017,7 @@
          * that and was the single largest muddy source in the element.
          *
          * WHAT THAT COST BUYS IS REAL. Measured night energy at seed 42 has
-         * jade at 0.4% and gold, moss, rose, spring and red all at 0.0%, so six of twenty swatches
+         * jade at 0.4% and gold, moss, rose, spring and red all at 0.0%, so six of the then-twenty
          * are absent from this world, and a leaf tree is the only large legitimate moss surface EDO
          * has. core.js calls moss "the darkest pigment in the table after shadow, which is what a
          * leaf in ordinary light actually is" — a green tree in this frame IS a dark object.
@@ -769,17 +1028,13 @@
          * white anyway, which jp_town.js:397-402 already argues. */
         var bloom = hash2(k, side * 3, BASE + 0x64) < 0.82;
 
-        /* Three billows on radiating limbs, offset 0.40*cr from the trunk and staggered in height.
-         * rad 0.66*cr each, so the union is very close to a crown of radius cr with about 15% of
-         * overdraw — and overdraw is nearly free here because CC.put depth-rejects the second write.
-         * The vertical radius is 0.80 of the horizontal: a someiyoshino crown is about 1.3:1 wider
-         * than tall, and this gets that from a single radius parameter. */
-        var bi;
+        /* Three billows, at the centres the leader pass already fixed — the peak pulled in to
+         * OFF_MID and raised, the two shoulders pushed out to OFF_F and dropped. rad RAD_F*cr each,
+         * so the union is close to a crown of radius cr with some overdraw, and overdraw is nearly
+         * free here because CC.put depth-rejects the second write. See the constants' own note for
+         * why the union is mounded and much wider than tall rather than the ball it was. */
         for (bi = 0; bi < 3; bi++) {
-          var ang = bi * 2.0944 + hash2(k, side + bi * 5, BASE + 0x65) * 1.5;
-          var off = cr * 0.40;
-          var cbx = px + Math.cos(ang) * off, cbz = pz + Math.sin(ang) * off;
-          var cby = th + cr * (0.44 + 0.36 * hash2(k, side + bi * 11, BASE + 0x66));
+          var cbx = CBX[bi], cby = CBY[bi], cbz = CBZ[bi];
 
           /* ---- THE CANOPY'S LUMINANCE ACROSS THE DAY ----------------------------------------
            * The only time dependence in this whole element is NIGHT, DAYF and LAMP, which are the
@@ -804,6 +1059,21 @@
            *     zero above 3.6 m, and a crown sits at 3.0-9.3 m, so the lamp wash does not reach it
            *     at all. A cherry tree in an unlit lane at night IS a silhouette, and it reads where
            *     it crosses the lit paper frontage.
+           *     WHAT THAT COSTS THE VIEWER, WRITTEN DOWN because the line above states the design
+           *     and not the price. The canopy base is 12 + 168*(1-NIGHT) + 66*DAYF, which is exactly
+           *     12 for the whole night half of a 420 s cycle — 43% of the clock — and the landing
+           *     phase is seeded per city, so a large share of first loads open inside it. At the
+           *     shipped accept rate this was not a silhouette, it was nothing: seed 42 — the seed in
+           *     every fixture and every README table — drew 330.7 crown cells a frame at night with
+           *     ZERO of them above the v = 9 black line, max printed value 4, over 1801 frames.
+           *     The fix is NOT a night term on this base. NIGHT is read straight off the director's
+           *     clock, so `+ 190 * NIGHT` is precisely the scale CONTRACT.md forbids; it was built
+           *     and it also makes the crown brighter at night (202) than at dusk (180), the hour
+           *     this note calls the element's worst, and takes seed 404's night muddy from 25.6 to
+           *     30.8, across the target. The legal version of the same image is to give the LAMP
+           *     EXCEPTION below a kerb tree near enough to fire on, which is what raising the accept
+           *     rate to 0.32 does: at seed 42 that exception fired zero times in 601 frames on the
+           *     shipped tree, and now yields 81.4 visible warm cells a frame.
            *
            * THE ONE EXCEPTION, and it is the one image this element exists for after dark: a lantern
            * lighting the underside of a branch hanging over the street. The low billow of a KERB
@@ -828,24 +1098,74 @@
            * 0.3-0.7% of a night frame. The frame's muddy share still moves DOWN, -0.34 points at
            * seed 7 and -1.06 at seed 42, because the crown's own black mass more than pays for it.
            * That was the brief's own budget for this exception and it is met. */
-          var lowY = cby - cr * 0.528;
+          var lowY = cby - cr * RAD_F * RY_F;
           var lf = lowY >= 4.2 ? 0 : (lowY <= 2.0 ? 1 : (4.2 - lowY) * 0.4545);
           var lampT = (kerb && LAMP > 0.02 && lf > 0) ? 148 * LAMP * lf * lf * (3 - 2 * lf) : 0;
           var cb = (12 + 168 * (1 - NIGHT) + 66 * DAYF) * (bloom ? 1 : 0.62);
-          /* When the lamp term is what is actually lighting this billow, the swatch follows the
-           * light rather than the flower: warm paper light on white blossom is warm. */
+          /* THE CROWN IS PINK, in `blossom` — core.js slot 20, the pale-pink SURFACE swatch that
+           * was appended for exactly this and is the first pink in the table allowed to cover area.
+           * It is NOT `rose`: rose is a neon tube, gain-bounded to 0.20/0.18 so it can never clear
+           * the hot line, and it prints 85 at noon against blossom's 221 — a rose crown is 100%
+           * muddy by construction. Measured through the shipped LUT at dist 6, printed ceilings:
+           * blossom 159 night / 203 dawn and dusk / 221 noon, against white's 163/209/226 and
+           * sand's 163/207/224. So the pink sits a shade under the white it is stippled with at
+           * every hour, which is the right way round, and it still crosses the census hot line of
+           * 170 by day — the crown stays EDO's only day-hot surface, which is the whole reason the
+           * previous white version was defensible.
+           *
+           * WHITE IS THE MINORITY AND IT IS THE HIGHLIGHT. A someiyoshino mass is not flat: it is
+           * pink with pale flecks where the light comes through, which is what the reference pixel
+           * art draws and what the fw split below produces. cA carries the core and the rim, cB
+           * flecks the mid tier only.
+           *
+           * When the lamp term is what is actually lighting this billow the light does start to own
+           * the hue — warm paper light on a pale flower is warm — but the whole crown going `warm`
+           * turned a cherry into a yellow ball hanging over the street. So the lamp case keeps the
+           * pink in the mass and spends `warm` on the flecks instead: a pink tree with a lantern
+           * under it, rather than a lantern-coloured tree. */
           var warmLit = lampT > 18 && NIGHT > 0.5;
-          var cA = warmLit ? P.warm : (bloom ? P.white : P.moss);
-          var cB = warmLit ? P.warm : (bloom ? P.sand : P.moss);
+          var cA = bloom ? P.blossom : P.moss;
+          var cB = warmLit ? P.warm : (bloom ? P.white : P.moss);
 
           /* The gap threshold for this billow, walked out with its own depth — see SH_FAR. shK is
            * the reciprocal of the ramp width, hoisted here so the inner loop is one multiply. */
           var far = (w - SH_D0) * SH_DK;
           if (far < 0) far = 0; else if (far > 1) far = 1;
 
-          billow(f, cbx, cby, cbz, cr * 0.66, cr * 0.66 * 0.80,
+          billow(f, cbx, cby, cbz, cr * RAD_F, cr * RAD_F * RY_F,
                  BASE + 0x67 + bi, cb, lampT * (bloom ? 1 : 0.62), cA, cB,
                  SH_LO + SH_FAR * far + (bloom ? 0 : SH_LEAF), 1 / SH_W, far * 0.85);
+        }
+
+        /* ---- the branches SEEN THROUGH the blossom ---------------------------------------------
+         * THE MOST DISTINCTIVE THING ABOUT THE REFERENCE IS STRUCTURE VISIBLE INSIDE THE MASS —
+         * dark strokes crossing the pink, heaviest in the upper middle — and until this pass it was
+         * not merely absent but structurally impossible. The leaders are drawn at the trunk's own
+         * depth, while every billow cell is pushed toward the camera by up to off + rad*0.86; CC.put
+         * tests strict `dist < f.dist[i]`, so the canopy overwrote the whole splay wherever it
+         * covered it, which was everywhere. Measured on the tree this replaced, over 1200 autopilot
+         * frames: 82.6% of the limb cells the element wrote never reached the frame at seed 404, and
+         * the `Y` the old comment called "the difference between a lollipop and a tree" landed in
+         * 5.3% of its attempts — 0.07 cells a frame.
+         *
+         * So the upper half of each leader is walked a SECOND time with a depth bias, and the bias
+         * is derived rather than picked: it must exceed the furthest forward any billow cell can be
+         * pushed (off + rad*0.86) so the stroke wins inside the mass, and exceed it by only a few
+         * centimetres of cr so the stroke stays within the tree's own volume and cannot print in
+         * front of something standing between the camera and the crown. At cr*1.19 it lands about
+         * 4 cm of cr ahead of the crown's own frontmost cell, which the crown already occludes —
+         * nothing new is punched through the picture.
+         *
+         * Only from u = 0.45, because below that the leader is already in clear air and drawn; only
+         * inside 26 m, beyond which it is one or two cells inside a mass that is writing them
+         * anyway; and one cell wide, never `wide`. */
+        if (w < 26) {
+          var BR_D = cr * (OFF_F + 0.86 * RAD_F + 0.04);
+          leader(f, px, fh, pz, CBX[1], CBY[1], CBZ[1], 0.45, w, BR_D, tcol, tlum);
+          leader(f, px, fh, pz, CBX[2], CBY[2], CBZ[2], 0.45, w, BR_D, tcol, tlum);
+          var thu = Math.pow(0.45, 0.55), tvu = Math.pow(0.45, 1.6);
+          leader(f, px + (CBX[1] - px) * thu, fh + (CBY[1] - fh) * tvu, pz + (CBZ[1] - pz) * thu,
+                 CBX[0], CBY[0], CBZ[0], 0.30, w, BR_D, tcol, tlum);
         }
 
         /* ---- publish the anchor ----------------------------------------------------------------

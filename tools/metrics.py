@@ -21,7 +21,7 @@ import sys, json
 # Eight swatches were appended to the palette (12..19) and this line is the whole of what that
 # cost the census.
 NAMES = ['amber','azure','ember','spring','violet','white','red','slate','warm','ice','pure','shadow',
-         'stone','timber','sand','jade','rose','gold','moss','indigo']
+         'stone','timber','sand','jade','rose','gold','moss','indigo','blossom']
 KINDS = ['sky', 'facade', 'floor', 'element']
 
 def load(src):

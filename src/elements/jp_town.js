@@ -509,12 +509,22 @@
    * a petal drawn through would only muddle. So the pool fades out above `rain` 0.35 and the frame
    * gets its motion from the weather instead.
    *
-   * WHITE AND SAND, NEVER ROSE. core.js's palette note puts a prohibition on rose — "SIGNAGE AND
-   * SCREENS ONLY", because hue 337 under this build's bloom is the failure that walked violet off
-   * magenta — and a drift of pink petals is exactly the large-area use it forbids. It is also
-   * wrong about the flower: someiyoshino is white with a blush at the base and reads as white at
-   * any distance. So the drift is `white` with a share of `sand` in it, which is a petal with the
-   * light behind it, and the setting loses nothing.
+   * PINK, AND NEVER `rose` — WHICH ARE TWO DIFFERENT STATEMENTS AND THE FIRST VERSION OF THIS NOTE
+   * CONFLATED THEM. The prohibition in core.js is on the ROSE SWATCH: "SIGNAGE AND SCREENS ONLY",
+   * because hue 337 at 57% saturation under this build's bloom is the failure that walked violet
+   * off magenta, and rose's gain is bounded at 0.20/0.18 so that a large area of it can never clear
+   * the hot line. All of that is still true and rose is still forbidden here. What did not follow —
+   * and what this note used to claim — is that the drift therefore had to be white.
+   *
+   * It had to be white only because the palette could not spell a pale pink SURFACE, and that was a
+   * gap in the table rather than a fact about cherry blossom. core.js slot 20 `blossom` now fills
+   * it: 240,168,196 at 30% saturation, which blooms toward white-pink instead of magenta, on the
+   * SKY curve like every other surface, printing 159 at night and 221 at noon against rose's 140
+   * and 85. So the drift is pink because the flower is pink, and the swatch that carries it is a
+   * surface rather than a tube.
+   *
+   * The `sand` half survives, for the lantern case only: a petal crossing a lantern's light takes
+   * the light's colour and not its own, which is the one time a viewer does not see the flower.
    *
    * DETERMINISTIC FROM t. The state is a small pool integrated in update(), the same shape the
    * tumbleweed uses, and every respawn draws from hash2 on (index, quantised t) rather than from
@@ -522,11 +532,94 @@
   var NPET = 30;
   var pX = null, pY = null, pZ = null, pPh = null, pVy = null, pSp = null, pLife = null;
 
+  /* THE DRIFT COMES OFF THE CROWNS, and until now it did not. src/elements/jp_flora.js publishes
+   * CC.JPFlora — up to eight live crown anchors, refilled every frame, with a centre, a top and a
+   * radius — and its own note says a consumer must tolerate n = 0 because the walk is often between
+   * eligible quarters. That consumer was never written: grep for JPFlora across src/ and the built
+   * bundle returned only the two lines that WRITE it. So the world drew cherries in one place and
+   * petals in another, on a ring round the camera, which is the one arrangement that guarantees the
+   * two are never seen in the same shot.
+   *
+   * A SECOND HASH, NOT A SECOND rng() CALL, and this is the constraint that shapes the code. init()
+   * seeds the pool from the SHARED element rng and nine EDO elements initialise after this one at
+   * layer 22; one extra draw here shifts every one of their noise streams, which is the failure
+   * CONTRACT.md records about elements drawing from one rng in layer order. hash2 is a pure
+   * function and costs the stream nothing.
+   *
+   * IT ALSO DECORRELATES RADIUS FROM BEARING, which was a real defect in its own right. Every one
+   * of the seven state fields below was derived from the single scalar `r`, so bearing (r * 6.2832)
+   * and radius (4 + r * 20) were welded together: a petal's distance from the camera DETERMINED its
+   * direction. Once the 11 m near cut below removes everything with r under about 0.35, what is
+   * left is a fixed 234-degree arc of world bearings — the drift had a hole in it in the same
+   * compass direction on every seed and at every hour. `q` is a second HASH, decorrelated from the
+   * bearing rather than independent of it — its varying input is a 1/4096 quantisation of the same
+   * r, so two petals inside one bucket share a radius. That is enough to break the weld and nothing
+   * observable follows from the residue; it is written down because the paragraph above argues from
+   * decorrelation and should not be read as claiming a second random draw. It is sqrt-distributed
+   * so petals spread evenly over the disc of the crown rather than bunching at its centre.
+   *
+   * BE HONEST ABOUT WHAT THIS BUYS, AND IT IS LESS THAN IT SOUNDS. Under the 11 m cut, a pool of 30
+   * and the frustum, the drift is structurally incapable of more than a few cells a frame — raising
+   * NPET to 96 with this coupling in place moved seed 42 from 0.09 to 0.09 visible cells a frame,
+   * so the pool size is not the constraint and never was. Measured after this change over 601-frame
+   * walks at 200x60, petal cells printing above the black line run 0.1 a frame at seed 42 and 0.0 at
+   * seeds 512 and 3 — the drift is still BELOW THE VISIBILITY FLOOR of the shipped picture, exactly
+   * as the camera-ring version was. Written down so a later pass does not re-derive it: the blossom
+   * MASS in this world is the crown, at 300-425 cells a frame. This makes the drift correct and
+   * located, not visible.
+   *
+   * ITS RATE MOVED AND THE NUMBER IS HERE. Petals born on a crown 13-42 m out cross cells at
+   * different speeds than petals born on a ring 4-24 m round the camera, and this element has
+   * tripped the photosensitivity rule before. Measured with tools/sakura-flicker.cjs at its 10 s
+   * reference window, worst over seeds 42/3/404 x kiri/clear/tsuyu: the drift's own cells go from
+   * 0.20 to 0.60 big steps a second, and 1.04% to 0.97% in the 3-20 Hz band. The band — which is the
+   * project's actual rule — improved; the step rate tripled and is still well under the 1.00/s the
+   * probe holds a non-default world to and an order under west-flicker's 8.0/s backstop. */
   function respawn(i, r) {
     var a = r * 6.2832;
+    var FL = CC.JPFlora;
+    if (FL && FL.n > 0) {
+      var j = (hash2(i, 7, BASE + 0x53) * FL.n) | 0;
+      if (j >= FL.n) j = FL.n - 1;
+      /* THE ANCHOR HAS TO BE INSIDE THIS ELEMENT'S OWN RECYCLE RADIUS or the spawn is thrown away
+       * on the next tick. update() below retires a petal at dx*dx + dz*dz > 1600, i.e. 40 m, while
+       * the publisher accepts a tree at a FORWARD distance of up to 42 m — and forward is not
+       * radial, so an accepted anchor reaches about 1.30 * w, near 54 m off to the side. Measured
+       * before this guard: at seed 42, 75 of 135 crown spawns in one window landed outside the
+       * recycle radius, against zero for the camera ring the old path used (its own 4-24 m ring
+       * could not reach it). Worse than the waste, the respawn draw is quantised at 2 Hz, so a
+       * petal born outside is re-placed on the same dead point for up to half a second before it
+       * moves at all. 1444 is 38 m squared — inside 40 with a margin for the crown radius the
+       * spawn then adds. Out-of-range anchors fall through to the ring, which is the same
+       * behaviour the publisher's own note asks for when there is no usable crown.
+       *
+       * THE NEAR BOUND IS A RATE BOUND AND IT WAS ADDED BECAUSE THE FAR ONE ALONE FAILED THE GATE.
+       * With only `< 1444` the drift concentrated on whichever crown was nearest, and at seed 3
+       * under tsuyu that doubled the drift's own cell count (118 -> 234) and took it to 2.03% in
+       * the 3-20 Hz band, over the project's 2% rule — a photosensitivity regression introduced by
+       * a change whose only stated purpose was to stop wasting petals. How fast a petal crosses a
+       * cell is a function of how near it is, which is the whole argument behind the 11 m cut
+       * further down; birthing the pool nearer is the same defect arriving by a different route.
+       * 400 is 20 m squared, and it puts the drift back at 0.97% in band and 0.60 big steps a
+       * second. Both ends of this bound are measured, and neither is a look. */
+      var adx = FL.x[j] - V.ox, adz = FL.z[j] - V.oz, ad2 = adx * adx + adz * adz;
+      if (ad2 > 400 && ad2 < 1444) {
+      var q = Math.sqrt(hash2(i * 13 + 5, (r * 4096) | 0, BASE + 0x54));
+      pX[i] = FL.x[j] + Math.cos(a) * FL.r[j] * q;
+      pZ[i] = FL.z[j] + Math.sin(a) * FL.r[j] * q;
+      pY[i] = FL.y[j] - q * 0.9;
+      pPh[i] = r * 6.2832;
+      pVy[i] = 0.32 + r * 0.36;
+      pSp[i] = 0.7 + r * 1.1;
+      pLife[i] = 7 + r * 9;
+      return;
+      }
+    }
     /* 4-24 m, not 6-32. A petal at thirty metres is a sub-cell object that projects to one dim
      * mark and is then culled by whatever is in front of it: measured at four seeds the wider ring
-     * put 0-8 of forty-six petals on screen, which is not a drift, it is a speck. */
+     * put 0-8 of forty-six petals on screen, which is not a drift, it is a speck.
+     * This is the fallback the publisher requires: no crown in shot, so the ring round the camera
+     * is still what a viewer sees, exactly as it was before. */
     pX[i] = V.ox + Math.cos(a) * (4 + r * 20);
     pZ[i] = V.oz + Math.sin(a) * (4 + r * 20);
     pY[i] = 3.4 + r * 4.2;
@@ -679,7 +772,13 @@
          * pool size, and that is where the cut was taken instead. Written down because the reasoning
          * for the streak is sound and the next person will have it too. */
         emit(f, Math.floor(PJ.x), Math.floor(PJ.y),
-             flat ? G_o : G_TICK, warm ? P.sand : P.white,
+             /* PINK, in core.js's `blossom` (slot 20) — the drift is the same flower as the crown
+              * and has to be the same swatch or the petals read as ash coming off a cherry. The
+              * warm case keeps `sand`: a petal passing through a lantern's own light takes that
+              * light's colour, which is the one place the flower's own hue is not what a viewer
+              * sees. The prohibition this replaces was on `rose`, and it still stands — see the
+              * note by the swatch in core.js for why a tube and a petal are different objects. */
+             flat ? G_o : G_TICK, warm ? P.sand : P.blossom,
              (flat ? 96 : 62) * fade * near * (0.42 + 0.58 * (1 - 0.6 * NIGHT)), PJ.d);
       }
     }

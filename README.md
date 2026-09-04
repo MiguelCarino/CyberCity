@@ -94,8 +94,8 @@ and it moves the other way. Both, measured at 200x60 on frame 300 at two seeds, 
 | **frontier** seed 7 | 26.5 / 0.24 | 38.7 / 1.03 | 40.9 / 7.16 |
 | **Moonwalk** seed 42 | 5.5 / 1.64 | 6.6 / 2.27 | 5.0 / 2.85 |
 | **Moonwalk** seed 7 | 11.8 / 1.27 | 7.2 / 3.88 | 6.2 / 3.60 |
-| **Edo** seed 42 | 38.6 / 0.38 | 46.8 / 2.58 | 51.9 / 0.71 |
-| **Edo** seed 7 | 30.8 / 0.03 | 37.3 / 2.08 | 37.6 / 0.07 |
+| **Edo** seed 42 | 36.3 / 0.70 | 43.8 / 3.08 | 51.6 / 3.23 |
+| **Edo** seed 7 | 29.5 / 0.03 | 34.9 / 2.23 | 44.7 / 1.17 |
 
 Four things in that table are worth saying out loud rather than leaving for someone to notice.
 
@@ -113,8 +113,8 @@ tail is 0.41% at dusk against 7.27% at night — and that is not a bug to be tun
 the hour when the neon and the sky are the same brightness, which is exactly what makes it look
 like twilight.
 
-Edo is the only world whose hot tail goes the *other* way — a few hundredths of a per cent at
-night against two and a half at dusk — and it is the ladder rather than the picture. After dark the print's hot line is v 170 and the only
+Edo is the only world whose hot tail goes the *other* way — well under a per cent at night against
+three at dusk — and it is the ladder rather than the picture. After dark the print's hot line is v 170 and the only
 swatches in the palette that reach it are `amber` (179), `azure` (219), `red` (206), `ice` (174)
 and `pure` (234) — a sodium lamp, a screen, a signal, a rain highlight and a specular. A paper
 lantern is materially `warm`, which tops out at 167: three points under the line at any luminance
@@ -539,6 +539,7 @@ Everything here runs without a browser, which is how the thing gets verified at 
 | `tools/lightning-rate.cjs` | the same, for storms |
 | `tools/west-flicker.cjs` | the same, for every world that is not the city — pinned camera, per cell, against the city as its baseline |
 | `tools/canal-flicker.cjs` | the same, for Edo's canal — pins the camera **on the water**, which the gate above structurally cannot do |
+| `tools/sakura-flicker.cjs` | the same, for the cherry — **walks** until the element's own cells PRINT in the frame, then pins, and scores only those cells. `[seconds] [element] [--cells=n] [--time=]`, and a verdict is only taken at the 10 s reference window. Run it twice: `10` for the crown and `10 jp-blossom --cells=4` for the drift |
 | `tools/domshim.cjs` | runs the built page against a fake DOM — boot, resize, input, worlds, tab loss |
 
 The renderer is deterministic: the same seed and frame give a byte-identical picture in a browser

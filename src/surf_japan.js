@@ -92,6 +92,7 @@
   var G_DOT = g('.'), G_COMMA = g(','), G_COLON = g(':'), G_QUOTE = g("'"),
       G_TICK = g('`'), G_DASH = g('-'), G_UNDER = g('_'), G_EQ = g('='), G_TILDE = g('~'),
       G_PIPE = g('|'), G_PLUS = g('+'), G_8 = g('8'), G_o = g('o'), G_X = g('X'), G_STAR = g('*'),
+      G_HASH = g('#'),
       G_DQ = g('"');
 
   /* The one thing this file and surfaces.js MUST agree on, because raycast.js configures only one
@@ -188,9 +189,54 @@
    * bottom of the ladder in exactly the weather it is supposed to be seen in. So the floor here is
    * the DOME, which is a real quantity, and the contrast the frame needs is bought back in the
    * glyphs instead — see the header's note on lines. */
+  /* THE DAYLIGHT FILL, AND WHY A WALL IN THIS WORLD NEEDED ONE. EDO shipped as the only world in
+   * the tree whose NOON frame was DARKER than its night frame — lit 24.3% against 41.0% at seed 42,
+   * and the reversal held on every seed measured. The cause is arithmetic and it is all in this
+   * function. The lamp wash below is worth 0.86, while the ENTIRE daylight budget of a vertical
+   * face was SKY_SIDE = 0.52, and the one term that could have exceeded it, `direct`, is multiplied
+   * by openSky(), which under this world's own live weather (kiri, cloud 0.760) is 0.029. facade()
+   * then cubes what is left. Walls are 51.8% of the frame, so the whole picture inverted: the town
+   * was lit from its lanterns at midday.
+   *
+   * dFill AND NOT dSky IS THE WHOLE OF THE SAFETY ARGUMENT, and it is structural rather than tuned.
+   * dFill is smooth(clamp((dSky - 0.70) / 0.30)) — it is exactly 0 at night, and it is exactly 0 at
+   * BOTH signature hours, because the clock reports sky 0.657 at dawn and at dusk, under the 0.70
+   * knee. So this term is the identity at night as CONTRACT.md requires of anything read off the
+   * clock, and it leaves the two golden-hour frames byte-identical rather than nearly so. Measured:
+   * EDO night, dawn and dusk are byte-identical at seeds 42, 7 and 1337 with this term in, and
+   * independently at six seeds x three frames on a tree with only this term reverted.
+   *
+   * IT NARROWS THE INVERSION, IT DOES NOT CLOSE IT EVERYWHERE. Over a 6-seed x 5-frame grid, noon
+   * lit still sits below night lit at 4 of 30 points, and one of them is seed 42 frame 300 — the
+   * fixture in every README table — where noon reads 40.3 against night's 40.9. The gap there was
+   * 16.6 points and is now 0.6. Noon also remains the dimmest of the three daylight stops at every
+   * seed measured, because the two other inversions named at the foot of this note are still in
+   * place. Said plainly so the next reader does not have to rediscover that "fixed" meant 26 of 30.
+   *
+   * K = 0.33 WAS SWEPT, AND THE FIRST SWEEP WAS TOO NARROW TO SUPPORT WHAT IT CLAIMED. It ran
+   * seeds 42/7/1337/512 at f300 only and concluded 0.33 was "the only value with every seed inside
+   * the 3.5-5 hot band". Widened to seeds 404 and 3 that is simply false: at 0.33 the noon hot tail
+   * reaches 8.01% at seed 404 f300 and 7.46% at seed 3 f300, and lowering K does not rescue it
+   * cheaply either — at K 0.20 seed 404 is still 5.01% while seed 42's noon lit falls from 40.3 to
+   * 35.4 and the inversion this term exists to fix comes back.
+   *
+   * The number is kept at 0.33 anyway, and the reason is that 3.5-5 is a NIGHT target and the other
+   * worlds do not meet it by day either. Measured at 200x60 f300 noon on this tree: the frontier
+   * runs 5.31% hot at seed 42, 7.68% at 404 and 6.51% at 3; the city runs 3.46/3.15/4.05; the Moon
+   * 2.85/2.41/3.06. EDO with this term lands at 3.17/8.01/7.46 — inside the family the frontier
+   * already occupies at midday, where before it was a world with almost no daylight at all. What
+   * would be wrong is quoting the narrow sweep as proof. The honest statement is that EDO's noon hot
+   * tail now varies 1.2-8.0% across seeds, which is the spread a sunlit world in this print has.
+   * Muddy rises, which is expected and permitted — a daylight frame is not held to the muddy
+   * target.
+   *
+   * TWO RELATED INVERSIONS ARE DELIBERATELY NOT FIXED HERE. The floor at the foot of this file
+   * inverts the same way, though its `0.55 + 0.45 * openSky()` is already the right shape — the
+   * wall is the term that lost it — and EDO's noon sky still prints about 65% P.shadow. Both are
+   * their own change with their own census; folding them in here would make this one unmeasurable. */
   var SKY_UP = 1.00, SKY_SIDE = 0.52;
   function sunOf(cell) {
-    var dome = SKY_SIDE * (0.16 + 0.84 * dSky);
+    var dome = SKY_SIDE * (0.16 + 0.84 * dSky) + 0.33 * dFill;
     var op = openSky();
     if (!cell || cell.faceX === undefined) return dome + 0.18 * dSun * op;
     /* The face crossed by a ray stepping +side has its outward normal pointing -side. */
@@ -610,7 +656,45 @@
 
     if (glow > 0.02) {
       var flick = CC.reducedMotion ? 1 : 0.90 + 0.10 * vnoise(t * 0.9 + bay * 7.3 + sd * 0.01, 0x2D);
-      var base = (168 + 62 * hash2(bay, storey, sd ^ 0x11)) * glow * flick;
+      /* THE PANEL GLYPH ALTERNATES PER BAY, and it is the cheapest thing in this file that changes
+       * the picture. Measured at 200x60 f300 seed 42 night: '8' was 29.0% of every LIT cell in EDO
+       * and the world drew from 20 distinct glyphs against the city's 33, whose own top glyph is
+       * '_' at 13.7%. Rendered, that is fifteen unbroken rows of 8888 down the left third of the
+       * frame — this is the largest untextured surface in the project, at 17.5-25.5% of a night
+       * frame. Splitting it on the hash that is ALREADY being drawn for `base` takes '8' to 23.5%
+       * and the distinct count to 21, for one variable and no new noise stream.
+       *
+       * BE PRECISE ABOUT WHAT THAT BUYS, because a glyph histogram is not a texture measurement and
+       * this note first read as though it were. The hash is per (bay, storey), so a whole bay flips
+       * together: the structural measure — the share of panel ink sitting inside a horizontal run of
+       * six or more identical glyphs — is 35.9% before and 35.9% after at seed 42 f300, and at one
+       * frame the entire long-run mass simply migrated from '8' to '#'. So this is a LIGHTER PANEL
+       * GLYPH ON HALF THE BAYS, which is worth having on a frontage that was one repeated character
+       * across the whole lit third of the frame, and it is NOT a break-up of the runs. Breaking the
+       * runs needs a term that varies WITHIN a bay; the panel's own pu/pv module is computed two
+       * lines above and would cost nothing. That is the obvious next thing to try and it is not
+       * what this line does.
+       *
+       * `gh` HAS NO TIME TERM IN IT, deliberately: it is a pure function of (bay, storey, seed), so
+       * a cell's glyph cannot change while the camera is still. That matters more here than
+       * anywhere else in the file — the note below records that an 11 Hz hash on THIS panel is one
+       * of the five things that tripped the photosensitivity gate when EDO landed. The glyph does
+       * flip as a bay boundary sweeps a column during the walk, which is a per-cell step and is why
+       * this change was measured with a walking probe and not only with the pinned one.
+       *
+       * The obvious cheaper version — changing the temple row of the style table away from '8' —
+       * was built and measured NO effect: '8' stayed at 29.0%, because the frame's '8' is machiya
+       * frontage coming through this path, not temple lots. */
+      /* NAMED gh, AFTER TWO NAMES THAT WERE ALREADY TAKEN. `var` is function-scoped, and facade()
+       * is long: it already owns `bh` ("this bay's identity, stable forever") and, inside the
+       * `st.flat` kura branch, `ph`. A second `var` under either name is the SAME binding, silently
+       * reassigned for the rest of the call. Both were benign for the same reason — every read of
+       * the outer one lies on a path that returns before this line — and no byte compare could ever
+       * have shown it. That is exactly why it is worth naming carefully rather than checking
+       * reachability: the next person to move a read downward gets no warning at all. */
+      var gh = hash2(bay, storey, sd ^ 0x11);
+      var gPan = gh > 0.5 ? G_HASH : G_8;
+      var base = (168 + 62 * gh) * glow * flick;
       /* Rain across a lit panel: the water on the OUTSIDE of the paper, which is the detail that
        * puts the weather in front of the light instead of behind it.
        *
@@ -634,14 +718,14 @@
       if (wRain > 0.25 && lod === 2 && !CC.reducedMotion &&
           hash2(Math.floor(u * 9), Math.floor(v * 5 - t * 0.7), sd ^ 0x4C7) < 0.06 * wRain)
         return fset(G_PIPE, P.stone, base * 0.68);
-      if (lod < 2) return fset(G_8, P.warm, base * 0.86);
+      if (lod < 2) return fset(gPan, P.warm, base * 0.86);
       if (fpu < 0.16 || fpv < 0.13)
         return fset(fpv < 0.13 ? G_DASH : G_PIPE, P.timber, base * 0.30);
       /* The lower quarter of a shopfront panel is the noren or the shutter board — solid, so the
        * light is cut off at knee height. It is what stops a lit frontage reading as a hole. */
       if (storey === 0 && v < st.gnd * 0.34)
         return fset(G_EQ, P.timber, (24 + 60 * sun) * gr);
-      return fset(G_8, P.warm, base);
+      return fset(gPan, P.warm, base);
     }
 
     /* ---- and unlit, it is a LATTICE ------------------------------------------------------------

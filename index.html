@@ -67,12 +67,15 @@ var CC = (function () {
 
   [ 92, 126,  74],
 
-  [ 58,  70, 142]
+  [ 58,  70, 142],
+
+  [240, 168, 196]
 
  ];
  var P = { amber:0, azure:1, ember:2, spring:3, violet:4, white:5, red:6,
       slate:7, warm:8, ice:9, pure:10, shadow:11,
-      stone:12, timber:13, sand:14, jade:15, rose:16, gold:17, moss:18, indigo:19 };
+      stone:12, timber:13, sand:14, jade:15, rose:16, gold:17, moss:18, indigo:19,
+      blossom:20 };
 
  var GLYPHS = " .,:;'\"`^~-_=+*|/\\()[]{}<>!?#%&$@8OoQ0XZWMNHUVAKY".split('');
  var GI = {};
@@ -176,7 +179,9 @@ var CC = (function () {
 
   0.46,
 
-  0.56
+  0.56,
+
+  0.28
 
  ];
 
@@ -219,7 +224,9 @@ var CC = (function () {
 
   0.74,
 
-  0.62
+  0.62,
+
+  0.86
 
  ];
  var GAMMA_DAY = 0.62, KNEE_DAY = 0.030;
@@ -2827,6 +2834,7 @@ var CC = (function () {
  var G_DOT = g('.'), G_COMMA = g(','), G_COLON = g(':'), G_QUOTE = g("'"),
    G_TICK = g('`'), G_DASH = g('-'), G_UNDER = g('_'), G_EQ = g('='), G_TILDE = g('~'),
    G_PIPE = g('|'), G_PLUS = g('+'), G_8 = g('8'), G_o = g('o'), G_X = g('X'), G_STAR = g('*'),
+   G_HASH = g('#'),
    G_DQ = g('"');
 
  function cfg() { return CC.Surf ? CC.Surf.cfg : null; }
@@ -2862,7 +2870,7 @@ var CC = (function () {
 
  var SKY_UP = 1.00, SKY_SIDE = 0.52;
  function sunOf(cell) {
-  var dome = SKY_SIDE * (0.16 + 0.84 * dSky);
+  var dome = SKY_SIDE * (0.16 + 0.84 * dSky) + 0.33 * dFill;
   var op = openSky();
   if (!cell || cell.faceX === undefined) return dome + 0.18 * dSun * op;
 
@@ -3063,18 +3071,21 @@ var CC = (function () {
 
   if (glow > 0.02) {
    var flick = CC.reducedMotion ? 1 : 0.90 + 0.10 * vnoise(t * 0.9 + bay * 7.3 + sd * 0.01, 0x2D);
-   var base = (168 + 62 * hash2(bay, storey, sd ^ 0x11)) * glow * flick;
+
+   var gh = hash2(bay, storey, sd ^ 0x11);
+   var gPan = gh > 0.5 ? G_HASH : G_8;
+   var base = (168 + 62 * gh) * glow * flick;
 
    if (wRain > 0.25 && lod === 2 && !CC.reducedMotion &&
      hash2(Math.floor(u * 9), Math.floor(v * 5 - t * 0.7), sd ^ 0x4C7) < 0.06 * wRain)
     return fset(G_PIPE, P.stone, base * 0.68);
-   if (lod < 2) return fset(G_8, P.warm, base * 0.86);
+   if (lod < 2) return fset(gPan, P.warm, base * 0.86);
    if (fpu < 0.16 || fpv < 0.13)
     return fset(fpv < 0.13 ? G_DASH : G_PIPE, P.timber, base * 0.30);
 
    if (storey === 0 && v < st.gnd * 0.34)
     return fset(G_EQ, P.timber, (24 + 60 * sun) * gr);
-   return fset(G_8, P.warm, base);
+   return fset(gPan, P.warm, base);
   }
 
   if (st.vert) {
@@ -6422,7 +6433,7 @@ var CC = (function () {
    G_STAR = CC.g('*'), G_AT = CC.g('@'), G_8 = CC.g('8'), G_o = CC.g('o'),
    G_SLASH = CC.g('/'), G_BSL = CC.g('\\'), G_Y = CC.g('Y');
 
- var CITY = null, BASE = 0, JP = null;
+ var CITY = null, BASE = 0, JP = null, LAT = 3.93;
  function boot(city) {
   CITY = (city && city.aveX && city.world === 'japan') ? city : null;
   BASE = CITY ? ((Math.imul(CITY.seed | 0, 40503) >>> 6) & 0x3fffff) : 0;
@@ -6440,6 +6451,8 @@ var CC = (function () {
   DAYF = (JP && JP.dayFill !== undefined) ? JP.dayFill : 0;
 
   LAMP = CC.Daylight ? CC.Daylight.P.lamp : 1;
+
+  LAT = RAD_F * CR_MAX + OFF_F * CR_MAX * Math.sqrt(1 + V.hp * V.hp);
  }
 
  function wxOf(axis, along, cross) { return axis ? along : cross; }
@@ -6463,7 +6476,13 @@ var CC = (function () {
  };
  CC.JPFlora = FL;
 
- var TREE_PITCH = 12.0, TREE_R = 42, TREE_ACCEPT = 0.19;
+ var TREE_PITCH = 12.0, TREE_R = 42, TREE_ACCEPT = 0.32, CR_MAX = 3.4;
+
+ var CBX = new Float64Array(3), CBY = new Float64Array(3), CBZ = new Float64Array(3);
+
+ var RAD_F = 0.76, RY_F = 0.60;
+ var OFF_F = 0.50, OFF_MID = 0.16;
+ var MOUND = [0.60, 0.42, 0.42];
  var TREE_OK = { garden: 1, temple: 1, machiya: 1, market: 1 };
 
  var CAN_NEAR = 9.5;
@@ -6473,6 +6492,8 @@ var CC = (function () {
  var Q_CORE = 0.28, Q_MID = 0.62;
 
  var T_RIM = 0.22, T_MID = 0.07;
+
+ var T_LOB = 0.10;
 
  var SH_LO = 0.34, SH_W = 0.18;
 
@@ -6524,7 +6545,9 @@ var CC = (function () {
     var nf = fu * 0.46 + fv * 0.54;
 
     var tier = q > Q_MID ? 2 : (q > Q_CORE ? 1 : 0);
-    var shF = (nf - shLo - (tier === 2 ? T_RIM : (tier === 1 ? T_MID : 0))) * shK;
+    var lob = vy < 0 ? T_LOB * vy : T_LOB * 0.30 * vy;
+    var rimT = tier === 2 ? T_RIM + lob : (tier === 1 ? T_MID + 0.45 * lob : 0);
+    var shF = (nf - shLo - rimT) * shK;
     if (shF < 0) shF = 0; else if (shF > 1) shF = 1;
 
     var d = dc - rad * 0.86 * Math.sqrt(1 - q);
@@ -6549,9 +6572,31 @@ var CC = (function () {
       tier === 2 ? (fw > 0.5 ? G_QUOTE : G_TICK)
             : (tier === 1 ? (fw > 0.5 ? G_STAR : G_o)
                    : (nf > 0.52 ? G_AT : G_8)),
-      tier === 1 ? (fw > 0.5 ? cB : cA) : cA,
+
+      tier === 1 ? (fw > 0.72 ? cB : cA) : cA,
       lum, d);
    }
+  }
+ }
+
+ function leader(f, x0, y0, z0, x1, y1, z1, u0, w, bias, col, lum) {
+  var dh = Math.sqrt((x1 - x0) * (x1 - x0) + (z1 - z0) * (z1 - z0));
+
+  var ns = Math.ceil((Math.abs(y1 - y0) * V.scale + 1.4 * dh * V.colK) / w) + 4;
+  if (ns > 30) ns = 30;
+  var lx = -1, ly = -1, i;
+  for (i = 0; i <= ns; i++) {
+   var u = u0 + (1 - u0) * (i / ns);
+   var hu = Math.pow(u, 0.55), vu = Math.pow(u, 1.6);
+   if (!project(x0 + (x1 - x0) * hu, y0 + (y1 - y0) * vu, z0 + (z1 - z0) * hu)) { lx = -1; continue; }
+   var xx = Math.floor(PJ.x), yy = Math.floor(PJ.y), g = G_PIPE;
+   if (lx >= 0) {
+    var ddx = xx - lx, ddy = yy - ly;
+
+    if (Math.abs(ddx) * 1.6 > Math.abs(ddy)) g = (ddx > 0) === (ddy > 0) ? G_BSL : G_SLASH;
+   }
+   emit(f, xx, yy, g, col, lum, bias > 0 ? Math.max(0.6, PJ.d - bias) : PJ.d);
+   lx = xx; ly = yy;
   }
  }
 
@@ -6587,38 +6632,66 @@ var CC = (function () {
     var rx = px - V.ox, rz = pz - V.oz;
     var w = rx * V.fwx + rz * V.fwz;
     if (w < 1.0 || w > TREE_R) continue;
-    var sp = rx * V.rgx + rz * V.rgz, lim = w * V.hp + 14;
+    var sp = rx * V.rgx + rz * V.rgz, lim = w * V.hp + LAT;
     if (sp < -lim || sp > lim) continue;
 
     var rr = hash2(k, side, BASE + 0x63);
     var th = 3.0 + rr * 1.9, cr = 1.9 + rr * 1.5;
 
-    column(f, px, pz, 0, th + 0.16, G_PIPE, tcol, tlum, w < 20 ? 1 : 0);
+    var crossAng = axis ? 1.5708 : 0;
+    var bi;
+    for (bi = 0; bi < 3; bi++) {
+     var bang = bi === 0
+      ? hash2(k, side + 5, BASE + 0x65) * 6.2832
+      : crossAng + (bi === 1 ? 0 : 3.1416) + (hash2(k, side + bi * 5, BASE + 0x65) - 0.5) * 1.2;
+
+     var boff = cr * (bi === 0 ? OFF_MID : OFF_F);
+     CBX[bi] = px + Math.cos(bang) * boff;
+     CBZ[bi] = pz + Math.sin(bang) * boff;
+     CBY[bi] = th + cr * (MOUND[bi] + 0.18 * hash2(k, side + bi * 11, BASE + 0x66));
+    }
+
+    var fh = 0.40 * (th + cr * 1.24);
+    column(f, px, pz, 0, fh + 0.10, G_PIPE, tcol, tlum, 0);
+
+    var hb = 0.16;
+
+    var hbc = Math.ceil(hb * V.colK / w);
+    if (hbc < 1) hbc = 1; else if (hbc > 4) hbc = 4;
+    var q, qo;
+    for (q = 1; q <= hbc; q++) {
+     qo = hb * (q / hbc);
+
+     var qh = fh * (0.82 - 0.10 * (q / hbc));
+     column(f, wxOf(axis, along, cross + qo), wzOf(axis, along, cross + qo),
+        0, qh, G_PIPE, tcol, tlum, 0);
+     column(f, wxOf(axis, along, cross - qo), wzOf(axis, along, cross - qo),
+        0, qh, G_PIPE, tcol, tlum, 0);
+    }
+    if (w < 15) {
+
+     leader(f, px, 0.34, pz, wxOf(axis, along, cross + 0.36), 0.02,
+        wzOf(axis, along, cross + 0.36), 0, w, 0, tcol, tlum);
+     leader(f, px, 0.34, pz, wxOf(axis, along, cross - 0.36), 0.02,
+        wzOf(axis, along, cross - 0.36), 0, w, 0, tcol, tlum);
+    }
 
     if (w < 30) {
-     var ns = Math.ceil(cr * 0.9 * V.colK / w) + 3;
-     if (ns > 14) ns = 14;
-     var b, s2i;
-     for (b = -1; b <= 1; b++) {
+     leader(f, px, fh, pz, CBX[1], CBY[1], CBZ[1], 0, w, 0, tcol, tlum);
+     leader(f, px, fh, pz, CBX[2], CBY[2], CBZ[2], 0, w, 0, tcol, tlum);
 
-      var lx = px + b * 0.62, lz = pz + b * 0.34;
-      var lh = th + cr * (0.50 - 0.10 * (b * b));
-      for (s2i = 1; s2i <= ns; s2i++) {
-       var u2 = s2i / ns;
-       if (!project(px + (lx - px) * u2, th - 0.22 + (lh - th + 0.22) * u2,
-             pz + (lz - pz) * u2)) continue;
-       emit(f, Math.floor(PJ.x), Math.floor(PJ.y),
-         b < 0 ? G_SLASH : (b > 0 ? G_BSL : G_PIPE), tcol, tlum * 0.94, PJ.d);
-      }
-     }
+     var mhu = Math.pow(0.45, 0.55), mvu = Math.pow(0.45, 1.6);
+     var mx = px + (CBX[1] - px) * mhu, mz = pz + (CBZ[1] - pz) * mhu;
+     var my = fh + (CBY[1] - fh) * mvu;
+     leader(f, mx, my, mz, CBX[0], CBY[0], CBZ[0], 0, w, 0, tcol, tlum);
 
-     if (project(px, th + 0.12, pz))
+     if (project(px, fh + 0.06, pz))
       emit(f, Math.floor(PJ.x), Math.floor(PJ.y), G_Y, tcol, tlum, PJ.d);
 
      if (w < 15) {
-      if (project(px, th * 0.42, pz))
+      if (project(px, fh * 0.42, pz))
        emit(f, Math.floor(PJ.x), Math.floor(PJ.y), G_DASH, tcol, tlum, PJ.d);
-      if (project(px, th * 0.68, pz))
+      if (project(px, fh * 0.72, pz))
        emit(f, Math.floor(PJ.x), Math.floor(PJ.y), G_DASH, tcol, tlum, PJ.d);
      }
     }
@@ -6627,28 +6700,33 @@ var CC = (function () {
 
     var bloom = hash2(k, side * 3, BASE + 0x64) < 0.82;
 
-    var bi;
     for (bi = 0; bi < 3; bi++) {
-     var ang = bi * 2.0944 + hash2(k, side + bi * 5, BASE + 0x65) * 1.5;
-     var off = cr * 0.40;
-     var cbx = px + Math.cos(ang) * off, cbz = pz + Math.sin(ang) * off;
-     var cby = th + cr * (0.44 + 0.36 * hash2(k, side + bi * 11, BASE + 0x66));
+     var cbx = CBX[bi], cby = CBY[bi], cbz = CBZ[bi];
 
-     var lowY = cby - cr * 0.528;
+     var lowY = cby - cr * RAD_F * RY_F;
      var lf = lowY >= 4.2 ? 0 : (lowY <= 2.0 ? 1 : (4.2 - lowY) * 0.4545);
      var lampT = (kerb && LAMP > 0.02 && lf > 0) ? 148 * LAMP * lf * lf * (3 - 2 * lf) : 0;
      var cb = (12 + 168 * (1 - NIGHT) + 66 * DAYF) * (bloom ? 1 : 0.62);
 
      var warmLit = lampT > 18 && NIGHT > 0.5;
-     var cA = warmLit ? P.warm : (bloom ? P.white : P.moss);
-     var cB = warmLit ? P.warm : (bloom ? P.sand : P.moss);
+     var cA = bloom ? P.blossom : P.moss;
+     var cB = warmLit ? P.warm : (bloom ? P.white : P.moss);
 
      var far = (w - SH_D0) * SH_DK;
      if (far < 0) far = 0; else if (far > 1) far = 1;
 
-     billow(f, cbx, cby, cbz, cr * 0.66, cr * 0.66 * 0.80,
+     billow(f, cbx, cby, cbz, cr * RAD_F, cr * RAD_F * RY_F,
         BASE + 0x67 + bi, cb, lampT * (bloom ? 1 : 0.62), cA, cB,
         SH_LO + SH_FAR * far + (bloom ? 0 : SH_LEAF), 1 / SH_W, far * 0.85);
+    }
+
+    if (w < 26) {
+     var BR_D = cr * (OFF_F + 0.86 * RAD_F + 0.04);
+     leader(f, px, fh, pz, CBX[1], CBY[1], CBZ[1], 0.45, w, BR_D, tcol, tlum);
+     leader(f, px, fh, pz, CBX[2], CBY[2], CBZ[2], 0.45, w, BR_D, tcol, tlum);
+     var thu = Math.pow(0.45, 0.55), tvu = Math.pow(0.45, 1.6);
+     leader(f, px + (CBX[1] - px) * thu, fh + (CBY[1] - fh) * tvu, pz + (CBZ[1] - pz) * thu,
+        CBX[0], CBY[0], CBZ[0], 0.30, w, BR_D, tcol, tlum);
     }
 
     if (FL.n < ANC_N && w > 13) {
@@ -6976,6 +7054,24 @@ var CC = (function () {
 
  function respawn(i, r) {
   var a = r * 6.2832;
+  var FL = CC.JPFlora;
+  if (FL && FL.n > 0) {
+   var j = (hash2(i, 7, BASE + 0x53) * FL.n) | 0;
+   if (j >= FL.n) j = FL.n - 1;
+
+   var adx = FL.x[j] - V.ox, adz = FL.z[j] - V.oz, ad2 = adx * adx + adz * adz;
+   if (ad2 > 400 && ad2 < 1444) {
+   var q = Math.sqrt(hash2(i * 13 + 5, (r * 4096) | 0, BASE + 0x54));
+   pX[i] = FL.x[j] + Math.cos(a) * FL.r[j] * q;
+   pZ[i] = FL.z[j] + Math.sin(a) * FL.r[j] * q;
+   pY[i] = FL.y[j] - q * 0.9;
+   pPh[i] = r * 6.2832;
+   pVy[i] = 0.32 + r * 0.36;
+   pSp[i] = 0.7 + r * 1.1;
+   pLife[i] = 7 + r * 9;
+   return;
+   }
+  }
 
   pX[i] = V.ox + Math.cos(a) * (4 + r * 20);
   pZ[i] = V.oz + Math.sin(a) * (4 + r * 20);
@@ -7077,7 +7173,8 @@ var CC = (function () {
     var warm = hash2(i, 0, BASE + 0x52) < 0.34;
 
     emit(f, Math.floor(PJ.x), Math.floor(PJ.y),
-      flat ? G_o : G_TICK, warm ? P.sand : P.white,
+
+      flat ? G_o : G_TICK, warm ? P.sand : P.blossom,
       (flat ? 96 : 62) * fade * near * (0.42 + 0.58 * (1 - 0.6 * NIGHT)), PJ.d);
    }
   }

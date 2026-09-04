@@ -384,6 +384,17 @@ console.log('index.html  ' + bytes + ' bytes  (' + (bytes / 1024).toFixed(1) + '
  * is not about the number: it is that a budget set against a half-finished tree is a guess with a
  * decimal point on it, and the right moment to set one is after the last file lands.
  *
+
+ * THE CHERRY PASS COST 755 BYTES and made NONE of the three moves this essay asks for, which is
+ * recorded here because the contract asks each pass to say which one it did. It cut nothing, moved
+ * no line, and added content: 606,893 -> 607,648, leaving 6,752 bytes. Most of it is one function —
+ * the petal drift reading the crown anchors src/elements/jp_flora.js had been publishing to nobody
+ * since it landed — and the rest is a constant and a glyph. Four of the pass's ten edits were zero
+ * bytes or negative, which is the only reason a change that rewrote three files fits in a tenth of
+ * the headroom at all.
+ *
+ * So the finding below stands untouched for the fourth pass running, and the margin is now a tenth
+ * smaller than when it was written. The next feature of any size cannot be paid for out of this.
  * THE MOON COST 55 KB stripped — 11.5 for the painter, 43.4 for eleven elements — against the
  * frontier's 65. Neither is bloated; a world in this engine is simply about that big.
  *

@@ -1,6 +1,6 @@
 /* west-flicker's method, but with the camera PINNED ON THE CANAL — which is the one place the
    shipped gate can never look, because it pins at the map's start and the channel is 100+ m away. */
-const R='/Users/eden/Github/CyberCity/',fs=require('fs');
+const R=require('path').join(__dirname,'..')+'/',fs=require('fs');
 global.CC=require(R+'src/core.js');global.window=undefined;
 ['world','proj','daylight','weather_state','city','surfaces','raycast','control'].forEach(m=>require(R+'src/'+m+'.js'));
 fs.readdirSync(R+'src').sort().forEach(p=>{if(/^surf_.*\.js$/.test(p))require(R+'src/'+p)});
@@ -49,9 +49,35 @@ function run(preset,seed,reduced,dOff){
     for(const fq of PROBES){const a=goertzel(x,fq);if(a>band)band=a;}}
   return {water,worst:(100*worst/255).toFixed(1),big:big.toFixed(2),band:(100*band/255).toFixed(2)};
 }
+/* One sweep, collected as it prints. The verdict below reads THIS array — an earlier cut ran the
+   same eight configurations a second time to score them, which doubled a 13-second gate's runtime
+   for numbers it had already computed and left two config lists to keep in step. */
+const ROWS_ALL=[];
 for(const [seed,dOff] of [[42,2],[42,8],[3,2],[3,8]])
   for(const p of ['kiri','typhoon'])
-    { const r=run(p,seed,false,dOff);
+    { const r=run(p,seed,false,dOff); ROWS_ALL.push(r);
       console.log('seed',seed,'dist-to-channel',dOff+'m',p.padEnd(8),r?`waterCells ${String(r.water).padStart(4)}  worstStep ${r.worst}%  bigSteps ${r.big}/s  3-20Hz ${r.band}%`:'(never reached)'); }
 const rm=run('typhoon',42,true,2);
 console.log('reduced-motion @2m typhoon:', rm?`waterCells ${rm.water} worstStep ${rm.worst}% bigSteps ${rm.big}/s 3-20Hz ${rm.band}%`:'n/a');
+
+/* THE VERDICT, which this file shipped without — CONTRACT.md names it the pattern to copy and a
+   probe with no PASS/FAIL is a print-out, not a gate. Four codes rather than two, following
+   tools/flicker-rate.cjs: 1 is a MEASURED violation, 3 is "the walk never reached the water", and
+   those are not the same answer. The 2% rule is the project's, and the big-step cap is the one
+   tools/west-flicker.cjs applies to a world that is not the default. */
+const measured = ROWS_ALL.filter(Boolean);
+if (!measured.length || measured.every(r => r.water === 0)) {
+  console.log('RESULT: NOT_MEASURED — the walk never stood on the channel, or it rendered no water');
+  process.exit(3);
+}
+const worstBand = Math.max(...measured.map(r => parseFloat(r.band)));
+const worstBig  = Math.max(...measured.map(r => parseFloat(r.big)));
+const bad = (worstBand > 2.0 ? ` 3-20Hz ${worstBand}% over 2%` : '') +
+            (worstBig > 8.0 ? ` big steps ${worstBig}/s over 8/s` : '') +
+            /* The reduced-motion row was printed and not judged, which is half a gate: the flag's
+               rule is stricter than the live one — with it on, everything that modulates must be
+               frozen or slow enough that the band is empty. */
+            (rm && (parseFloat(rm.big) > 0 || parseFloat(rm.band) > 0.5)
+              ? ` reduced motion is not still (${rm.big}/s, ${rm.band}%)` : '');
+console.log(`RESULT: ${bad ? 'FAIL' + bad : 'PASS'}  (worst 3-20Hz ${worstBand}%, worst big steps ${worstBig}/s)`);
+process.exit(bad ? 1 : 0);

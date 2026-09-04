@@ -65,13 +65,38 @@ var CC = (function () {
     [ 92, 126,  74],  // 18 moss    — dull green: planting, algae on concrete, sage, canvas. The
                       //              darkest pigment in the table after shadow, which is what a
                       //              leaf in ordinary light actually is
-    [ 58,  70, 142]   // 19 indigo  — deep blue: night glass, shade with sky in it, dusk haze. The
+    [ 58,  70, 142],  // 19 indigo  — deep blue: night glass, shade with sky in it, dusk haze. The
                       //              shade swatch for a world that has a sky in it, where `shadow`
                       //              is the shade swatch for a world that has none
+    /* ---- and one more, for the same reason the eight above exist -----------------------------
+     * A swatch the first twenty could not spell: PALE PINK AS A SURFACE. The palette already has a
+     * pink — `rose` at slot 16 — and it is the wrong object. rose is a TUBE: hue 337 at 57%
+     * saturation, gain-bounded to 0.20/0.18 (the lowest pair in either table) precisely so a large
+     * area of it can never clear the hot line and take the bloom with it, because that is the
+     * failure that walked `violet` off magenta. Every one of those constraints is correct for
+     * signage and every one of them is wrong for a cherry in blossom, which is not a light source,
+     * is lit by the sky like any other surface, and covers three hundred cells of a frame.
+     *
+     * THE PIGMENT IS DESATURATED ON PURPOSE, and that is what makes it safe where rose is not.
+     * 240,168,196 is 30% saturation against rose's 57%: under this build's bloom it bleeds toward
+     * WHITE-pink, not toward magenta, so it does not reopen the failure the rose bound exists to
+     * close. It is also the more honest flower — someiyoshino photographs as a pale pink mass with
+     * white in it, which is why the previous pass's white+sand crown was a defensible reading of
+     * it even though it was not the one asked for.
+     *
+     * It blends on the SKY curve and not the sun, without an edit to ladder(), because the source
+     * test there is a membership list of things that EMIT and this does not emit. That is the right
+     * answer as well as the free one: blossom is lit by the whole hemisphere from first light, like
+     * stone, timber, sand, moss and indigo, and putting it on the sun curve would hold its night
+     * gain through the whole of dawn. */
+    [240, 168, 196]   // 20 blossom — pale pink SURFACE: sakura, and the first pink in this table
+                      //              that is allowed to cover area. See the note above for why it
+                      //              is not `rose` and must never be swapped for it
   ];
   var P = { amber:0, azure:1, ember:2, spring:3, violet:4, white:5, red:6,
             slate:7, warm:8, ice:9, pure:10, shadow:11,
-            stone:12, timber:13, sand:14, jade:15, rose:16, gold:17, moss:18, indigo:19 };
+            stone:12, timber:13, sand:14, jade:15, rose:16, gold:17, moss:18, indigo:19,
+            blossom:20 };
 
   // Glyph table. Index 0 must stay blank — the frame is cleared to it.
   var GLYPHS = " .,:;'\"`^~-_=+*|/\\()[]{}<>!?#%&$@8OoQ0XZWMNHUVAKY".split('');
@@ -503,7 +528,7 @@ var CC = (function () {
             //              the swatch would print DARKER at noon than at midnight. 94 is also the
             //              honest reading: a hedge at night is darker than the concrete beside it,
             //              and moss is 20 points under slate
-    0.56    // 19 indigo  — STRUCTURE, ceiling 115, which is slate's 114 to within a unit and is
+    0.56,   // 19 indigo  — STRUCTURE, ceiling 115, which is slate's 114 to within a unit and is
             //              meant to be. indigo is the shade swatch for a world with a sky in it
             //              and slate is the far-haze swatch for the same world; they are two
             //              readings of the same cold structure and they print at the same height,
@@ -511,6 +536,17 @@ var CC = (function () {
             //              changes HUE and not brightness. Rejected 0.70 (ceiling 124): night
             //              glass that outprints the concrete around it reads as a lit window,
             //              which is azure's job and comes with azure's gain
+    0.28    // 20 blossom — STRUCTURE, and it takes a shade UNDER white's own gain for the reason
+            //              sand takes exactly white's: this is the brightest pigment in the table
+            //              (max channel 240, above white's 236), so an equal gain would make a
+            //              blossom mass the brightest broad surface in a night frame — the exact
+            //              fault white itself was brought down from 1.15 to fix. At 0.28 it lands
+            //              between sand and white, which is where a pale petal seen by lamplight
+            //              belongs: brighter than dust, dimmer than render.
+            //              Rejected 0.20, rose's own bound: that gain exists to CRUSH, and its
+            //              knee takes every cell under lum 96 to black — correct for a small
+            //              signage cell written near full scale, and it would delete two thirds of
+            //              a canopy. The bound is right for the tube and has nothing to say here
   ];
   /* GAMMA and KNEE are held at the values the previous round fitted, and that is a measurement
    * rather than an omission: re-swept over the 128 frames with the new EXPOSURE in place, GAMMA
@@ -668,12 +704,17 @@ var CC = (function () {
             //              night ceiling (94) rather than falling under it — see the night entry
             //              for the whole of why this swatch is fitted from the day side backwards.
             //              Sage and canvas in sun. Rejected 0.60 (ceiling 91), below night again
-    0.62    // 19 indigo  — shade with the sky in it, ceiling 104, and MID is the entire brief: it
+    0.62,   // 19 indigo  — shade with the sky in it, ceiling 104, and MID is the entire brief: it
             //              is the swatch for the part of a daylight frame that is neither lit nor
             //              black, which is what stops a noon picture reading as a lit object cut
             //              out of paper — the same job the shadow entry above describes, one tier
             //              up and with an actual sky in it. Rejected 0.78 (slate's gain, ceiling
             //              118), which puts shade level with the sunlit concrete casting it
+    0.86    // 20 blossom — sunlit blossom, and it must be able to cross the hot line, because the
+            //              crown is the only day-hot surface EDO owns and the census tail depends
+            //              on it. A step under white's 0.92 and a step over sand's 0.90 in effect,
+            //              since the pigment is brighter than both. Rejected white's own 0.92: a
+            //              petal is not render and should not print level with it
   ];
   var GAMMA_DAY = 0.62, KNEE_DAY = 0.030;
 

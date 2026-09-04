@@ -50,7 +50,7 @@ concatenates them in order and the headless harness `require`s them through a sh
 | `src/render_canvas.js` | `CC.Canvas` | glyph atlas, `drawImage` per cell, bloom. **Only DOM-touching module** |
 | `src/main.js` | `CC.Main` | loop, resize, fullscreen, seed in hash, prefers-reduced-motion |
 
-## The palette — 20 swatches, two ladder entries each
+## The palette — 21 swatches, two ladder entries each
 
 `PALETTE` in `core.js` is **append-only**. Slots 0-11 are frozen because a swatch index in this
 tree is a literal in other files — `surfaces.js`'s `L_LOW`/`L_LIT`/`L_HOT`, `ads.js`'s `PEAK`,
@@ -67,6 +67,24 @@ Rules for the palette:
   through the whole of dawn, so the wall goes bright only after the sky already has.
 - The LUT's stride is read off `PALETTE.length`. It was a literal `12` once and that is exactly the
   failure above.
+- APPENDING IS THE SUPPORTED GROWTH PATH AND IT HAS NOW BEEN EXERCISED, which is worth recording
+  because the section above is otherwise all warnings. Slot 20 `blossom` was added for the cherry:
+  one `PALETTE` row, one entry in each ladder, one name in the `P` map, one name in `metrics.py`'s
+  `NAMES`. Nothing else needed an edit — `ladder()` sorts an unlisted swatch onto the sky curve,
+  which is the right answer for a surface; the LUT stride and `render_canvas.js`'s atlas both read
+  `PALETTE.length`; and `surfaces.js` fills its per-slot tables to `PALETTE.length` with a neutral.
+  The 27-fixture byte-compare came back identical, so a swatch no other world writes costs those
+  worlds nothing. The check that matters is the parallel list in `metrics.py`, which WRAPS rather
+  than raising: a census taken with a short `NAMES` misattributes the new swatch to slot 0 and reads
+  as amber appearing in a world that has none.
+- A NEW SWATCH IS FOR A MATERIAL THE TABLE CANNOT SPELL, not for a hue it already has. `blossom` and
+  `rose` are both pink and they are different objects: rose is a TUBE, at 57% saturation with the
+  lowest gain pair in either ladder specifically so a large area of it can never clear the hot line
+  and take the bloom with it. That bound is correct and it is why a cherry could not be painted in
+  rose — the crown is a SURFACE, lit by the sky, covering three hundred cells. The test to apply
+  before appending is whether the existing swatch's constraints are wrong for the new use or merely
+  inconvenient; here they were wrong, and desaturating to 30% is what makes the new one safe where
+  the old one is not.
 - Any painter that maps a hue to a material must be indexed **by palette slot with every slot
   filled**, not by a whitelist. `surf_west.js` carried `hue === P.warm || hue === P.white ||
   hue === P.ember ? hue : P.amber` and every material the map learned to name after it was written
@@ -208,6 +226,8 @@ what each world actually measures at each hour.
 
 The gates, in the order they are worth running: `node build.js`, `node tools/domshim.cjs`,
 `node tools/flicker-rate.cjs`, `node tools/lightning-rate.cjs`, `node tools/west-flicker.cjs 4`,
+`node tools/canal-flicker.cjs`, `node tools/sakura-flicker.cjs 10`,
+`node tools/sakura-flicker.cjs 10 jp-blossom --cells=4`,
 the census, and a determinism check (the same seed, frame, world and hour rendered twice must be
 byte-identical).
 
@@ -218,6 +238,40 @@ rendered ZERO canal cells on a surface that was in fact running at 3.61% against
 feature lives somewhere the pinned camera never stands, measure it where it lives —
 `tools/canal-flicker.cjs` is that probe for the canal and is the pattern to copy. Quoting a PASS
 from a tool that rendered none of the thing under test is worse than not running it.
+
+THE SAME RULE CAUGHT THE CHERRY, which is the second feature to fall through the same hole and is
+why this is written as a pattern rather than as one file's story. On the tree the cherry work started
+from, `west-flicker.cjs` rendered 20 sakura cells of 4,800 from its pinned pose at seed 3 and 15 at
+seed 42 — of which ZERO printed above the black line — and its japan rows came back BYTE-IDENTICAL
+whether the crown was drawing zero visible cells a frame or eighty. It passed the tree in both states
+without ever measuring it.
+
+THAT NUMBER IS A MOVING TARGET AND THE FIRST VERSION OF THIS PARAGRAPH SHIPPED IT AS A CONSTANT.
+Raising the cherry's accept rate put a crown at the map's start pose, so the same gate now renders 80
+cells there, 45 of them printing — which quietly turned the new probe into a second copy of
+west-flicker, because it pinned as soon as its threshold was met and its threshold was met at frame
+zero. Two lessons, and the second is the general one: a pinned gate's blindness is a property of the
+CONTENT as much as of the camera, so it cannot be written down once; and a walking probe must
+threshold on what PRINTS, not on what the element owns, or it will stop on invisible occluding mass
+and report a pose the viewer never sees. `tools/sakura-flicker.cjs` is the probe: it WALKS the autopilot until a stated
+number of that element's cells PRINT, then pins there, and it scores only the cells that element
+itself wrote, attributed by wrapping `CC.put` BEFORE `src/proj.js` is required — `proj.js` caches
+`var put = CC.put` at module scope, so a wrapper installed after that require is never called by any
+world-space element and the probe would measure an empty set while printing a confident PASS. Two
+BOTH INVOCATIONS ARE IN THE GATE LIST ABOVE, and that is not tidiness. The default run measures the
+TREE; the petal drift is a different element, needs `--cells=4` to be found at all, and returns
+NOT_MEASURED at the default threshold. A maintainer who runs only the named default ships a petal
+change having measured only the crown, which is this section's own rule failing one level down.
+
+Three further things that cost a measurement each and are now in that file's header: an element that is
+SIMULATED rather than drawn from the map cannot be found by a search loop that does not call
+`update()` on every frame (the first cut reported "no crown reached" for a drift the pinned run in
+the same process measured at 41 cells), and the window is an ARGUMENT rather than a constant because
+a rate is quantised by it — at four seconds a rate is a multiple of 0.25/s, which is too coarse to
+judge against a 1.00/s limit. Quote the window with the number.
+
+Both of these probes take a pose the shipped gates cannot reach, and both of them found something
+there. Assume the next feature that lives off the start pose needs a third.
 
 `west-flicker.cjs` is named after the frontier and is NOT scoped to it: it walks `CC.World.LIST`
 and gates every world that is not the default against the default's own elements, so a new world is
