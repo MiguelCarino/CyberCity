@@ -245,6 +245,13 @@ catch (e) { throw new Error('build: bundle does not parse — ' + e.message); }
  * entering fullscreen never flashes white and never shows a seam at an edge the canvas overhangs.
  * The hint is CSS-only on purpose: it fades itself out and no JavaScript ever has to know it
  * existed, which keeps main.js free of anything resembling UI. */
+/* The baseline head block (description, canonical, Open Graph, JSON-LD) is written into
+ * index.html by Carino-Systems/baseline/apply.py, between two marker comments. This build
+ * regenerates index.html from scratch, so it carries that block over from the previous
+ * output instead of dropping it. */
+const PREV = fs.existsSync(OUT) ? fs.readFileSync(OUT, 'utf8') : '';
+const BASELINE = (PREV.match(/<!-- carino:head[\s\S]*?<!-- \/carino:head -->\n/) || [''])[0];
+
 const HTML = `<!doctype html>
 <html lang="en">
 <head>
@@ -253,7 +260,8 @@ const HTML = `<!doctype html>
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#000000">
 <title>CyberCity</title>
-<style>
+<link rel="icon" type="image/webp" href="logo.webp">
+${BASELINE}<style>
   html, body { margin: 0; padding: 0; background: #000; height: 100%; overflow: hidden; }
   /* The canvas is allowed to overhang the viewport by a fraction of a cell (see main.js layout),
      so it is pinned to the origin and the overflow above hides the remainder. */
@@ -273,11 +281,19 @@ const HTML = `<!doctype html>
      for good after one play and never reappears on resize or fullscreen change. */
   @keyframes hint { 0% { opacity: 0 } 12% { opacity: .34 } 70% { opacity: .34 } 100% { opacity: 0 } }
   @media (prefers-reduced-motion: reduce) { #hint { animation-duration: 14s } }
+  /* The one link on the page: the fleet's legal notice. Dim and small, in the corner the
+     city's skyline never needs; it brightens only under the pointer. */
+  #legal { position: fixed; right: 10px; bottom: 8px; z-index: 1;
+           font: 500 10px/1 ui-monospace, "Liberation Mono", "DejaVu Sans Mono", monospace;
+           letter-spacing: .12em; text-transform: uppercase; color: #d8e84a; opacity: .28;
+           text-decoration: none; }
+  #legal:hover, #legal:focus-visible { opacity: .8; }
 </style>
 </head>
 <body>
 <canvas id="cc"></canvas>
 <div id="hint">click for fullscreen</div>
+<a id="legal" href="https://carino.systems/legal.html">Legal</a>
 <script>
 ${bundle}</script>
 </body>
