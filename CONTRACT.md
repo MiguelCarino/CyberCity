@@ -1,7 +1,11 @@
 # CyberCity — module contract
 
-Deliverable: **one self-contained `index.html`**, fullscreen, pure ambient, no game loop.
-Sources live in `src/`; `node build.js` inlines them into `index.html`. Never edit `index.html` by hand.
+Deliverable: **`index.html` plus `w/`** — the page with the engine and the city inline, and one
+`w/<world>.js` per secondary world loaded by synchronous `<script src>` — fullscreen, pure ambient,
+no game loop. Until the HD pass it was one self-contained `index.html`; that property was spent on
+purpose, by the owner, and `build.js`'s essay records the trade. Sources live in `src/`;
+`node build.js` writes both. Never edit `index.html` or `w/` by hand, and never publish one without
+the other.
 
 ## Renderer model — voxel-space (heightmap) raycasting at character resolution
 
@@ -26,6 +30,17 @@ Per column `x`:
 | `lum` | Uint8Array | 0..255 brightness multiplier applied to the palette colour |
 | `dist` | Float32Array | depth in world units; `Infinity` for sky. Elements MUST depth-test against this |
 | `kind` | Uint8Array | `0` sky `1` façade `2` floor `3` element |
+| `under` | Uint8ClampedArray, `cols*rows*3` | the underpainting: RGB per cell, additive under the glyphs. Written ONLY by `CC.Compose.post`, after `tone()`. **Elements never write it**, and nothing else may; all-zero (the `UNDER = 0` kill switch) is the glyph-only print |
+| `D` | number, ≥ 1 | grid density against the 200-column 9:16 reference, `max(1, cols*cellAspect/112.5)`. Published by `raycast.js` every render (1 under `CC.DETAIL_SCALE === 0`); read by `optics.js`, `weather.js`, `west_stock.js` (the wagon bed's sample count and the team's leg-width threshold), the underpainting's spill box and `render_canvas.js`'s bloom radii. Declared in `makeFrame` with `uon`, so the frame's shape never changes after birth |
+
+**The render order is contract**, because the underpainting needs the world pass on its own:
+`CC.clearFrame(f)` → `CC.Cast.render(f, cam, city)` → `CC.Compose.world(f)` → every element's
+`draw` → `CC.Compose.post(f, cam, t)` → `CC.Canvas.draw(f)`. `main.js`, `tools/headless.cjs` and every
+composite probe repeat it. `world()` snapshots the frame before any element draws (so lightning and
+other element flashes never reach the mass term) and stamps the snapshot with the frame; `post()`
+and `clearFrame()` spend the stamp. A caller that skips `world()` still gets a field — `post()`
+snapshots the frame itself before toning it — but a degraded one with the elements in it, which is
+fine for a probe that never reads `under` and wrong for anything that does.
 
 ## Modules
 
@@ -34,7 +49,7 @@ concatenates them in order and the headless harness `require`s them through a sh
 
 | file | global | responsibility |
 | --- | --- | --- |
-| `src/core.js` | `CC`, `CC.Compose` | Frame alloc, PALETTE, GLYPHS, rng/noise, math, `put()`, and the print — the two exposure ladders, `ladder()`, the LUT and `Compose.post()`. `src/compose.js` does not exist; the contract allows it not to and `build.js` filters it out rather than assuming it |
+| `src/core.js` | `CC`, `CC.Compose` | Frame alloc, PALETTE, GLYPHS, rng/noise, math, `put()`, and the print — the two exposure ladders, `ladder()` (its source set is the one `SRC` list, which the underpainting's emitter set `EM` extends), the LUT, `Compose.post()`, and the underpainting: `Compose.world(f)` (the pre-element snapshot), the field it writes into `f.under`, and `Compose.UNDER` (strength 0..1; 0 is the kill switch). `src/compose.js` does not exist; the contract allows it not to and `build.js` filters it out rather than assuming it |
 | `src/world.js` | `CC.World` | the world registry — which world is live, the id/name/alias table, and `inWorld()` |
 | `src/daylight.js` | `CC.Daylight` | the clock: sun altitude and bearing, and the light directions everything reads off them |
 | `src/weather_state.js` | `CC.Weather` | the weather director and one preset table per world; `rel()` is the cross-world quantity |
@@ -47,8 +62,36 @@ concatenates them in order and the headless harness `require`s them through a sh
 | `src/proj.js` | `CC.Proj` | the ONE copy of the element camera — `make()` hands each world-space element file its own basis and the four helpers closed over it |
 | `src/control.js` | `CC.Control` | the walk and the input devices; re-anchors to `city.js`'s route on a rebuild |
 | `src/elements/*.js` | pushes to `CC.ELEMENTS` | ambient systems, see below |
-| `src/render_canvas.js` | `CC.Canvas` | glyph atlas, `drawImage` per cell, bloom. **Only DOM-touching module** |
+| `src/render_canvas.js` | `CC.Canvas` | the underlay (`f.under`, one pixel per cell, drawn unsmoothed first), the glyph pass — `drawImage` per cell from the atlas, or on cells of 7 device px and under (`setPixelPath('auto')`, what `main.js` ships) direct pixel writes and one `putImageData`, falling back to drawImage on any context that cannot — and the bloom, which reads the glyph scene only and is sized from the reference cell `dh*frame.D`. **Only DOM-touching module** |
 | `src/main.js` | `CC.Main` | loop, resize, fullscreen, seed in hash, prefers-reduced-motion |
+
+**Painter export keys the engine reads**, all optional, all on the painter's own export (the city's
+on `CC.Surf`, the others on `CC.SURFACES[id]`) — a world is what its painter file says, and core
+never names one:
+- `SKY_RGB` — 18 numbers for the underpainting: zenith rgb then horizon rgb at NIGHT, at NOON, and
+  the DUSK pair the warm term pulls toward. The night horizon is also what far walls haze toward
+  (at half strength by night), and darkening it is not free: every glyph that steps in front of
+  the sky steps harder in display terms on a darker backdrop, which is what failed flicker-rate's
+  still-holo check at 400x120 when the city's was taken from 40,50,96 to 24,30,60. **No table means no sky and
+  no spill**: that is the Moon, which gets regolith ambient off `P.sun` instead.
+- `BARE` — `[wall, floor]`, the share of the underpainting's ambient a blank cell takes when the
+  painter wrote it in a LIT swatch, meaning "this surface, no glyph on it". A blank written in
+  `shadow` or `slate` is a hole and takes the defaults whatever the export says (0.1 on a wall, 0.5
+  on a floor), and so does every blank when the export is absent. The swatch on a blank cell prints
+  nothing, so this costs the glyph layer nothing; it is the painter's one way of telling core which
+  of its blanks are openings. Edo is the world that needs it (`[0.8, 1.6]`): its walls and road thin
+  their glyphs by the light, and read as holes its noon street printed darker than its dusk one.
+- `airless` — truthy on a world with no atmosphere. `surfaces.js`'s `refog()` skips its haze floor,
+  and `raycast.js` hands the painter the TRUE distance rather than the density-scaled apparent one.
+- `fogStart` / `fogEnd` — LIVE getters for the weather's ramp (the city's on `CC.Surf`), read by the
+  underpainting's haze. `fogStart` may be 0; a collapsed ramp is treated as a wall of haze.
+
+**What `CC.Compose.UNDER = 0` restores, exactly.** The frame data (ch/col/lum/dist/kind) and the
+glyph layer, byte-for-byte, and the composite's op sequence minus the one underlay draw — `domshim`'s
+`print-paths` case asserts that last part. It does NOT roll back the rest of the HD print: the pixel
+glyph pass on small cells, the bloom sized from `dh*D`, the density LOD in `raycast.js` and
+`main.js`'s cell band all stay, so the browser with the switch off shows this build's glyph layer,
+which is not the pre-HD page.
 
 ## The palette — 21 swatches, two ladder entries each
 
@@ -199,21 +242,34 @@ Rules for elements:
 
 ## The build
 
-`node build.js` must exit 0. It fails over **600 KB** and that line has been raised five times and
-held once; the essay in `build.js` is the record and it is addressed to whoever lands here next.
-**The next pass must split the payload.** Three passes running have now ended at this line with the
-same finding — the content is bigger than the headroom and every remaining cut is a rounding error
-against it. The last non-content cut in the tree (the duplicated `streetSpan` / `objVisible` /
-`corridor` bodies, measured at ~2,350 bytes and banked in `build.js`'s essay) is worth a tenth of a
-world.
+`node build.js` must exit 0 and prints every shipped file's size and headroom. **The payload is
+split per world.** `index.html` holds `core` through `control`, the city's elements, `render_canvas`
+and `main`, capped at **600 KB**; `w/west.js`, `w/jp.js` and `w/moon.js` each hold that world's
+painter and its prefixed elements (`west_*`, `jp_*`, `moon_*`), capped at **160 KB each**. Routing
+is by name, in `build.js`'s `CHUNKS` table; anything no row claims stays inline.
+
+The chunks **define and do not run**: each module is filed as a function under its `src/` path on
+a scratch global, and the inline IIFE calls it back at its place in `ORDER`, then deletes the
+global. So execution order is exactly what it was as one file — which is load-bearing, because
+`CC.ELEMENTS` registration order breaks layer ties and sequences the shared rng — `CC` stays one
+lexical `var`, and nothing is left on `window`. A chunk that fails to load costs its world, which
+renders as the city; it never costs the city. Do not "simplify" this into two inline tags with the
+chunks run between them: that moves the Edo elements behind eleven shared ones and gives the
+browser a different frame from `tools/headless.cjs`, with nothing failing.
+
+The 600 KB line was raised five times and held once before the split; the essay in `build.js` is the
+record, and its last paragraph is addressed to whoever lands here next: the split bought ~220 KB in
+`index.html` and that is not permission. A fifth world is a fourth chunk and a `CHUNKS` row, not a
+raise. The last non-content cut in the tree (the duplicated `streetSpan` / `objVisible` /
+`corridor` bodies, ~2,350 bytes, banked in the essay) is still there to take.
 It also checks that every world's painter global is present, so a painter dropped into `src/` and
 never registered fails the build instead of rendering as the city.
 The order is: cut something that is not content, then cut content, then move the line, and write
 down which one you did. The whitespace has already been spent — `decomment()` halves leading
 indentation, worth 42,134 bytes of a measured 84,232 — so a future pass has one fewer option than
-this one had. The bundle must also survive `new Function()`, contain none of `require(`,
-`module.exports`, ESM syntax or a closing script tag, and still name every global in the
-required-globals list.
+this one had. Every shipped script — the inline bundle and each chunk, separately — must survive
+`new Function()` and contain none of `require(`, `module.exports`, ESM syntax or a closing script
+tag; their concatenation must still name every global in the required-globals list.
 
 ## Verification (this is not optional)
 
@@ -222,7 +278,9 @@ and dumps `glyph,colourIdx,lum,kind` per cell. `python3 tools/topng.py f.txt out
 to an image with the same bloom the canvas does. Every change gets looked at this way before it
 ships. `python3 tools/metrics.py f.txt` is the census; its night targets are muddy under 30% and
 hot 3.5-5%, and a daylight frame is not expected to meet the first — see the README's table for
-what each world actually measures at each hour.
+what each world actually measures at each hour. The first is a direction at night, not a line every
+world clears: in that table the frontier (40.9% at seed 42) and Edo (37.1% at seed 42) run over it
+after dark, and so does the city itself at seed 7 (32.6%).
 
 The gates, in the order they are worth running: `node build.js`, `node tools/domshim.cjs`,
 `node tools/flicker-rate.cjs`, `node tools/lightning-rate.cjs`, `node tools/west-flicker.cjs 4`,
@@ -230,6 +288,75 @@ The gates, in the order they are worth running: `node build.js`, `node tools/dom
 `node tools/sakura-flicker.cjs 10`, `node tools/sakura-flicker.cjs 10 jp-blossom --cells=4`,
 the census, and a determinism check (the same seed, frame, world and hour rendered twice must be
 byte-identical).
+
+EVERY PROBE IN THAT LIST NOW RUNS FOUR TIMES, and the list above is only the first of them. Each
+takes `--composite`, `--cols=N` and `--rows=N` (one parser, in `tools/composite.cjs`), and a change
+ships when all seven pass in all four of: no flag at `--cols=200 --rows=60`, the same at
+`--cols=400 --rows=120`, and both again with `--composite` — e.g.
+`node tools/flicker-rate.cjs --composite --cols=400 --rows=120`,
+`node tools/west-flicker.cjs 4 --composite --cols=400 --rows=120`. The reason is the underpainting.
+It never touches ch/col/lum, so every probe written against f.lum was still reading the frame it was
+fitted to — and could not see the one part of the new frame that can spread a flicker: the SPILL lays
+an emitter over a nine-by-five box of reference cells, so a tube that stepped one cell now steps up
+to forty-five cells of wash with it. `--composite` scores the light a cell EMITS instead — glyph ink
+by `tools/cov.json` coverage, plus the under block, in linear light — and it is the mode that can see
+that. Lum mode (no flag) scores exactly what it always did and switches the underpainting off for the
+run, which by construction moves no byte of f.lum. The masked probes (canal, road, sakura) grow their
+masks by the spill box in composite mode, because the wash lands beside the cause. `lightning-rate`'s
+composite mode is a different SCENE, not just a different sum: its flat wall is white, which does not
+emit, so the stroke cannot reach the wash there; composite mode holds the real night world pass at the
+start pose instead and measures the light emitted above it.
+
+AND EVERY PROBE NOW CARRIES THE WCAG GENERAL-FLASH RULE, AREA-WEIGHTED, which no per-cell statistic
+can stand in for. A transition is a 10%-of-white change in a cell's relative luminance with the
+darker side under 0.80; a cell is flashing when it makes seven inside one second; the run FAILS if the
+flashing cells cover more than a quarter of any window a third of the screen wide and tall (WCAG's
+341x256-on-1024x768 field). It is absolute in every probe, west-flicker's comparative rule
+notwithstanding. A synthetic check of the detector: a 60x18-cell azure sign at 6 Hz over cyber night
+scores 0.0% on the glyph print and 75.9% on the composite (FAIL), and the same sign at 2 Hz passes —
+the composite seeing what the glyph layer cannot is the point of it. Red flashes, WCAG's second
+clause, are not measured, and neither is the bloom, which is a blur of glyph ink the glyph term
+already carries.
+
+WHAT THEY SAID WHEN THIS LANDED. All seven passed in all four modes but one: lum-mode west-flicker
+at 400x120 FAILS at 10.75 big steps a second against the 8.0 backstop (seed 3, every preset), and the
+untouched tree at 7425bb2 fails identically, so this is not the underpainting or the density work. It
+is `west-wagon` alone — 1.50/s at 200 columns, 3.00/s at 300, 10.00/s at 360 — and the shipped band
+reached 360 (main.js MAXC) with this note still open, so it was chased down in the fix pass. It was not the rim: it
+was the BED, 27 fixed samples printing as a comb once the wagon spans more columns than that, with
+the teeth sliding a sub-cell phase as it moves; and then the team's legs, one cell wide at 25 m on a
+400-column grid so a near and far leg crossed a lit road cell as two pulses. Both now scale by
+frame.D (identical at 200 columns): 10.75/s -> 3.25/s, 3-20 Hz 3.93% -> 3.07%, backstops passed. It
+STILL FAILS the comparative rule at 400x120 — 3.25/s against the city's own 2.75 x 1.15 = 3.16 —
+and that residual is the legs crossing the road at all, a solid object passing once, not an
+aliasing beat. Composite mode, the light actually emitted, is 0.00 big steps a second at both sizes.
+Flash area was 0.0% in every real run. Lightning passes with the underpainting on: on the composite
+(2026-10-21, after the composite model learned the pixel path's ink lift — see below) the strongest
+stroke is 0.9% of full scale above the held night frame at 200x60 and 1.1% at 400x120, its largest
+frame step 28.5% and 29.5% of its peak, maxima 0.667 s apart — the wash moves by at most 9 levels at
+the peak, because the mass term reads the snapshot taken before the stroke and only lit EMITTING
+cells feed the spill. In composite mode west-flicker judges the project's absolute 1.0/s and 2% and
+only PRINTS its city-relative ratio, because the cell average shrinks the city's hairline rain three
+times harder than the frontier's solid objects. Measured the day the underpainting landed, at
+200x60: 1.18% in band against the city's 0.79% on the composite, 1.14% against 0.80% on the glyph
+print with the underpainting off — the wash's share is 0.04 of it. Measured 2026-10-21 on the
+composite: 1.02% against 0.78% at 200x60, 1.27% against 0.95% at 400x120.
+
+THE COMPOSITE MODEL WEIGHTS A GLYPH AT THE CELL THE GRID STANDS FOR. `tools/cov.json`'s reference
+table is a 9x16 cell, and the canvas prints cells of 7 device px and under through its pixel path,
+which lifts each glyph's coverage per pixel (`render_canvas.js`, INK) — +17% of mean ink at 6x11 and
++25% at 5x9, measured in Chromium. A 400-column gate weighted by the 9x16 table understated the glyph
+term at exactly the size it exists for. `composite.cjs` now picks the cell from the grid (its width
+across a 1920 px panel, so 200 columns is the 9x16 table, unchanged, and 400 is the 5x9 compensated
+one) and `--cell=N` asks about another panel; `topng.py --cov` writes the compensated tables. Every
+400x120 composite figure in this file dated before 2026-10-21 was taken with the old weights.
+`tools/domshim.cjs` runs the page as it ships: every `<script>` in DOM order in one context — the
+`w/` chunks and then the inline bundle, each under its own filename — skipping only the baseline's
+JSON-LD block, which it parses as JSON instead. It fails if a tag points at a missing chunk or a
+built chunk is never loaded, and it reads the column band from `main.js`'s `MAXC`/`MINC` in the
+bundle rather than keeping its own copy. `tools/headless.cjs` loads `src/` directly and never
+sees the split, which is why the split had to preserve execution order rather than merely load
+everything.
 
 THE THIRD TIME THIS RULE BIT, AND THE FIRST TIME IT BIT A FEATURE THAT WAS NOT RUNNING AT ALL.
 `surf_japan.js` declared `function water` twice at one scope. Declarations do not shadow by

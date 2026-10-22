@@ -33,24 +33,73 @@ const ONLY = (function () {
   return null;
 })();
 
-/* ---- extract the shipped script ------------------------------------------------------------
- * The page has exactly one <script> and it is inline; if that ever stops being true the shim is
- * testing something other than the deliverable and must say so rather than quietly test less. */
+/* ---- extract the shipped scripts -----------------------------------------------------------
+ * The page ships its code as several <script> tags since the payload split (see THE SPLIT in
+ * build.js): one synchronous `<script src="w/<world>.js">` per secondary world, then the inline
+ * bundle that calls their modules back in. They are run here exactly as a browser runs them — one
+ * vm.Script per tag, in DOM order, in one context, each with its own filename and line offset so a
+ * stack frame still points into the file that shipped. Concatenating them into one body would be
+ * simpler and would test a page nobody loads: the chunks only work because they hand their
+ * functions across a global between two scripts, and that hand-off is exactly what must run.
+ *
+ * The one tag that is NOT code is the JSON-LD block baseline/apply.py writes into the head. It is
+ * data the browser never executes, and it is skipped by its type rather than by position — the old
+ * "exactly one <script>" rule threw on it and left this shim dead on the shipped tree from the day
+ * the baseline landed. It is still parsed as JSON, because a block that does not parse is a search
+ * result that silently stops having a card, and nothing else in the repo would notice.
+ *
+ * Anything else is held tight, so the shim cannot quietly test less than ships: exactly one inline
+ * classic script; every src tag points at a w/*.js that exists; and every w/*.js on disk is loaded
+ * by the page — a chunk the build wrote and the page forgot is a world that renders as the city. */
 const html = fs.readFileSync(PAGE, 'utf8');
-const opens = html.match(/<script\b/gi) || [];
-if (opens.length !== 1) throw new Error('domshim: expected exactly 1 <script> in index.html, found ' + opens.length);
-const m = /<script>\n?([\s\S]*?)<\/script>/.exec(html);
-if (!m) throw new Error('domshim: could not find the inline <script> body');
-const SCRIPT_LINE = html.slice(0, m.index).split('\n').length;   // 1-based line of <script>
-
-/* The bundle leaks nothing to window on purpose, so there is no way to inspect CC from outside.
- * One call is spliced in — with NO newline, so every stack line number still matches index.html —
- * immediately before main.js, which means CC is captured even if boot() throws. main.js then
- * hangs CC.Main off the same object we already hold. */
+const TAG = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+const SCRIPTS = [];
+const loaded = [];
+let inlineCount = 0, MAIN = null, t;
 const MARK = '/* src/main.js */';
-if (html.indexOf(MARK) < 0) throw new Error('domshim: build no longer emits the ' + MARK + ' marker');
-const CODE = m[1].replace(MARK, '__export(CC);' + MARK);
-const SCRIPT = new vm.Script(CODE, { filename: 'index.html', lineOffset: SCRIPT_LINE });
+const lineOf = (i) => html.slice(0, i).split('\n').length;   // 1-based line of an offset
+while ((t = TAG.exec(html))) {
+  const attrs = t[1];
+  if (/\btype\s*=\s*["']?application\/ld\+json/i.test(attrs)) { JSON.parse(t[2]); continue; }
+  if (/\btype\s*=/i.test(attrs)) throw new Error('domshim: unexpected <script' + attrs + '> in index.html');
+  const src = /\bsrc\s*=\s*["']([^"']+)["']/i.exec(attrs);
+  if (src) {
+    /* The ?v= is build.js's cache-buster, the chunk's own content hash — and it is CHECKED, not
+     * just stripped: a tag whose hash disagrees with the file beside it is exactly the stale pair
+     * the token exists to prevent, so it fails here rather than in a visitor's cache. */
+    const sm = /^(w\/[\w-]+\.js)(?:\?v=([0-9a-f]+))?$/.exec(src[1]);
+    if (!sm) throw new Error('domshim: script src outside w/: ' + src[1]);
+    const file = path.join(ROOT, sm[1]);
+    if (!fs.existsSync(file)) throw new Error('domshim: index.html loads ' + sm[1] + ', which does not exist');
+    const body = fs.readFileSync(file, 'utf8');
+    if (!sm[2] || require('crypto').createHash('sha1').update(body).digest('hex').slice(0, sm[2].length) !== sm[2])
+      throw new Error('domshim: ' + src[1] + ' does not carry the content hash of ' + sm[1]);
+    loaded.push(sm[1]);
+    SCRIPTS.push({ name: sm[1], s: new vm.Script(body, { filename: sm[1] }) });
+    continue;
+  }
+  inlineCount++;
+  /* The bundle leaks nothing to window on purpose, so there is no way to inspect CC from outside.
+   * One call is spliced in — with NO newline, so every stack line number still matches index.html —
+   * immediately before main.js, which means CC is captured even if boot() throws. main.js then
+   * hangs CC.Main off the same object we already hold. */
+  if (t[2].indexOf(MARK) < 0) throw new Error('domshim: build no longer emits the ' + MARK + ' marker');
+  MAIN = t[2];
+  const body = t[2].replace(/^\n/, '');
+  SCRIPTS.push({ name: 'index.html', s: new vm.Script(body.replace(MARK, '__export(CC);' + MARK),
+    { filename: 'index.html', lineOffset: lineOf(t.index + t[0].indexOf('>') + 1 + (t[2].length - body.length)) - 1 }) });
+}
+if (inlineCount !== 1) throw new Error('domshim: expected exactly 1 inline <script> in index.html, found ' + inlineCount);
+const WDIR = path.join(ROOT, 'w');
+for (const f of (fs.existsSync(WDIR) ? fs.readdirSync(WDIR) : []))
+  if (f.endsWith('.js') && loaded.indexOf('w/' + f) < 0)
+    throw new Error('domshim: w/' + f + ' is built but index.html never loads it');
+/* The column band is READ from the bundle, not written down here. A literal 260 in this file was a
+ * second copy of main.js's constant, and the first pass to raise MAXC would have found the shim
+ * failing on a page that was right. */
+const MAXC = +((/\bMAXC\s*=\s*(\d+)/.exec(MAIN) || [])[1]);
+const MINC = +((/\bMINC\s*=\s*(\d+)/.exec(MAIN) || [])[1]);
+if (!(MAXC > 0 && MINC > 0)) throw new Error('domshim: could not read MAXC/MINC from the bundle');
 
 /* ---- the fake DOM ---------------------------------------------------------------------------
  * Every stub counts. A stub that silently accepts anything turns "the renderer drew nothing" into
@@ -191,6 +240,30 @@ function makeEnv(opts) {
         env.bounds.push(label + '.drawImage odd arity ' + (a.length + 1));
       }
     };
+    /* THE PIXEL PATHS, opt-in. render_canvas.js has two prints that go through ImageData — the
+     * underlay (one pixel per cell, putImageData'd every frame) and the pixel-write glyph pass
+     * (getImageData of the atlas once, putImageData of the scene every frame) — and both catch a
+     * missing method and fall back SILENTLY, by design. So a shim without these was passing 302
+     * checks on a page with no underlay and no pixel path in it, which is the shipped print on most
+     * desktops. They are off by default because every older case counts per-glyph drawImage calls
+     * and the pixel path makes those vanish; the 'print-paths' case turns them on and asserts. The
+     * fake atlas read is a sparse alpha mask, so every glyph bakes a non-empty coverage list. */
+    if (opts.imageData) {
+      const img = (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) });
+      c.createImageData = function (w, h) { op('createImageData'); return img(w, h); };
+      c.getImageData = function (x, y, w, h) {
+        op('getImageData');
+        const r = img(w, h);
+        for (let i = 3; i < r.data.length; i += 28) r.data[i] = 200;
+        return r;
+      };
+      c.putImageData = function (im) {
+        op('putImageData');
+        if (!im || !im.data || im.data.length !== im.width * im.height * 4) env.bounds.push(label + '.putImageData malformed image');
+        else if (im.width > canvas.width || im.height > canvas.height)
+          env.bounds.push(label + '.putImageData ' + im.width + 'x' + im.height + ' onto ' + canvas.width + 'x' + canvas.height);
+      };
+    }
     env.contexts.push(c);
     return c;
   }
@@ -411,8 +484,12 @@ function makeEnv(opts) {
   env.run = function () {
     const sandbox = win;
     vm.createContext(sandbox);
-    try { SCRIPT.runInContext(sandbox); }
-    catch (e) { env.err('script evaluation', e); }
+    /* One context, tags in DOM order — and a tag that throws does not stop the next, which is the
+     * browser's rule too: a broken chunk costs its world, it does not take the city with it. */
+    for (const S of SCRIPTS) {
+      try { S.s.runInContext(sandbox); }
+      catch (e) { env.err('script evaluation (' + S.name + ')', e); }
+    }
     return env;
   };
   return env;
@@ -533,7 +610,7 @@ testCase('resize', function (ok) {
     env.tick(40);
     const cols = CC.Main.cols, rows = CC.Main.rows;
     const cellW = env.cc.width / cols, cellH = env.cc.height / rows;
-    ok(cols >= 48 && cols <= 260, label + ': column count inside its band', cols);
+    ok(cols >= MINC && cols <= MAXC, label + ': column count inside its band', cols);
     ok(rows >= 22, label + ': row count above the floor', rows);
     ok(cellW === Math.round(cellW) && cellH === Math.round(cellH),
       label + ': cell is a whole number of device pixels', cellW + 'x' + cellH);
@@ -1106,27 +1183,69 @@ testCase('reduced-motion', function (ok) {
 });
 
 /* ============================================================================================
- * 11. adaptive quality — degrade to one bloom tap, then to fewer columns, then recover
+ * 11. adaptive quality — two rungs of columns, then one bloom tap, then the same ladder back
+ *
+ * The order is main.js's: columns go before bloom now that the bloom is sized in screen pixels and
+ * the cell count is what the frame pays for. A step every 1.2 s of bad frames from the moment the
+ * EMA crosses 26 ms, and the second after any layout (boot included) is not counted at all, so the
+ * first rung lands near tick 140, the second near 275 (its own relayout buys another quiet
+ * second), the bloom near 410; recovery is one rung per 6 s of good frames, plus that quiet second
+ * after each relayout, three rungs back.
+ * Each intermediate state is checked, not just the ends — a ladder that skipped its middle rung
+ * would arrive at the same two end states and still have taken twice the detail out at once.
  * ========================================================================================== */
 testCase('adaptive-quality', function (ok) {
   const env = makeEnv({ frameCost: 40 }).run();
   const CC = env.CC;
   if (!ok(!!CC, 'booted')) return env;
   const cols0 = CC.Main.cols;
-  env.tick(120);
-  ok(CC.Canvas.quality === 1, 'a 40 ms frame dropped the bloom to one tap first', CC.Canvas.quality);
+  env.tick(170);
+  const cols1 = CC.Main.cols;
+  ok(cols1 < cols0 && CC.Canvas.quality === 2, 'a 40 ms frame gave up columns first, bloom kept',
+    cols0 + ' -> ' + cols1 + ' q' + CC.Canvas.quality);
+  env.tick(130);
+  const cols2 = CC.Main.cols;
+  ok(cols2 < cols1 && CC.Canvas.quality === 2, 'then a second rung of columns, bloom still kept',
+    cols1 + ' -> ' + cols2 + ' q' + CC.Canvas.quality);
+  env.tick(150);
+  ok(CC.Main.cols === cols2 && CC.Canvas.quality === 1, 'and only then did the bloom drop to one tap',
+    CC.Main.cols + ' q' + CC.Canvas.quality);
   const drewAtQ1 = env.get('cc.drawImage');
   env.tick(60);
   ok(env.get('cc.drawImage') - drewAtQ1 >= 60 * 2, 'the degraded composite still draws scene + one tap',
     env.get('cc.drawImage') - drewAtQ1);
-  env.tick(120);
-  ok(CC.Main.cols < cols0, 'and only then did it give up columns', cols0 + ' -> ' + CC.Main.cols);
-  ok(env.bounds.length === 0, 'the mid-loop relayout left no bad draws', env.bounds.slice(0, 2).join(' | '));
+  ok(CC.Main.cols === cols2, 'the ladder stops at its last rung', CC.Main.cols);
+  ok(env.bounds.length === 0, 'the mid-loop relayouts left no bad draws', env.bounds.slice(0, 2).join(' | '));
 
   env.frameCost = 4;
-  env.tick(900);                                     // two 6 s recovery windows
-  ok(CC.Main.cols === cols0, 'columns came back first', CC.Main.cols);
-  ok(CC.Canvas.quality === 2, 'then the full bloom', CC.Canvas.quality);
+  env.tick(420);                                     // one 6 s window plus the EMA's fall
+  ok(CC.Canvas.quality === 2 && CC.Main.cols === cols2, 'the bloom came back first',
+    CC.Main.cols + ' q' + CC.Canvas.quality);
+  env.tick(370);
+  ok(CC.Main.cols === cols1, 'then one rung of columns', CC.Main.cols);
+  env.tick(430);
+  ok(CC.Main.cols === cols0 && CC.Canvas.quality === 2, 'then the full grid', CC.Main.cols);
+
+  /* The breathing guard: the grid just regained is lost again inside twelve seconds, so the next
+   * climb must wait twelve good seconds rather than six. At 500 ticks a six-second wait would have
+   * climbed already (quiet second + EMA fall + 360); a doubled one has not. */
+  env.frameCost = 40;
+  env.tick(170);
+  ok(CC.Main.cols === cols1, 'a relapse right after recovery takes one rung', CC.Main.cols);
+  env.frameCost = 4;
+  env.tick(500);
+  ok(CC.Main.cols === cols1, 'and the climb back now waits the doubled hold', CC.Main.cols);
+  env.tick(400);
+  ok(CC.Main.cols === cols0, 'but does come back', CC.Main.cols);
+  /* And the doubling is not for life: a rung held a full minute before it is lost again resets the
+   * wait, so the next climb back is the plain six seconds — the 500 ticks that were too few above. */
+  env.tick(3700);
+  env.frameCost = 40;
+  env.tick(170);
+  ok(CC.Main.cols === cols1, 'a relapse a minute later takes one rung', CC.Main.cols);
+  env.frameCost = 4;
+  env.tick(500);
+  ok(CC.Main.cols === cols0, 'and the climb back is six seconds again, not the doubled hold', CC.Main.cols);
 
   // quality 0 is reachable only by hand; it must still put the frame on the glass.
   CC.Canvas.setQuality(0);
@@ -1136,6 +1255,16 @@ testCase('adaptive-quality', function (ok) {
   CC.Canvas.setQuality(2);
   env.tick(30);
   ok(env.errors.length === 0, 'no exceptions across the quality ladder');
+
+  /* Past MAXC the 1.25 rung lands on the cell the cap already chose (2560 at dpr 1: 8 px, 320
+   * columns either way), so the first degrade has to go straight on to 1.5 rather than spend a
+   * rung on nothing. */
+  const wide = makeEnv({ w: 2560, h: 1440, dpr: 1, frameCost: 40 }).run();
+  const w0 = wide.CC.Main.cols;
+  wide.tick(170);
+  ok(wide.CC.Main.cols < w0 && wide.CC.Canvas.quality === 2, 'a capped grid skips the rung that moves no columns',
+    w0 + ' -> ' + wide.CC.Main.cols + ' q' + wide.CC.Canvas.quality);
+  ok(wide.errors.length === 0 && wide.bounds.length === 0, 'and the skip left no bad draws');
   return env;
 });
 
@@ -1274,6 +1403,44 @@ testCase('denied-permissions', function (ok) {
     'the undefined-returning legacy APIs were called');
   ok(old.errors.length === 0, 'and nothing threw on their undefined return');
   return [env, old];
+});
+
+/* ============================================================================================
+ * 17. the print paths — underlay, kill switch, pixel path
+ *
+ * The three things the shipped print does that the drawImage-only shim above could never see:
+ * (a) with the underpainting on, every frame copies f.under into its one-pixel-per-cell buffer
+ *     (putImageData) and draws it first on the page canvas — scene + 2 bloom taps + 1 underlay;
+ * (b) with CC.Compose.UNDER = 0 neither happens, so the kill switch removes the op, not just its
+ *     pixels;
+ * (c) at a dw <= 7 layout (1280 at dpr 1: 6 px cells) 'auto' engages the pixel path, and at a
+ *     coarse one (dpr 2: 13 px) it does not.
+ * ========================================================================================== */
+testCase('print-paths', function (ok) {
+  const env = makeEnv({ w: 1280, h: 800, dpr: 1, imageData: true }).run();
+  const CC = env.CC;
+  if (!ok(!!CC, 'booted')) return env;
+  env.tick(30);
+  ok(CC.Canvas.pixelPath === true, "'auto' engaged the pixel path on 6 px cells", CC.Canvas.pixelPath);
+  let p0 = env.get('putImageData'), d0 = env.get('cc.drawImage');
+  env.tick(60);
+  const put1 = env.get('putImageData') - p0, cc1 = env.get('cc.drawImage') - d0;
+  ok(put1 >= 120, 'UNDER=1: scene and underlay both putImageData each frame', put1);
+  ok(cc1 >= 240, 'UNDER=1: the page draws underlay + scene + 2 taps each frame', cc1);
+  CC.Compose.UNDER = 0;
+  env.tick(2);                                       // the one frame that clears the old field
+  p0 = env.get('putImageData'); d0 = env.get('cc.drawImage');
+  env.tick(60);
+  const put0 = env.get('putImageData') - p0, cc0 = env.get('cc.drawImage') - d0;
+  ok(put0 === 60, 'UNDER=0: only the scene is put, no underlay copy', put0);
+  ok(cc0 === cc1 - 60, 'UNDER=0: exactly one page draw per frame fewer — the underlay op is gone', cc0 + ' vs ' + cc1);
+  ok(env.errors.length === 0 && env.bounds.length === 0, 'no exceptions or bad draws on the pixel path',
+    env.bounds.slice(0, 2).join(' | '));
+  const hi = makeEnv({ w: 1280, h: 800, dpr: 2, imageData: true }).run();
+  hi.tick(30);
+  ok(hi.CC.Canvas.pixelPath === false, "and 'auto' leaves 13 px cells on drawImage", hi.CC.Canvas.pixelPath);
+  ok(hi.errors.length === 0 && hi.bounds.length === 0, 'no exceptions or bad draws there either');
+  return [env, hi];
 });
 
 /* ---- run ------------------------------------------------------------------------------------ */

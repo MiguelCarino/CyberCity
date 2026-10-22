@@ -2803,6 +2803,19 @@
     resolveWorld: resolveWorld,
     configure: configure, cfg: CFG, beginFrame: beginFrame,
     FOG_START: FOG_START, FOG_END: FOG_END,
+    /* The LIVE ramp, as getters: the underpainting's aerial haze has to fade on the distance the air
+     * actually hides tonight, and that is refog()'s pair, not the constants above it. */
+    get fogStart() { return fogStart; }, get fogEnd() { return fogEnd; },
+    /* The city's sky for the underpainting (core.js, CC.Compose): zenith rgb, horizon rgb at NIGHT,
+     * at NOON, and the DUSK pair the warm term pulls toward. The night zenith is 2,4,12 and that is
+     * the whole art direction in three numbers — near-black with blue in it, so the slot between the
+     * towers is still the negative space the frame is built from and the haze lives low, where the
+     * signs light it. The night horizon is also what far walls haze toward, and at full strength
+     * an unlit tower deep in the canyon printed as a flat periwinkle panel — so core.js hazes to
+     * HALF of it by night rather than this table going darker. Darkening it here (24,30,60) was
+     * tried and failed a gate: every glyph stepping in front of this sky steps harder on a darker
+     * backdrop, and flicker-rate's still holo band went from 9.3% to 10.3% against its 10% line. */
+    SKY_RGB: [2,4,12,40,50,96, 60,96,150,150,172,196, 34,40,84,196,110,70],
     /* The share of ground-floor units that are open, published because signage.js's shopSpill has
      * to re-derive the SAME test to land its pool under a lit window rather than under a shutter —
      * it says so in its own comment and then hardcoded the number, so raising the rate here left

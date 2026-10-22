@@ -13,13 +13,13 @@
 
   var STEP = 1 / 60;                 // simulation tick; elements were written against 60 Hz
   var ASPECT = 0.5625;               // 9x16 character cell, the proportion surfaces.js was tuned on
-  var MAXC = 260, MINC = 48, MINR = 22;
+  var MAXC = 360, MINC = 48, MINR = 22;
 
   var canvas = null, frame = null, city = null, seed = 0;
   var cam = { x: 0, z: 0, yaw: 0, eyeY: 1.7, fov: 1.25, horizon: 0, t: 0, cellAspect: ASPECT };
   var els = [], cols = 0, rows = 0;
   var simT = 0, acc = 0, last = 0, running = false;
-  var zoom = 1;                      // adaptive column pressure; 1 = full detail
+  var zoom = 1;                      // adaptive column pressure; 1 = full detail (see adapt)
 
   /* ---- seed ----------------------------------------------------------------------------------
    * A city is a pure function of its seed, so the fragment IS the artwork's address. Anything that
@@ -80,12 +80,21 @@
   }
 
   /* ---- viewport ------------------------------------------------------------------------------
-   * Showing LESS city on a small screen is the correct answer; shrinking the cell until the glyphs
-   * turn to grey mush is not, because the glyph shapes ARE the texture. So the cell width is
-   * pinned to a legible band and the column count falls out of it, rather than the other way
-   * round. 1920px lands near 200 columns, a phone near 60. */
+   * The band used to be pinned wide (6.4-9.6 CSS px) on the argument that a smaller cell only
+   * shrinks the ink: a glyph covers about a fifth of its cell, so halving the cell halved the light
+   * and 400 columns read as grey mush. That argument died with the underpainting. Every cell now
+   * carries its own colour behind the glyph (core.js, Compose.post), so a smaller cell is more
+   * PICTURE rather than less ink, and the optics are sized in reference cells (frame.D) so a halo
+   * does not shrink to a quarter of its area when the grid doubles. What is left of the old rule is
+   * the floor: under 5 px a glyph stops being a shape, and the shapes are still the texture.
+   *
+   * Integer device-pixel cells make the column counts lumpier than the band suggests: 6.4 rounds to
+   * 6 at dpr 1, so 1920 lands on 320 columns, the ladder's 1.25 and 1.5 steps on 240 and 192, and a
+   * 390 px phone at dpr 2 on 78. MAXC is set at 360 because the node budget was measured at 300x95
+   * (world + elements + underpainting under 12 ms) and an ultrawide must not buy a grid nobody
+   * costed; past it the cell grows instead, which at 2560 dpr 1 means 8 px and 320 columns. */
   function cellCSS(vw) {
-    var w = vw < 560 ? 6.4 : vw < 1000 ? 7.6 : vw < 1700 ? 8.8 : 9.6;
+    var w = vw < 560 ? 5.0 : vw < 1000 ? 5.6 : 6.4;
     return w * zoom;
   }
 
@@ -115,6 +124,7 @@
     var r = Math.max(MINR, Math.ceil(vh * dpr / dh));
 
     cols = c; rows = r;
+    calm = nowMs() + 1000;            // see adapt: a relayout's own cost is not the frame's
     CC.Canvas.setGrid(cols, rows, dw, dh, dpr);
     frame = CC.makeFrame(cols, rows);
     /* horizonBase is the neutral row; cam.horizon is owned by CC.Control from here on, because
@@ -215,35 +225,72 @@
     cam.t = t;
     CC.clearFrame(frame);
     if (CC.Cast) CC.Cast.render(frame, cam, city);
+    if (CC.Compose && CC.Compose.world) CC.Compose.world(frame);
     for (var i = 0; i < els.length; i++) if (els[i].draw) els[i].draw(frame, cam, t);
     if (CC.Compose && CC.Compose.post) CC.Compose.post(frame, cam, t);
     CC.Canvas.draw(frame);
   }
 
   /* ---- adaptive quality ----------------------------------------------------------------------
-   * Degradation is deliberately reluctant and strictly ordered: bloom first, because a single tap
-   * still reads as light, and only then columns, because fewer columns means literally less city.
-   * Recovery needs six sustained good seconds so a one-off GC pause cannot make the frame breathe
-   * in and out of detail while someone is watching it. */
-  var ema = 16, badSince = 0, goodSince = 0;
+   * Degradation is deliberately reluctant and strictly ordered, and the order turned round when the
+   * cell shrank. Bloom used to go first because it was the fill-rate cost; it is now sized in screen
+   * pixels and blurred off a downsampled scene, so it costs the same at 200 columns as at 360, while
+   * the world pass, the elements and the underpainting all scale with the cell count and the glyph
+   * pass does not scale at all (the pixel path). So columns go first, in two rungs — zoom 1.25 and
+   * 1.5, which at 1920 is 320 -> 240 -> 192 — because a coarser grid is still the same picture and
+   * a missing glow is a different one. Bloom drops to one tap only once the grid is as coarse as the
+   * band allows. Recovery climbs back the same ladder in reverse, one rung per six sustained good
+   * seconds, so a one-off GC pause cannot make the frame breathe in and out of detail.
+   *
+   * The six seconds are not enough on their own. A machine that holds 240 columns at 10 ms and
+   * drops 320 at 27 would otherwise climb, fall and climb again every seven seconds forever, which
+   * is exactly the breathing the wait was meant to stop. So a rung that is lost again within twelve
+   * seconds of being regained doubles the wait for the next climb, up to most of a minute. THAT
+   * rung and no other: upLv is the level the climb landed on, and only a loss FROM it is a relapse.
+   * Keyed on the clock alone, every rung a heavy burst took after one good climb doubled it again —
+   * measured on the ladder lifted out verbatim, a climb at 9.4 s, the regained rung lost at 12.4 s
+   * (6 -> 12 s, right) and then the bloom rung, never regained, lost at 13.6 s (12 -> 24 s, wrong):
+   * one burst cost a quarter of a minute of waiting it had not earned. And a
+   * rung that was held a full minute before it was lost resets the wait to six seconds, because a
+   * doubling earned by a tab switch or a GC storm at boot is not evidence about the machine an
+   * hour later, and without the reset every recovery for the rest of the page's life waited 48 s.
+   *
+   * And the first second after any layout is not evidence. A relayout rebuilds the atlas, the
+   * frame and every bloom buffer, and at boot the JIT has not warmed yet: Chromium measured 30-40 ms
+   * ticks in that second on worlds that then settled at 21-25 ms at 320 columns, and the ladder,
+   * charged for them, had given away a third of the grid before the page had properly started. */
+  var ZOOM = [1, 1.25, 1.5, 1.5];
+  var ema = 16, badSince = 0, goodSince = 0, lv = 0, upAt = -1e9, upLv = -1, hold = 6000, calm = 0;
+  /* A rung that moves no columns is skipped, not served. Past MAXC the cell is already widened to
+   * fit, so at 2560 dpr 1 zoom 1 and zoom 1.25 both land on 8 px and 320 columns: the first rung
+   * there was measured in Chromium spending 1.2 s of bad frames to change nothing. (Climbing back,
+   * the same no-op is the last rung, 1.25 -> 1; it costs one idle six-second wait and no detail,
+   * and testing for it would mean a trial relayout, which rebuilds the atlas.) */
+  function rung(d) {
+    lv += d;
+    if (lv > 2) CC.Canvas.setQuality(1);
+    else {
+      if (lv === 2 && d < 0) CC.Canvas.setQuality(2);
+      var c0 = cols;
+      if (ZOOM[lv] !== zoom) { zoom = ZOOM[lv]; layout(); }
+      if (cols === c0 && lv === 1 && d > 0) rung(d);
+    }
+  }
   function adapt(ms, now) {
+    if (now < calm) { badSince = goodSince = 0; return; }
     ema += (ms - ema) * 0.08;
     if (ema > 26) {
       goodSince = 0;
       if (!badSince) badSince = now;
-      else if (now - badSince > 1200) {
+      else if (now - badSince > 1200 && lv < 3) {
         badSince = now;
-        if (CC.Canvas.quality > 1) CC.Canvas.setQuality(1);
-        else if (zoom < 1.3) { zoom = 1.3; layout(); }
+        hold = now - upAt < 12000 && lv === upLv ? Math.min(hold * 2, 48000) : now - upAt > 60000 ? 6000 : hold;
+        rung(1);
       }
     } else if (ema < 11) {
       badSince = 0;
       if (!goodSince) goodSince = now;
-      else if (now - goodSince > 6000) {
-        goodSince = now;
-        if (zoom > 1) { zoom = 1; layout(); }
-        else if (CC.Canvas.quality < 2) CC.Canvas.setQuality(2);
-      }
+      else if (now - goodSince > hold && lv > 0) { goodSince = upAt = now; rung(-1); upLv = lv; }
     } else { badSince = 0; goodSince = 0; }
   }
 
@@ -327,6 +374,10 @@
       mq.addEventListener('change', function (e) { CC.reducedMotion = !!e.matches; });
 
     CC.Canvas.init(canvas);
+    /* 'auto', not on: the pixel-write glyph pass (render_canvas.js) only pays at cells of 7 device
+     * px or less, where drawImage per glyph is what made more columns cost more frames. Above that
+     * the atlas blit is as fast and the canvas's own antialiasing is the better print. */
+    if (CC.Canvas.setPixelPath) CC.Canvas.setPixelPath('auto');
     layout();
 
     /* World first, seed second, and in that order because city.js resolves CC.World inside make():

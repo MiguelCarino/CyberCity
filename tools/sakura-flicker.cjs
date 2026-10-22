@@ -37,6 +37,11 @@
  * unjudged run is the defect this scheme exists to prevent. The RESULT line always says which.
  *
  * usage: node tools/sakura-flicker.cjs [seconds] [element] [--time=<hour>] [--cells=<n>]
+ *                                      [--composite] [--cols=120] [--rows=40]
+ * --composite scores the light each cell EMITS (tools/composite.cjs) over the owned cells GROWN by
+ * the underpainting's spill box; the pin threshold and the lit count stay on what the glyphs print,
+ * because those two answer "is the tree in shot", which the wash behind it cannot. Both modes run
+ * the WCAG general-flash check, absolute, over the whole frame.
  * --cells is how many cells of the target must PRINT (v >= 9) before the walk pins. It counts
  * what prints and NOT what the element owns — see the note above the search loop — and it is a
  * REQUIRED knob rather than a constant because the two things this probe is aimed at differ by
@@ -73,9 +78,10 @@ if (SECONDS < 4) console.error('sakura-flicker: WARNING — under 4 s the 3-20 H
 
 global.CC = require(R + 'src/core.js');
 global.window = undefined;
+const CP = require('./composite.cjs')(CC), M = CP.mode(process.argv, 120, 40);
 
 /* ---- the wrapper, installed before ANY consumer caches it ---------------------------------- */
-let TAG = null, OWNED = null, COLS = 120, ROWS = 40;
+let TAG = null, OWNED = null, COLS = M.cols, ROWS = M.rows;
 const rawPut = CC.put;
 /* ATTRIBUTION IS CC.put's OWN RETURN VALUE and nothing else. put depth-tests, and it already tells
  * the caller whether the write landed, so "did this element end up owning this cell" is answered
@@ -243,7 +249,9 @@ function run(preset, seed, reduced, pinned) {
      Nothing else moves: Control.update is not called in this loop, so the camera stays pinned;
      `keep`, `WARM` and the sampling index are untouched; and the pinned baseline run has
      pinFrame = 0, so its numbers are byte-identical to before. */
-  const keep = NF - WARM, s = new Uint8Array(N * keep), mask = new Uint8Array(N);
+  const keep = NF - WARM, s = new Uint8Array(N * keep), litc = new Uint8Array(N);
+  let mask = new Uint8Array(N);
+  const V = new Float32Array(N), Y = new Float32Array(N), fl = CP.Flash(COLS, ROWS);
   for (let k = 0; k < NF; k++) {
     const t = (pinFrame + k) / 60;
     if (!CC.Weather.P.forced) CC.Weather.set(preset, t);
@@ -251,6 +259,7 @@ function run(preset, seed, reduced, pinned) {
     CC.Daylight.update(1 / 60, t); CC.Weather.update(1 / 60, t);
     for (const el of live) if (el.update) el.update(1 / 60, t, cam);
     cam.t = t; CC.clearFrame(f); CC.Cast.render(f, cam, city);
+    if (M.comp) CC.Compose.world(f);   // the underpainting's world snapshot, where main.js takes it
     for (const el of rest) if (el.draw) el.draw(f, cam, t);
     OWNED.fill(0); TAG = TARGET;
     for (const el of tgt) if (el.draw) el.draw(f, cam, t);
@@ -259,20 +268,26 @@ function run(preset, seed, reduced, pinned) {
        leaves is precisely the transient this gate is for, and a per-frame mask would drop it. */
     for (let i = 0; i < N; i++) if (OWNED[i]) mask[i] = 1;
     if (CC.Compose && CC.Compose.post) CC.Compose.post(f, cam, t);
-    if (k >= WARM) { const b = (k - WARM) * N; for (let i = 0; i < N; i++) s[b + i] = f.lum[i]; }
+    if (k >= WARM) {
+      const b = (k - WARM) * N, src = M.comp ? V : f.lum;
+      CP.light(f, V, Y); fl.push(Y);
+      for (let i = 0; i < N; i++) { s[b + i] = src[i] + 0.5; if (f.lum[i] >= 9) litc[i] = 1; }
+    }
   }
+  const own = mask;
+  if (M.comp) mask = CP.dilate(mask, COLS, ROWS, f.D);
 
   let cells = 0, lit = 0, big = 0, band = 0, worst = 0;
   const x = new Float64Array(keep);
   for (let i = 0; i < N; i++) {
     if (!mask[i]) continue;
-    cells++;
+    if (own[i]) cells++;
     /* OWNED IS NOT THE SAME AS SEEN, WHICH IS WHY THE PIN THRESHOLD COUNTS PRINTING CELLS AND
        NOT OWNED ONES (see the search loop). proj.js's
        emit() calls put for a cell fogged to lum 0 — real occluding mass that the element does own —
        so about half a crown's owned cells print nothing, and a threshold met on those is met on
        something invisible. Both counts are printed so the row cannot overstate what is on screen. */
-    for (let k = 0; k < keep; k++) if (s[k * N + i] >= 9) { lit++; break; }
+    if (own[i] && litc[i]) lit++;
     let b = 0, mx = 0, prev = s[i];
     for (let k = 1; k < keep; k++) {
       const v = s[k * N + i], d = Math.abs(v - prev);
@@ -286,10 +301,10 @@ function run(preset, seed, reduced, pinned) {
     if (mx > worst) worst = mx;
     for (const fq of PROBES) { const a = goertzel(x, fq); if (a > band) band = a; }
   }
-  return { cells, lit, worst: 100 * worst / 255, big, band: 100 * band / 255, pinFrame };
+  return { cells, lit, worst: 100 * worst / 255, big, band: 100 * band / 255, pinFrame, flash: fl.result() };
 }
 
-console.log(`sakura rate gate — ${TARGET}, ${COLS}x${ROWS}, ${SECONDS}s measured of ${NF} frames, ` +
+console.log(`sakura rate gate — ${TARGET}, ${M.tag}, ${SECONDS}s measured of ${NF} frames, ` +
             `${WARM} discarded, pin at >=${NEED} PRINTING cells (v>=9)` +
             `${HOUR !== '' ? ', hour ' + HOUR : ''}\n`);
 const rows = [];
@@ -302,7 +317,7 @@ for (const seed of [42, 3, 404])
         ? `(no crown reached — best ${r.cells} cells)`
         : `cells ${String(r.cells).padStart(4)}(${String(r.lit).padStart(3)} lit)  worst step ${r.worst.toFixed(1).padStart(5)}%   ` +
           `big steps ${r.big.toFixed(2).padStart(5)}/s   3-20Hz ${r.band.toFixed(2).padStart(5)}%   ` +
-          `pinned f${String(r.pinFrame).padStart(5)}${r.pinFrame === 0 ? ' (DID NOT WALK)' : ''}`));
+          `pinned f${String(r.pinFrame).padStart(5)}${r.pinFrame === 0 ? ' (DID NOT WALK)' : ''}\n        ${CP.fmt(r.flash)}`));
   }
 const pin = run('kiri', 42, false, true);
 console.log(`\n  pinned at start (what west-flicker sees): cells ${pin.cells}`);
@@ -331,6 +346,10 @@ if (thin.length) {
 }
 const wBig = Math.max(...seen.map(r => r.big)), wBand = Math.max(...seen.map(r => r.band));
 const rmBad = !rm.notFound && (rm.big > 0 || rm.band > 0.5);
+/* The flash rule is ABSOLUTE and has no reference window: it counts transitions inside each
+   second, so it is judged at any length — every measured row, the reduced-motion one included. */
+const wFl = seen.concat(rm.notFound ? [] : [rm]).reduce((a, r) => r.flash.area > a.area ||
+  (r.flash.area === a.area && r.flash.swing > a.swing) ? r.flash : a, seen[0].flash);
 const judging = SECONDS === REF_WINDOW;
 /* A BIG-STEP RATE IS NOT A FLASH RATE, and the RESULT line has to say so or the two get quoted
    as if they were the same number. `big` counts frame-to-frame jumps over 85/255 on the worst
@@ -345,15 +364,17 @@ const bad = judging
       `${RATE_CAP.toFixed(2)}/s (~${impliedHz.toFixed(2)} Hz of switching; the project's own ` +
       `backstop is 8.0/s and its flash band starts at 3 Hz)` : '') +
      (wBand > BAND_CAP ? ` 3-20Hz ${wBand.toFixed(2)}% over ${BAND_CAP.toFixed(2)}%` : '') +
-     (rmBad ? ' reduced motion is not still' : ''))
-  : '';
+     (rmBad ? ' reduced motion is not still' : '') + (wFl.bad ? ' general flash' : ''))
+  : (wFl.bad ? ' general flash' : '');
 const walked = seen.filter(r => r.pinFrame > 0).length;
 const wLit = Math.min(...seen.map(r => r.lit));   // the thinnest row a verdict was taken on
-console.log(`\nRESULT: ${!judging ? 'NOT_JUDGED' : bad ? 'FAIL' + bad : 'PASS'}  ` +
+console.log(`\nRESULT: ${bad ? 'FAIL' + bad : !judging ? 'NOT_JUDGED' : 'PASS'}  ` +
             `(worst big steps ${wBig.toFixed(2)}/s, worst 3-20Hz ${wBand.toFixed(2)}%` +
             `${judging ? '' : `; both PRINTED NOT JUDGED — a verdict is only taken at the ${REF_WINDOW}s reference window`}` +
             `, i.e. ~${impliedHz.toFixed(2)} Hz of switching on the worst cell` +
             `, over a ${SECONDS}s window; thinnest row ${wLit} lit cells; ${walked}/${seen.length} rows walked off the start pose` +
-            `${rm.notFound ? '; reduced-motion row found nothing — frozen by design, NOT a measured pass' : ''})`);
+            `${rm.notFound ? '; reduced-motion row found nothing — frozen by design, NOT a measured pass' : ''}` +
+            `; ${CP.fmt(wFl)}; ${M.tag})`);
+if (bad) process.exit(1);
 if (!judging) process.exit(3);
 process.exit(bad ? 1 : 0);

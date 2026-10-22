@@ -1,11 +1,18 @@
 /* west-flicker's method, but with the camera PINNED ON THE CANAL — which is the one place the
-   shipped gate can never look, because it pins at the map's start and the channel is 100+ m away. */
+   shipped gate can never look, because it pins at the map's start and the channel is 100+ m away.
+
+     node tools/canal-flicker.cjs [--composite] [--cols=120] [--rows=40]
+
+   --composite scores the light each cell EMITS (tools/composite.cjs) and grows the water mask by the
+   underpainting's spill box: a ripple that flickers a reflected sign throws its wash on the bank,
+   and the bank is where that wash lands. Both modes run the WCAG general-flash check, absolute. */
 const R=require('path').join(__dirname,'..')+'/',fs=require('fs');
 global.CC=require(R+'src/core.js');global.window=undefined;
 ['world','proj','daylight','weather_state','city','surfaces','raycast','control'].forEach(m=>require(R+'src/'+m+'.js'));
 fs.readdirSync(R+'src').sort().forEach(p=>{if(/^surf_.*\.js$/.test(p))require(R+'src/'+p)});
 fs.readdirSync(R+'src/elements').sort().forEach(p=>require(R+'src/elements/'+p));
-const COLS=120,ROWS=40,WARM=360,NF=WARM+240,PROBES=[3.5,5,7,9,12,15,19];
+const CP=require('./composite.cjs')(CC),M=CP.mode(process.argv,120,40);
+const COLS=M.cols,ROWS=M.rows,WARM=360,NF=WARM+240,PROBES=[3.5,5,7,9,12,15,19];
 function goertzel(x,f){const n=x.length,w=2*Math.PI*f/60,c=2*Math.cos(w);let s1=0,s2=0,m=0;
  for(let i=0;i<n;i++)m+=x[i];m/=n;
  for(let i=0;i<n;i++){const v=(x[i]-m)*(0.5-0.5*Math.cos(2*Math.PI*i/(n-1)));const s0=v+c*s1-s2;s2=s1;s1=s0;}
@@ -28,18 +35,20 @@ function run(preset,seed,reduced,dOff){
      them here measured the pedestrians and called it the canal. */
   const drawn=live.filter(e=>e.world&&CC.inWorld(e,'japan')&&!CC.inWorld(e,'cyber'));
   const f=CC.makeFrame(COLS,ROWS),N=COLS*ROWS,keep=NF-WARM,s=new Uint8Array(N*keep);
-  const isWater=new Uint8Array(N);
+  let isWater=new Uint8Array(N);const V=new Float32Array(N),Y=new Float32Array(N),fl=CP.Flash(COLS,ROWS);
   for(let k=0;k<NF;k++){const t=k/60;
     if(!CC.Weather.P.forced)CC.Weather.set(preset,t);
     CC.Weather.update(1/60,t);
     for(const el of live) if(el.update) el.update(1/60,t,cam);
     cam.t=t;CC.clearFrame(f);CC.Cast.render(f,cam,city);
+    if(M.comp)CC.Compose.world(f);   // the underpainting's world snapshot, where main.js takes it
     for(const el of drawn) if(el.draw) el.draw(f,cam,t);
     if(CC.Compose&&CC.Compose.post)CC.Compose.post(f,cam,t);
-    if(k>=WARM){const b=(k-WARM)*N;for(let i=0;i<N;i++)s[b+i]=f.lum[i];}
+    if(k>=WARM){const b=(k-WARM)*N,src=M.comp?V:f.lum;CP.light(f,V,Y);fl.push(Y);for(let i=0;i<N;i++)s[b+i]=src[i]+0.5;}
   }
   let water=0;
   for(let i=0;i<N;i++){ const rz=(i/COLS)|0; if(f.kind[i]===2&&rz>ROWS*0.56){isWater[i]=1;water++;} }
+  if(M.comp)isWater=CP.dilate(isWater,COLS,ROWS,f.D);
   let big=0,band=0,worst=0;const x=new Float64Array(keep);
   for(let i=0;i<N;i++){ if(!isWater[i]) continue;let b=0,mx=0,prev=s[i];
     for(let k=1;k<keep;k++){const v=s[k*N+i],d=Math.abs(v-prev);if(d>mx)mx=d;if(d>85)b++;prev=v;x[k]=v;}
@@ -47,7 +56,7 @@ function run(preset,seed,reduced,dOff){
     if(b/(keep/60)>big)big=b/(keep/60);
     if(mx>worst)worst=mx;
     for(const fq of PROBES){const a=goertzel(x,fq);if(a>band)band=a;}}
-  return {water,worst:(100*worst/255).toFixed(1),big:big.toFixed(2),band:(100*band/255).toFixed(2)};
+  return {water,worst:(100*worst/255).toFixed(1),big:big.toFixed(2),band:(100*band/255).toFixed(2),flash:fl.result()};
 }
 /* One sweep, collected as it prints. The verdict below reads THIS array — an earlier cut ran the
    same eight configurations a second time to score them, which doubled a 13-second gate's runtime
@@ -56,7 +65,7 @@ const ROWS_ALL=[];
 for(const [seed,dOff] of [[42,2],[42,8],[3,2],[3,8]])
   for(const p of ['kiri','typhoon'])
     { const r=run(p,seed,false,dOff); ROWS_ALL.push(r);
-      console.log('seed',seed,'dist-to-channel',dOff+'m',p.padEnd(8),r?`waterCells ${String(r.water).padStart(4)}  worstStep ${r.worst}%  bigSteps ${r.big}/s  3-20Hz ${r.band}%`:'(never reached)'); }
+      console.log('seed',seed,'dist-to-channel',dOff+'m',p.padEnd(8),r?`waterCells ${String(r.water).padStart(4)}  worstStep ${r.worst}%  bigSteps ${r.big}/s  3-20Hz ${r.band}%\n     ${CP.fmt(r.flash)}`:'(never reached)'); }
 const rm=run('typhoon',42,true,2);
 console.log('reduced-motion @2m typhoon:', rm?`waterCells ${rm.water} worstStep ${rm.worst}% bigSteps ${rm.big}/s 3-20Hz ${rm.band}%`:'n/a');
 
@@ -72,12 +81,14 @@ if (!measured.length || measured.every(r => r.water === 0)) {
 }
 const worstBand = Math.max(...measured.map(r => parseFloat(r.band)));
 const worstBig  = Math.max(...measured.map(r => parseFloat(r.big)));
+const worstFl = measured.concat(rm ? [rm] : []).reduce((a, r) => r.flash.area > a.area || (r.flash.area === a.area && r.flash.swing > a.swing) ? r.flash : a, measured[0].flash);
 const bad = (worstBand > 2.0 ? ` 3-20Hz ${worstBand}% over 2%` : '') +
             (worstBig > 8.0 ? ` big steps ${worstBig}/s over 8/s` : '') +
+            (worstFl.bad ? ' general flash' : '') +
             /* The reduced-motion row was printed and not judged, which is half a gate: the flag's
                rule is stricter than the live one — with it on, everything that modulates must be
                frozen or slow enough that the band is empty. */
             (rm && (parseFloat(rm.big) > 0 || parseFloat(rm.band) > 0.5)
               ? ` reduced motion is not still (${rm.big}/s, ${rm.band}%)` : '');
-console.log(`RESULT: ${bad ? 'FAIL' + bad : 'PASS'}  (worst 3-20Hz ${worstBand}%, worst big steps ${worstBig}/s)`);
+console.log(`RESULT: ${bad ? 'FAIL' + bad : 'PASS'}  (worst 3-20Hz ${worstBand}%, worst big steps ${worstBig}/s; ${CP.fmt(worstFl)}; ${M.tag})`);
 process.exit(bad ? 1 : 0);

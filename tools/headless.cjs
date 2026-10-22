@@ -1,5 +1,5 @@
 /* Render one frame with no browser. Usage:
-     node tools/headless.cjs [seed] [frame] [cols] [rows] [--cold] > f.txt
+     node tools/headless.cjs [seed] [frame] [cols] [rows] [--cold] [--cell=WxH] [--under=k] > f.txt
    Loads whatever src modules exist, so it stays useful while the build is half-written.
 
    THIS HARNESS REPLAYS THE WHOLE FRAME, NOT JUST THE UPDATES. See the replay loop below: until
@@ -66,6 +66,8 @@ if (wxArg && CC.Weather) CC.Weather.set(wxArg.slice(10), 0);
    clock runs on a 420 s cycle, so a fixture that wants noon cannot wait for it. */
 const tmArg = flags.find(a => a.slice(0, 7) === '--time=');
 const TIME = tmArg ? tmArg.slice(7) : null;
+const unArg = flags.find(a => a.slice(0, 8) === '--under=');
+if (unArg && CC.Compose) CC.Compose.UNDER = parseFloat(unArg.slice(8)) || 0;
 const f = CC.makeFrame(cols, rows);
 const t = frameN / 60;
 
@@ -78,6 +80,14 @@ const cam = {
   z: city && city.startZ !== undefined ? city.startZ : 0.5,
   yaw: 0, eyeY: 1.7, fov: 1.25, horizon: rows * 0.56, scale: rows * 0.9, t: t
 };
+/* --cell=WxH: the cell the frame will be PRINTED on, which the caster needs as well as the printer
+   — raycast reads cam.cellAspect for the vertical scale and frame.D, and D sizes the spill box, the
+   bloom radii and the optics. Left at the 9x16 default, a 300-column dump was cast at D 1.50 while
+   the browser's 6x11 cell (cellCSS 6.4, dpr 1) casts it at 1.45 and topng --cell=6x11 prints it at
+   1.45. Pass the same --cell to both tools and the three agree. Unlike --yaw this is the browser's
+   own frame, just at a cell this harness does not assume. */
+const cellArg = flags.find(a => a.slice(0, 7) === '--cell=');
+if (cellArg) { const m = /^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/.exec(cellArg.slice(7)); if (m) cam.cellAspect = m[1] / m[2]; }
 // The camera advance MUST come from the city itself, exactly as main.js drives it. An earlier
 // version of this harness advanced cam.z here on its own, which faked motion the browser never
 // had and hid a shipped bug where the walk never started at all.
@@ -104,6 +114,7 @@ function renderAt(kt) {
   cam.t = kt;
   CC.clearFrame(f);
   if (CC.Cast) CC.Cast.render(f, cam, city);
+  if (CC.Compose && CC.Compose.world) CC.Compose.world(f);
   for (const el of els) if (el.draw) el.draw(f, cam, kt);
   if (CC.Compose && CC.Compose.post) CC.Compose.post(f, cam, kt);
 }
@@ -191,6 +202,16 @@ for (let y = 0; y < rows; y++) {
     line.push(f.ch[i] + ',' + f.col[i] + ',' + f.lum[i] + ',' + f.kind[i]);
   }
   out.push(line.join(' '));
+}
+/* THE UNDERPAINTING, as one line after the cells: cols*rows `r,g,b` triples, row-major, the format
+   tools/topng.py --u reads. Written ONLY when the field is non-zero, so a frame rendered with
+   CC.Compose.UNDER = 0 (the kill switch) dumps byte-for-byte what this harness dumped before the
+   field existed, and every fixture diffed against an old dump still diffs clean. --under=<k> sets
+   the strength for a tuning render; it is a browser knob too, so unlike --yaw it is a real frame. */
+if (f.under && f.under.some(v => v)) {
+  const u = f.under, s = [];
+  for (let i = 0; i < f.n; i++) s.push(u[i * 3] + ',' + u[i * 3 + 1] + ',' + u[i * 3 + 2]);
+  out.push('UNDER ' + s.join(' '));
 }
 process.stdout.write(out.join('\n') + '\n');
 /* The exposure gain is reported on stderr because it is the one thing about this frame that no

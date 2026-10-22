@@ -745,9 +745,11 @@
 
       var rad = 0.22 + age * 0.30;
       var rv = rad * vScale / pjW;
-      var kv = rv < 0.75 ? 0 : 1;
+      /* The caps are 1 and 2 REFERENCE cells; on a denser grid the puff keeps its world size. */
+      var DD = frame.D || 1;
+      var kv = rv < 0.75 ? 0 : Math.min(Math.round(rv), Math.max(1, Math.round(DD)));
       var rh = rv / vCellA;
-      var kh = rh < 0.75 ? 0 : (rh < 1.9 ? 1 : 2);
+      var kh = rh < 0.75 ? 0 : (rh < 1.9 ? 1 : Math.min(Math.max(2, Math.round(rh)), Math.max(2, Math.round(2 * DD))));
       var cx = Math.floor(pjX), cy = Math.floor(pjY), d = pjD;
 
       for (var dy = -kv; dy <= kv; dy++) {

@@ -862,9 +862,20 @@
      * it is a horizontal mass with a bright top edge, which is what a wagon bed is, and the cap
      * rail still reads as the edge because it is nearly twice as bright as the board under it.
      *
-     * The underside stays a cut-out. There is nothing under a wagon but shadow and the road. */
+     * The underside stays a cut-out. There is nothing under a wagon but shadow and the road.
+     *
+     * TWENTY-SIX SAMPLES WERE A GRID SIZE, NOT A WAGON SIZE, and they are scaled by frame.D now.
+     * Each sample is one column() of board and one of underside, so a bed that spans more columns
+     * than it has samples prints as a comb — and the teeth sit at a sub-cell phase that moves as
+     * the wagon translates, the same aliasing beat the wheel's header describes, landing on every
+     * cell the bed crosses. At 200 columns a wagon at 25 m spans fewer columns than 27 and none of
+     * that showed; at 400 it spans ~35, and lum-mode west-flicker's worst cell (seed 3, 400x120)
+     * read 91, 91, 0, 0, 0, 0 on a ~9 Hz loop for two seconds — a lit plant at 31 m seen through
+     * the holes — which was the whole of the frontier's 10.75 big steps a second against the 8.0
+     * backstop, and was there in the untouched tree too. 26 x D keeps the samples per reference
+     * column what they were: identical at 200 columns (D = 1), 4.25/s at 400 on this change alone. */
     var deck = 1.02, capY = 1.48;
-    var n = 26, i;
+    var n = Math.round(26 * (f.D || 1)), i;
     for (i = 0; i <= n; i++) {
       var aa = rear + (front - rear) * (i / n);
       column(f, wx(axis, aa, cross), wz(axis, aa, cross), deck, capY - 0.06,
@@ -947,7 +958,12 @@
       B.head = 0;                                     // a horse in draught carries its head up
       B.tail = 0;
       B.lift = 0;                                     // the wagon's own motion is animation enough
-      B.legW = objVisible(axis, teamA, cross + lat2, 0.5) < 18 ? 1 : 0;
+      /* Two-cell legs out to 18 m — 18 REFERENCE metres, so x D. The threshold was fitted at 200
+       * columns, where it means "legs at least as wide as a cell"; at 400 a leg at 25 m was one
+       * cell wide again and the near and far leg of a pair, a column apart, crossed a lit road
+       * cell as two dark pulses instead of one — the residual 3-20 Hz on the same probe after the
+       * bed fix above (3.93% -> 3.07% against the city's 2.97 x 1.15). */
+      B.legW = objVisible(axis, teamA, cross + lat2, 0.5) < 18 * (f.D || 1) ? 1 : 0;
       hideLight();
       beast(f);
     }

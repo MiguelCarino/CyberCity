@@ -112,13 +112,19 @@ var CC = (function () {
       col:  new Uint8Array(n),
       lum:  new Uint8Array(n),
       dist: new Float32Array(n),
-      kind: new Uint8Array(n)
+      kind: new Uint8Array(n),
+      under: new Uint8ClampedArray(n * 3),  // the underpainting: see CC.Compose, the one writer
+      /* Both declared here although other modules write them — D by raycast.js, uon by
+       * Compose.post — so the frame has its whole shape from birth: a field added on the first
+       * render changes the object's hidden class under every hot loop that reads it. */
+      D: 1, uon: false
     };
   }
 
   function clearFrame(f) {
     f.ch.fill(0); f.col.fill(0); f.lum.fill(0); f.kind.fill(0);
     f.dist.fill(Infinity);
+    if (W0 && W0.f === f) W0.f = null;   // a new frame: the underpainting's world snapshot is spent
   }
 
   // The only sanctioned write. Depth-tests so elements can never punch through a wall.
@@ -590,6 +596,14 @@ var CC = (function () {
    * from Surf.fog at lum 0 and is skipped below, and every object in elements/sky.js is deliberately
    * given a distance beyond it so that it self-occludes against the world pass. */
   var SKY_D = FOG_END;
+  /* THE SOURCE SET, written down ONCE. ladder() below puts these on the squared-sun curve, and the
+   * underpainting's emitter set EM is built from this same list plus the accent lamps, because the
+   * two were hand-copied literals for one pass and a list kept in two places is two lists. Being
+   * in SRC is a statement about the LADDER (holds its gain through dusk) and moves the glyph layer;
+   * being in EM only is a statement about the WASH (caps its panel, spills on its neighbours) and
+   * moves nothing but f.under. Do not promote a swatch from one to the other to get the second. */
+  var SRC = [0, 1, 8, 9, 15, 16, 17], SRCF = new Uint8Array(PALETTE.length);
+  for (var si = 0; si < SRC.length; si++) SRCF[SRC[si]] = 1;
 
   /* ---- THE DAY LADDER ---------------------------------------------------------------------------
    * The table above is fitted to a NIGHT frame and says so at length: LIGHT OUTRANKS STRUCTURE, the
@@ -774,9 +788,7 @@ var CC = (function () {
      * there is a sun to lift it. Put a surface on the sun curve and it stays at its night gain
      * through the whole of dawn — the wall goes bright only after the sky already has, which is
      * the dusk fault above running backwards. */
-    var src = (c === 0 || c === 1 || c === 8 || c === 9 ||
-               c === 15 || c === 16 || c === 17);   // amber azure warm ice + jade rose gold
-    var m = src ? sunMix * sunMix : mix;
+    var m = SRCF[c] ? sunMix * sunMix : mix;   // amber azure warm ice + jade rose gold: SRC below
     return EXPOSURE[c] + (EXPOSURE_DAY[c] - EXPOSURE[c]) * m;
   }
 
@@ -875,12 +887,331 @@ var CC = (function () {
    * gains its daylight from the sky and a SOURCE loses its advantage only to the sun. See the note
    * on `sky` in daylight.js for why that parameter carries a misleading name on an airless world
    * and why it is still the right input here. */
+  /* ---- THE UNDERPAINTING ------------------------------------------------------------------------
+   * One RGB value per CELL, laid under the glyphs on the character grid and added to them. It exists
+   * because of a number nobody had looked at: a glyph inks at most ~40% of its cell in this font and
+   * 21% on average, and about half the cells are blank, so a wall the painters lit at full lum still
+   * reached the glass at a fifth of its value. The picture had ink and no TONE — no large shapes, no
+   * sky, no depth — and every resolution increase only made the ink finer. This field is the tone,
+   * and it is five terms, each one a thing a painter does with a wash before the line work goes on:
+   *
+   *   MASS      the cell's own colour at a fraction of its printed lum, so a lit wall is a lit PANEL
+   *   SKY       a zenith-to-horizon gradient per world and hour, behind every open-sky cell
+   *   HAZE      aerial perspective: far cells walk toward 0.8 x the horizon colour with depth
+   *   RIM       where a roofline meets the sky the sky wraps the edge, which is what a silhouette is
+   *   SPILL     the emitters' light on the cells round them, a box in REFERENCE cells (see below)
+   *
+   * It is drawn NEAREST, one flat block per cell, and never fed to the bloom. Both are measured
+   * decisions rather than taste: a bilinear field smeared the cyber street into a violet haze, and a
+   * bloomed one greyed every black between the lit cells, which is the negative space the night
+   * frame is built out of.
+   *
+   * WHAT IT NEVER TOUCHES is ch/col/lum. The glyph layer is byte-identical with it on or off, so
+   * every census, fixture and flicker probe fitted to that layer still reads the frame it was
+   * fitted to, and CC.Compose.UNDER = 0 is a kill switch rather than a setting: nothing is computed,
+   * nothing is written, and the frame data and glyph layer are today's to the byte (the rest of the
+   * HD print — pixel pass, screen-sized bloom, cell band — is not this switch's to undo; CONTRACT
+   * says exactly what it restores). Between 0 and 1 it is the
+   * strength, applied once at the end so it scales the whole wash without moving its balance.
+   *
+   * THE SKY TABLE lives on the painter export as SKY_RGB, not here, because the registry rule says a
+   * world is everything its painter file says and nothing core has to know the name of: 18 numbers,
+   * zenith then horizon (rgb, rgb) at NIGHT, at NOON and at the DUSK colour the warm term pulls
+   * toward. The city's is on CC.Surf, which is the city's painter. A painter with NO table gets no
+   * sky at all — that is the Moon, which has a black sky and gets regolith ambient instead. */
+  var UK = [0.12, 0.3, 0.13, 0.3], NG = GLYPHS.length, THIN = new Uint8Array(NG), EM = new Uint8Array(PALETTE.length), SH = P.shadow;
+  var W0 = null, Z = new Float32Array(9), q = [0, 0, 0], r = [0, 0, 0], KS = ['ch', 'col', 'lum', 'kind', 'dist'], sp, tp, tq, AC;
+  /* Per-frame terms fld() reads, set once at the top of under(): the ambient, the sun on a figure,
+   * the sky and wall mass shares, and the haze target's fraction of the horizon colour. */
+  var DY = 0, SN = 0, M0 = UK[0], M1 = UK[1], HT = 0.8, FE = FOG_END;
+  /* THE BARE SHARES, and the painter's swatch on a blank cell is what selects them (see fld). BW
+   * and BF are a bare wall's and a bare floor's share of the ambient; the defaults are the hole
+   * rule exactly, and a painter overrides them with a BARE = [wall, floor] export beside its
+   * SKY_RGB. SL is slate, the other unlit swatch. */
+  var BW = 0.1, BF = 0.5, SL = P.slate;
+  '.,:;\'"`^~-_=+|/\\'.split('').forEach(function (c) { THIN[GI[c]] = 1; });
+  /* EM: the swatches that EMIT — SRC, the ladder's source set, plus the four accents that are lamps
+   * or screens (ember, spring, violet, red). Violet is in because the palette says what it is for —
+   * "screens and signage only" — and out, it was the one sign that took a surface's 0.30 panel and
+   * no spill: the flat-slab case the cap below exists for, in the one hue nobody had tested. Two
+   * things key off EM. Only these spill. And their MASS is capped at 0.18 where a surface gets 0.30,
+   * because a sign is lit from inside and is already the brightest ink in its neighbourhood: at 0.30
+   * a near signboard filled its whole rectangle with one saturated value and printed as a flat slab
+   * with the letters lost on it. At 0.18 the panel is there and the letters still lead it. */
+  SRC.concat([2, 3, 4, 6]).forEach(function (c) { EM[c] = 1; });
+  /* The world pass, snapshotted before any element draws. An element is drawn OVER something, and
+   * the field has to know what: a hairline rain streak over a lit wall keeps the wall's panel, a
+   * pedestrian over the sky becomes a silhouette. It is also what keeps lightning out of the mass
+   * term — the flash is an element's lum, and the wall under it is read from before it struck.
+   *
+   * STAMPED WITH THE FRAME IT WAS TAKEN FOR, and the stamp is spent: post() clears it after use and
+   * clearFrame() clears it on the next frame. Unstamped, a caller that never called world() — a
+   * probe that only wants post()'s tone — was handed whatever the snapshot last held: the first
+   * time, the finished frame (already toned, so toned twice); every time after, a world from an
+   * earlier frame with its "toned" flag still set. Nothing read the field in those callers, which
+   * is the only reason it never showed. */
+  function world(f) {
+    if (!Compose.UNDER) return;
+    var j, n = KS.length;
+    if (!W0 || W0.n !== f.n) for (W0 = { n: f.n }, j = 0; j < n; j++) W0[KS[j]] = f[KS[j]].slice();
+    else for (j = 0; j < n; j++) W0[KS[j]].set(f[KS[j]]);
+    W0.t = 0; W0.f = f;
+  }
+  /* One cell's wash into q: mass, then either the row's sky (backdrop) or ambient plus haze (a thing
+   * in the air). FLOORS ARE GATED ON INK: the road is drawn in commas and full stops, and a mass
+   * behind a comma is a grey brick — the west street printed as cobbles nobody laid. A floor cell
+   * earns a mass only when its glyph is not one of the hairlines in THIN — when the ink is already a
+   * mass ('#', '8', 'o') the panel behind it reads as the same stone, not as a brick round a comma.
+   *
+   * THE AMBIENT IS GATED ON INK TOO, and that is what gives the day its blacks back. It was a flat
+   * share of the horizon colour laid on every world cell, lit or not, and in daylight that is every
+   * cell in the frame: cyber, west and Edo printed EXACTLY 0.0% black at every hour between dawn and
+   * dusk, doorways and window holes came out brown-grey, and the dusk street was one sepia veil. A
+   * blank WALL cell is a hole the painter left on purpose — a doorway, a window, a gap — so it takes
+   * a tenth of the ambient (a quarter left cyber noon at 3.9% black; a tenth gives 18.7%, against
+   * 54% with the field off). A blank FLOOR cell is not a hole, it is ground the painter left bare,
+   * and at a tenth the Edo street at noon printed as night tarmac, so it takes half; an inked
+   * one takes it in proportion to its lum up to 96, so a dim mullion is a dim panel and a lit one a
+   * lit panel — and since lum carries the painter's texture and depth fade, the wash carries them
+   * too. The floor's share also walks from 0.6 at the eye to 1.0 at 60 m (or the fog's end if it is
+   * nearer), on the TRUE distance rather than the haze ramp (which is flat zero inside fogStart, and
+   * on the Moon that is the whole near plain): the road nearest the eye is in the canyon's shadow,
+   * and before this a blank Edo road was one value over a third of the frame.
+   *
+   * AND BLANKNESS ALONE DOES NOT MAKE A HOLE; THE PAINTER'S SWATCH SAYS WHICH IT IS. Every painter
+   * writes a blank in `shadow`, and in the city and the frontier a blank wall cell genuinely is a
+   * doorway or a window, which is what the tenth was fitted on. Edo's is not. Its header says
+   * nothing there goes to black but the shadow under an eave, and its walls and road thin their
+   * glyphs by the light — `cov`, cubed — so most of its blank cells are lit timber, plaster and
+   * earth the dither left without a glyph. Read as holes, its noon facades printed as black
+   * perforated camouflage (29.6% of wall cells pure black at seed 7, against the frontier's 4.9%),
+   * whole kura as solid black blocks under a blue sky, and its road at 0.5 x 0.2 of the horizon
+   * came out DARKER at noon than at dusk (bottom 40% luma 18.4 against 21.4) with the noon crowd
+   * at 1.07:1 against it — invisible. So a painter that means "surface, no glyph" writes the blank
+   * in the surface's own swatch, and a blank in `shadow` or `slate` is still a hole. That swatch
+   * prints nothing — ch 0 is never drawn — so the glyph layer is the same picture; and a painter
+   * that never writes one, which today is every painter but Edo's, gets the old rule to the byte,
+   * BARE export or not. Elements keep the tenth whatever their swatch. A FIGURE (kd 3)
+   * additionally takes 0.3 of the horizon by the direct sun, because at noon a pedestrian is a lit
+   * form and not a hole in the street; at night that term is zero.
+   *
+   * HAZE IS QUADRATIC in the depth ramp, a^2 rather than an ease-out: air accumulates. On the city's
+   * ramp the ease-out had already laid 37% of the horizon colour over a wall forty metres off, and in
+   * the cyber canyon that is most of the frame — night went from black-with-light-in-it to blue-grey.
+   * a^2 lays 6% there and still reaches the full horizon at the end of the ramp. Its TARGET is HT of
+   * the horizon: 0.8 by day, 0.5 at night, because at night the horizon colour is the glow the signs
+   * put in the air low down, and a far unlit tower walked 80% of the way to it printed as a crisp
+   * periwinkle panel in the middle of the cyber street. */
+  function fld(c, L, kd, d, a, gc) {
+    var p = PALETTE[c], w = kd && d < SKY_D, k, v, m = a > 1 ? 1 : a > 0 ? a : 0,
+        l = L / 255 * (!w ? M0 : kd === 2 ? (THIN[gc] ? 0 : UK[2]) : EM[c] ? 0.18 : M1),
+        bare = c !== SH && c !== SL,
+        am = ((kd === 2 ? 0.2 * (0.6 + 0.4 * (d < FE ? d / FE : 1)) : 0.16) * DY + (kd === 3 ? 0.3 * SN : 0)) *
+             (gc ? (L < 96 ? L / 96 : 1) : kd === 2 ? (bare ? BF : 0.5) : kd === 1 && bare ? BW : 0.1);
+    for (k = 0; k < 3; k++) {
+      v = p[k] * l;
+      if (!w) v += Z[k + 6];
+      else v += Z[k + 3] * am, v += (Z[k + 3] * HT - v) * m * m;
+      q[k] = v;
+    }
+  }
+  /* Running-sum box passes, O(1) per cell whatever the width. hbox runs along each row (stride 3,
+   * three channels interleaved); vbox runs a whole ROW of column sums at once, so it walks memory
+   * in order too — a per-column vertical pass strides a row's width per step and measured a third
+   * slower on the whole field at 360 columns. */
+  function hbox(a, b, R, C, h) {
+    for (var y = 0; y < R; y++) for (var k = 0; k < 3; k++) {
+      var o = y * C * 3 + k, s = 0, x;
+      for (x = 0; x < h && x < C; x++) s += a[o + x * 3];
+      for (x = 0; x < C; x++) {
+        if (x + h < C) s += a[o + (x + h) * 3];
+        if (x > h) s -= a[o + (x - h - 1) * 3];
+        b[o + x * 3] = s;
+      }
+    }
+  }
+  function vbox(a, b, R, C3, h) {
+    var ac = AC && AC.length === C3 ? AC.fill(0) : (AC = new Float64Array(C3)), y, x, o;
+    for (y = 0; y < h && y < R; y++) for (o = y * C3, x = 0; x < C3; x++) ac[x] += a[o + x];
+    for (y = 0; y < R; y++) {
+      if (y + h < R) for (o = (y + h) * C3, x = 0; x < C3; x++) ac[x] += a[o + x];
+      if (y > h) for (o = (y - h - 1) * C3, x = 0; x < C3; x++) ac[x] -= a[o + x];
+      for (o = y * C3, x = 0; x < C3; x++) b[o + x] = ac[x];
+    }
+  }
+  function under(f, cam) {
+    var n = f.n, C = f.cols, R = f.rows, u = f.under || (f.under = new Uint8ClampedArray(n * 3)), G = +Compose.UNDER;
+    if (!W0.t) tone(W0), W0.t = 1;
+    if (!sp || sp.length !== n * 3) sp = new Float32Array(n * 3), tp = new Float32Array(n * 3), tq = new Float32Array(n * 3);
+    var Sf = CC.Surf, Wp = CC.SURFACES && CC.World && CC.SURFACES[CC.World.id], S = CC.Daylight && (Wp ? Wp.SKY_RGB : Sf && Sf.SKY_RGB);
+    /* DY is the AMBIENT: skylight plus a third of the warm term, which is the low sun's bounce off
+     * the ground and the facades — without it a dusk street was a black cut-out under a lit sky
+     * (west dusk mean 33) where the eye sees warm shadow with the walls still in it.
+     *
+     * THE MASS SHARES FALL WITH THE SKY: sky glyphs 0.12 -> 0.04 and surface walls 0.30 -> 0.18 at
+     * noon, both the identity at night. The day ladder has already lifted every glyph's lum by day,
+     * so a share fitted to the night frame laid a second daylight on top of the first: the cyber
+     * facades printed as a quilt of flat grey tiles (a third of the frame in identical runs of twelve
+     * cells or more), and in the frontier's noon sky every dash cell sat 17 levels over its blank
+     * neighbours, so the 3% of blank cells read as dark squares dotted across the blue. */
+    var P = CC.Daylight && CC.Daylight.P, sk = P && S ? P.sky : 0, sun = P && !S ? P.sun : 0, k, x, y, i, o, t, v, j, b;
+    DY = P && S ? sk + 0.3 * P.warm : 0; SN = P && S ? P.sun : 0;
+    var Bt = Wp ? Wp.BARE : Sf && Sf.BARE;
+    BW = Bt ? Bt[0] : 0.1; BF = Bt ? Bt[1] : 0.5;
+    M0 = UK[0] * (1 - 0.7 * sk); M1 = UK[1] * (1 - 0.4 * sk); HT = 0.5 + 0.3 * (DY < 1 ? DY : 1);
+    /* fogStart may legitimately be 0, so it is tested for presence rather than truth; a ramp that
+     * has collapsed (end at or before start, which a weather blend could reach) is a wall of haze
+     * at fogStart rather than a division by zero — the clamp in fld() swallowed the NaN that made
+     * before, by accident, and the water branch is the record of what accidents like that cost. */
+    var f0 = Sf && Sf.fogStart >= 0 ? Sf.fogStart : FOG_START, fs = (Sf && Sf.fogEnd > 0 ? Sf.fogEnd : FOG_END) - f0, hz = cam && cam.horizon || R * 0.56;
+    if (!(fs > 1e-3)) fs = 1e-3;
+    FE = f0 + fs < 60 ? f0 + fs : 60;
+    /* Zenith/horizon for this hour: night toward noon on the sky term, then toward the dusk pair on
+     * the warm term — fully at the horizon and 0.6 at the zenith, because a low sun colours the band
+     * it sits in and leaves the top of the sky blue, which is the difference between a golden dusk
+     * and an orange lid on the frame. */
+    for (k = 0; k < 6; k++) Z[k] = S ? S[k] + (S[k + 6] - S[k]) * P.sky : 0, S && (Z[k] += (S[k + 12] - Z[k]) * P.warm * (k < 3 ? 0.6 : 1));
+    var Wk = W0.kind, Wc = W0.col, Wh = W0.ch, Wl = W0.lum, Wd = W0.dist, fk = f.kind, fc = f.col, fh = f.ch, fl = f.lum, fd = f.dist, e0 = -1, e1 = -1;
+    for (y = 0, i = 0; y < R; y++) {
+      /* this row's sky: sqrt, so the horizon band is narrow and the zenith colour owns most of it */
+      for (t = Math.sqrt(Math.max(0, Math.min(1, (hz - y) / hz))), k = 0; k < 3; k++) Z[k + 6] = Z[k + 3] + (Z[k] - Z[k + 3]) * t;
+      for (x = 0; x < C; x++, i++) {
+        o = i * 3;
+        var wk = Wk[i], kd = fk[i], c = fc[i], gc = fh[i], L = gc ? fl[i] : 0, d = fd[i], p = PALETTE[c], wd = Wd[i], a = (wd - f0) / fs;
+        fld(Wc[i], Wh[i] ? Wl[i] : 0, wk, wd, a, Wh[i]);
+        r[0] = q[0]; r[1] = q[1]; r[2] = q[2];
+        /* An element: dense ink hides the world and hairlines do not, so rain over a wall keeps the
+         * wall. Against open sky it IS the sky's silhouette. The visor (HUD, dist < 0.1) is a stencil
+         * on the glass and gets nothing at all — not a wash, not a spill.
+         *
+         * AND AN ELEMENT HIDES THE WALL IN PROPORTION TO WHAT IT PRINTS, full only from lum 24 up.
+         * The deliberate occluders — a police cordon's body, a cat, a dark figure — are drawn in the
+         * shadow swatch and stay opaque at any lum; everything else that printed NOTHING used to be
+         * opaque too, and that is a hologram fogged under the print floor. The holo panel lands
+         * cells at lum 5 that tone to 0, so its scan band walked a black hole across the hazed
+         * tower behind it: flicker-rate's still-holo check stepped one cell 1.6 -> 29.2 every time
+         * the band passed (seed 555, composite, 200x60), 10.8% of full scale against the 10% line,
+         * for a panel the glyph layer does not show at all. signage.js has already written down the
+         * right rule — a hologram composites as LIGHT and never darkens what it lands on — and a
+         * ramp on printed lum is that rule without naming any one element: a thing too dim to see
+         * is too dim to stand in front of anything, and a lit figure is still a solid one. */
+        var vis = kd === 3 && d < 0.1, op = vis ? 1 : kd === 3 && d < wd ? (c === SH || !wk ? 1 : (THIN[gc] ? 0.25 : 0.75) * (L < 24 ? L / 24 : 1)) : 0;
+        if (op && !vis) fld(c, L, wk && 3, d, (d - f0) / fs, gc);
+        else if (vis) q[0] = q[1] = q[2] = 0;
+        /* AN EMITTER SPILLS ONLY ONTO SOMETHING. The test is the world under the cell: a sign over a
+         * wall lights the wall, but an amber cloud-bar dash over open night sky (west, seed 7) has
+         * nothing within a hundred metres to light, and it was printing hard-edged horizontal slabs
+         * of (26,29,21) into a sky of (3,5,13). Sky elements carry a distance past SKY_D and are out
+         * for the same reason. */
+        var rim = y && wk === 1 && Wk[i - C] === 0, e = S && !vis && wk && d < SKY_D && L > 90 && EM[c] ? (L - 90) / 165 * 0.7 : 0;
+        /* Lit regolith: grey with a breath of warmth, floors brighter than walls. Only lightly
+         * ink-weighted on the floor — the plain is one lit surface, and a weight that followed every
+         * pebble's lum printed it as a grey checkerboard — but walked 0.6 -> 1.0 along the depth
+         * ramp's end, so it recedes instead of printing 3,555 cells of one value. The WALLS are wholly
+         * ink-weighted: a shadow face on an airless world is black, and a constant here printed
+         * every blank cell of every unlit rock face at one identical grey, a slab of cardboard. */
+        var hk = wk && L ? (EM[c] ? 1.7 : 1.25) * L / 255 : 0;
+        var mf = sun && kd ? sun * (kd === 2 ? (0.32 + 0.2 * L / 255) * (0.6 + 0.4 * (wd < FE ? wd / FE : 1)) : 0.43 * L / 255) : 0;
+        for (k = 0; k < 3; k++) {
+          v = r[k] + (op ? (q[k] - r[k]) * op : 0);
+          if (rim) v = Math.max(v, Z[k + 6] * 0.9);
+          if (mf) v += (150 + 4 * (k >> 1) + 2 * (k & 1)) * mf;
+          /* THE TOE, v^2/(v+8): under ~8 the wash bends toward zero, above ~40 it is nearly linear.
+           * A dim slate wall at night is UNLIT concrete and the doctrine is that it prints black;
+           * without the toe every such cell carried a value of 3-6, under the visible threshold
+           * one at a time and a grey veil over the whole frame together.
+           *
+           * THE HEADROOM CAP, 255 - 1.25 x the glyph's own printed channel: the wash may fill a
+           * cell's gaps but never lift them toward the stroke that is already in it. A white sign
+           * is not an emitter by swatch (white is what light LANDS on), so its letters took the
+           * full 0.30 panel and the gaps between strokes filled with near-white: the '####/8888'
+           * board in cyber night printed as a solid block and the frame's clipped pixels went from
+           * 0.24% to 1.53%. The cap keys on what prints, not on the swatch id, so it catches every
+           * bright cell whatever it is painted in and leaves a dim one alone. An EMITTER's cap is
+           * 1.7 x its stroke, because the bloom is laid over a sign and not over a wall: at 1.25 the
+           * big amber banner in cyber night (seed 7) still clipped its halo, 1.27% of the frame
+           * against 0.24% with the field off, and at 1.7 it is 0.29%. And the SKY is never capped:
+           * a backdrop cell's wash is the sky itself, and capping it under every bright dash
+           * printed the frontier's noon sky as a field of dark squares where the dashes are. */
+          v = v * v / (v + 8) * G; t = 255 - p[k] * hk;
+          u[o + k] = v < t ? v : t; sp[o + k] = p[k] * e;
+        }
+        if (e > 0) { if (e0 < 0) e0 = y; e1 = y; }
+      }
+    }
+    /* SPILL: a TENT, built as two box passes per axis, so it stays O(1) per cell whatever its size.
+     * One box made a flat-topped pool with a step at its edge — around the yellow '888' sign a
+     * visible rectangle behind the letters and a uniform skirt past them — and two boxes convolved
+     * fall off linearly to nothing at the same 9 x 5 footprint, which is what light from a panel
+     * does. That footprint is in REFERENCE cells (a round pool on 9:16 glass) scaled by frame.D, the
+     * grid's density against the 200-column reference: a lamp lights the same patch of street at
+     * 360 columns as at 200, rather than a quarter of it. The sum is normalised by the kernel's
+     * area, so the pool's brightness does not change with density either — only how finely it is
+     * drawn. Nothing spills on the Moon: there is no air to scatter it.
+     *
+     * THE GAIN IS 1.2, down from the box's 1.9, and it was set by a gate rather than by eye. A
+     * tent the same size as the box puts three times the box's weight on an emitter's nearest
+     * neighbours, so at 1.9 a cell beside a moving emitter stepped three times as hard: the holo
+     * scan band, with its drift patched out, went from 9.6% to 10.3% of full scale per frame on the
+     * composite at 400x120 (seed 555) against flicker-rate's 10% limit. 1.2 puts the nearest
+     * neighbour back where the box had it and spends the saving at the pool's edge.
+     *
+     * ONLY OVER THE ROWS A POOL CAN REACH. The four passes and the sweep ran over the whole grid
+     * whenever the world had a sky, and on a frame with no emitter that is four full-field box
+     * filters of zeros: profiled at 400x120, cyber night, the passes were a tenth of the frame's
+     * CPU and the stage cost 4.5 ms against 0.24 with the field off. e0..e1 are the first and last
+     * rows that emitted. The pool's support is exactly that band grown by the two vertical radii,
+     * and sp is zero outside it (every cell writes its sp above, emitting or not), so the passes
+     * run on that slab as if it were the whole grid — a box truncated at the slab's edge sums the
+     * same zeros the full grid would have — and every cell outside it is left alone, which is what
+     * the sweep's threshold did to it anyway. No emitter, no passes at all. The result is the same
+     * field to the byte (checked on five frames across four worlds); the saving is whatever share
+     * of the rows carry no light, which is honest about how small it usually is. Measured at
+     * 400x120: cyber night 4.34 -> 4.36 ms, unchanged, because its signs reach nearly every row;
+     * west noon 3.86 -> 3.62; Edo dusk 3.86 -> 3.68. What it removes outright is the pathology —
+     * a frame with nothing lit paying for four filters of nothing. */
+    if (S && e0 >= 0) {
+      var Dn = f.D || 1, C3 = C * 3, h1 = Math.floor(2 * Dn), h2 = Math.ceil(2 * Dn), v1 = Math.floor(Dn), v2 = Math.ceil(Dn),
+          A = 1.2 / ((2 * h1 + 1) * (2 * h2 + 1) * (2 * v1 + 1) * (2 * v2 + 1)), pc,
+          y0 = e0 - v1 - v2 > 0 ? e0 - v1 - v2 : 0, y1 = e1 + v1 + v2 < R - 1 ? e1 + v1 + v2 : R - 1,
+          Rb = y1 - y0 + 1, a0 = y0 * C3, a1 = (y1 + 1) * C3,
+          bs = sp.subarray(a0, a1), bp = tp.subarray(a0, a1), bq = tq.subarray(a0, a1);
+      hbox(bs, bp, Rb, C, h1); hbox(bp, bq, Rb, C, h2); vbox(bq, bp, Rb, C3, v1); vbox(bp, bq, Rb, C3, v2);
+      /* Two curves on the pool. A soft ceiling, because a big sign is its own emitter over its
+       * whole box and the sum inside it climbed to a saturated slab; and the same toe as the mass,
+       * so a pool's faint skirt dies to black instead of greying the negative space round it. An
+       * emitter's own cell takes the pool at (1 - its emission): the sign is lit from inside, the
+       * wall beside it from the sign. The headroom cap again last, over the sum. */
+      for (i = y0 * C, j = a0; i < (y1 + 1) * C; i++, j += 3) if (tq[j] + tq[j + 1] + tq[j + 2] > 0.02 / A) {
+        p = PALETTE[fc[i]]; b = Wk[i] && fh[i] ? (EM[fc[i]] ? 1.7 : 1.25) * fl[i] / 255 : 0;
+        for (k = 0; k < 3; k++) if ((t = tq[j + k] * A) > 0.02) {
+          pc = p[k]; v = 1 - sp[j + k] / (pc + 1); v *= v * t; v = 72 * v / (v + 72);
+          v = u[j + k] + v * v / (v + 8) * G; t = 255 - pc * b;
+          u[j + k] = v < t ? v : t;
+        }
+      }
+    }
+    return u;
+  }
+
   var Compose = {
     post: function (f, cam, t) {
       var D = CC && CC.Daylight;
+      /* No fresh snapshot for THIS frame means the caller skipped world(f). Take it here, BEFORE
+       * tone(), so the field is at least computed from an untoned world rather than a twice-toned
+       * one. It is a degraded field — the elements are in it, lightning included — and it is
+       * recorded as such: CONTRACT's render order is the thing to follow. */
+      if (Compose.UNDER && !(W0 && W0.f === f)) world(f);
       setDayMix(D ? D.P.sky : 0, D ? D.P.sun : 0);
       tone(f);
-    }
+      /* Switched off mid-run, the field it last wrote is cleared once rather than left to haunt
+       * the glass under a frame that no longer asked for it. */
+      if (Compose.UNDER) under(f, cam), W0.f = null;
+      else if (f.uon) f.under.fill(0);
+      f.uon = !!Compose.UNDER;
+    },
+    world: world,
+    UNDER: 1
   };
 
   /* HOW WIDE THE PAVEMENT IS, in metres from the building face to the kerb face, and it lives here

@@ -12,6 +12,20 @@ the current tools/headless.cjs writes. Two agents worked around it with throwawa
 rather than fixing it; the fix is the two lines below and a kind breakdown for free.
 
     python3 tools/metrics.py f.txt [more.txt ...]
+    python3 tools/metrics.py --composite [--cell=WxH] [--u=k] f.txt [more.txt ...]
+
+Everything main() prints is the GLYPH-LAYER census: lum x swatch per cell, scored as if every
+glyph were a solid block. It is kept byte-for-byte as it was, because every target in core.js and
+every historical report is written in its units. It cannot see two things the screen does: a
+glyph covers about a fifth of its cell, and an underpainting (the dump's UNDER line) lights cells
+that have no glyph at all. --composite therefore adds a second census per file, in two halves:
+  ink    what the data says will print -- coverage(glyph) x lum x swatch (tools/cov.json), plus the
+         UNDER field's brightest channel -- as a per-cell mean, so a change can be judged before
+         anyone renders it;
+  print  what the browser shows, measured on tools/topng.py's composite (calibrated against a
+         Chromium screenshot): luma mean/p50/p90/p99, black share, the zenith band (top tenth of
+         the frame, where night must stay dark) and the mean by cell kind.
+The UNDER line is drawn at strength 1 when present; --u=k scales it and --u=0 leaves it out.
 """
 import sys, json
 
@@ -94,5 +108,47 @@ def main(srcs):
             f"{KINDS[i]} {kinds[i]/tot_cell*100:.1f}% (lit {kindLit[i]/tot_cell*100:.1f}%)"
             for i in range(len(KINDS))))
 
+def composite(srcs, cell=(9, 16), u=1.0):
+    """The composite census. Imported lazily: the glyph census must keep running where numpy and
+    PIL are not installed, which is everywhere the old script ran."""
+    import os
+    import numpy as np
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import topng
+    cov = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cov.json')))['cov']
+    print(f"COMPOSITE census  cell {topng.cw_s(cell)}  UNDER x{u:g}")
+    for src in srcs:
+        a, I = topng.render(src, cell, u if u > 0 else None, 2, True)
+        cells, pal, G, U = I['cells'], I['pal'], I['glyphs'], I['U']
+        miss = sorted({G[c] for c in np.unique(cells[..., 0]) if c and G[c] not in cov})
+        if miss: sys.exit(f"metrics: no coverage for {miss!r} -- regenerate tools/cov.json "
+                          "(python3 tools/topng.py f.txt --cov > tools/cov.json)")
+        cv = np.array([cov.get(g, 0.0) for g in G]); g, lu = cells[..., 0], cells[..., 2]
+        solid = pal[cells[..., 1] % len(pal)].max(axis=2) * lu / 255 * ((g > 0) & (lu >= 4))
+        ink = solid * cv[g]
+        und = U.max(axis=2) * u if U is not None and u > 0 else np.zeros_like(ink)
+        s = topng.stats(a)
+        y = a.astype(float) @ np.array([0.2126, 0.7152, 0.0722])
+        zen = y[:max(1, y.shape[0] // 10)].mean()
+        # Per-cell print, by the cell's kind: mean luma of each cell's own block of pixels.
+        rows, cols = cells.shape[:2]; H, W = y.shape
+        cy = (np.arange(H) * rows // H)[:, None]; cx = (np.arange(W) * cols // W)[None, :]
+        kd = cells[..., 3][cy, cx]
+        byk = "  ".join(f"{KINDS[k]} {y[kd == k].mean():.1f}" for k in range(len(KINDS)) if (kd == k).any())
+        print(f"{src}")
+        print(f"  ink    glyph {ink.mean():6.2f}  under {und.mean():6.2f}  total {ink.mean()+und.mean():6.2f}"
+              f"   (ink/solid {ink.sum()/max(solid.sum(), 1):.3f}  under share "
+              f"{und.sum()/max(ink.sum()+und.sum(), 1e-9)*100:.0f}%{'' if U is not None else '  no UNDER line'})")
+        print(f"  print  {topng.fmt(s)}  zenith {zen:.1f}")
+        print(f"  print by kind (mean luma): {byk}")
+
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    A = sys.argv[1:]; srcs = [a for a in A if not a.startswith('--')]
+    fl = dict((a[2:].split('=', 1) + [None])[:2] for a in A if a.startswith('--'))
+    if 'composite' in fl:
+        print("GLYPH-LAYER census (lum x swatch, every glyph scored as a solid cell)")
+    main(srcs)
+    if 'composite' in fl:
+        c = (fl.get('cell') or '9x16').split('x')
+        composite(srcs, tuple(float(v) if '.' in v else int(v) for v in c),
+                  float(fl['u']) if fl.get('u') else 1.0)

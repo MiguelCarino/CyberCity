@@ -1,14 +1,25 @@
-/* CyberCity canvas renderer — glyph atlas, one drawImage per lit cell, then bloom.
+/* CyberCity canvas renderer — underpainting, glyph atlas (or direct pixel writes), then bloom.
  *
  * This is the ONLY module that touches the DOM or a 2D context. Everything above it produced a
  * frame of typed arrays; everything here is about getting those ~13000 cells onto glass at 60 Hz
  * and then putting the light back into them.
  *
- * BLOOM IS NOT DECORATION. The art direction is 55%+ pure black with a thin scatter of very bright
- * glyphs; drawn flat, that reads as a text dump. The halo is what makes a sodium lamp look like it
+ * BLOOM IS NOT DECORATION. The art direction is a glyph layer 55%+ pure black with a thin scatter
+ * of very bright glyphs (the night composite, underpainting included, holds 35%+); drawn flat, that
+ * reads as a text dump. The halo is what makes a sodium lamp look like it
  * is emitting rather than printed, and it is the only thing that fuses the dim mullion glyphs into
  * the massed slab a facade is supposed to be. The offline reference renderer (tools/topng.py) bakes
  * the same two-radius glow, so this pass exists to keep the browser honest against it.
+ *
+ * THREE LAYERS, ADDED. f.under (CC.Compose's per-cell tone field) goes down first, one flat block
+ * per cell; the glyph scene is added over it; the bloom is added over that and reads the SCENE
+ * ONLY. The order is the art direction: a glyph inks ~21% of its cell, so the light a painter
+ * means for a lit wall never reached the glass until something sat behind the ink — but a halo
+ * fed by the underpainting would lift every black between lit cells to grey, and the negative
+ * space is what the whole composition is built on. No f.under, or an all-zero one, prints the
+ * glyph composite with the underlay op skipped altogether — the same frame, op for op, minus one
+ * drawImage. It is not the pre-HD print: the pixel path and the reference-cell bloom radii below are
+ * independent of the field and stay on.
  */
 (function (CC) {
   'use strict';
@@ -36,6 +47,10 @@
   var scene = null, sctx = null;              // glyph pass lands here, bloom reads it
   var b2 = null, b4 = null, b8 = null;        // 1/2, 1/4, 1/8 downsample chain
   var atlas = null, actx = null;
+  /* The underpainting buffer: ONE PIXEL PER CELL, scaled up unsmoothed so it stays on the
+   * character grid. A bilinear upscale was tried in the colour prototype and smeared the street
+   * into a violet haze; the grid is what keeps it reading as characters rather than a photo. */
+  var ubuf = null, uctx = null, uimg = null, underOn = false;
 
   var cols = 0, rows = 0, dw = 0, dh = 0, W = 0, H = 0, dpr = 1;
   var quality = 2;
@@ -43,7 +58,7 @@
    * a fixed 1.2px halo is half a glyph wide at dpr 1 and a quarter of one at dpr 2, so the piece
    * would look softer on a cheap monitor than on a retina one. Expressed as a fraction of the cell
    * they hold the same look at every density and every column count. */
-  var rTight = 1, rWide = 1, rMid = 1;
+  var rTight = 1, rWide = 1, rMid = 1, rD = 0;
   var advance = 0.6;                          // measured monospace advance, em units
 
   /* ctx.filter is absent on older WebKit. Probed once: assigning an unsupported value leaves the
@@ -125,16 +140,29 @@
     b2 = mkCanvas(W >> 1, H >> 1);
     b4 = mkCanvas(W >> 2, H >> 2);
     b8 = mkCanvas(W >> 3, H >> 3);
+    ubuf = mkCanvas(cols, rows); uctx = ubuf.getContext('2d');
+    try { uimg = uctx.createImageData(cols, rows); } catch (e) { uimg = null; }   // shim: no underlay
 
-    /* Each radius is expressed in ITS OWN buffer's pixels, so the 0.05/0.045 fractions below are
-     * the cell-relative full-resolution radii divided by the buffer's downsample factor. Landed on
-     * by matching tools/topng.py's 1.5px and 5.0px taps at its 9x16 cell, which is the render the
-     * art direction was signed off against. */
-    rTight = Math.max(0.6, dh * 0.05);      // on b2 (1/2)
-    rWide  = Math.max(0.8, dh * 0.045);     // on b8 (1/8)
-    rMid   = Math.max(0.7, dh * 0.06);      // on b4 (1/4), degraded mode only
-
+    radii(1);
     if (reAtlas || !atlas) buildAtlas();
+    pxImg = pxBuf = gOff = null;            // rebuilt lazily, and only if the pixel path engages
+  }
+
+  /* Each radius is expressed in ITS OWN buffer's pixels, so the 0.05/0.045 fractions below are
+   * the cell-relative full-resolution radii divided by the buffer's downsample factor. Landed on
+   * by matching tools/topng.py's 1.5px and 5.0px taps at its 9x16 cell, which is the render the
+   * art direction was signed off against.
+   *
+   * They are fractions of the REFERENCE cell, dh*D, not of the cell on glass. D is raycast's
+   * frame.D (cells per 200-column reference cell, 1 at or below it). Sized off the bare cell, a
+   * 360-column grid on 5x9 cells glows at a quarter of the area of the same street at 200x60 —
+   * the halo shrinks with the ink and the extra columns read as a darker, noisier picture rather
+   * than a finer one. At D=1 this is the old formula to the bit, floors included. */
+  function radii(D) {
+    var h = dh * D; rD = D;
+    rTight = Math.max(0.6, h * 0.05);       // on b2 (1/2)
+    rWide  = Math.max(0.8, h * 0.045);      // on b8 (1/8)
+    rMid   = Math.max(0.7, h * 0.06);       // on b4 (1/4), degraded mode only
   }
 
   function init(el) {
@@ -175,6 +203,102 @@
     c.globalAlpha = 1;
   }
 
+  /* ---- the pixel path ------------------------------------------------------------------------
+   * On a dense grid the glyph pass stops being a fill problem and becomes a CALL problem: 360x110
+   * is ~40k cells, each a drawImage with a state check and a blit of a few dozen pixels, and the
+   * pass grows with the cell count while the pixels on glass stay the same. Below PX_CELL device
+   * px of cell width it instead writes the scene's pixels straight from per-glyph sparse coverage
+   * lists (pixel offset + coverage, baked once per grid from the atlas's own alpha), then one
+   * putImageData. The cost is the screen, not the cells — flat in the column count. Same model as
+   * the drawImage path: dst = palette * lum/255 * coverage on black, which is exactly what
+   * source-over at globalAlpha onto black computes, so the two agree to within a level.
+   *
+   * INK COMPENSATION. At 5 px a bold stroke is ~0.8 px wide; antialiasing spreads it over two
+   * pixels at half value, so the cell's PEAK drops ~20% (measured: p99 128 -> 104 on one frame
+   * printed at 200 and 400 cols) while its mean holds — the picture prints darker and greyer for
+   * no reason in the data. Coverage is lifted by cov' = 1-(1-cov)^k, k = 1 + INK*(PX_REF-dw)/PX_REF,
+   * which only engages on small cells: at 9 px and up it is the identity. It lives in the print,
+   * not the data, so the lum fixtures and the census never see it.
+   *
+   * 'auto' is the shipping mode; true/false force it for the harness. Anything that throws while
+   * baking (a shim with no getImageData, a tainted context) or a big-endian host, where the packed
+   * 0xAABBGGRR word below lands in the wrong channels, leaves the drawImage path in charge for good. */
+  var PX_CELL = 7, PX_REF = 9, INK = 1.6;
+  var pxMode = false, pxDead = new Uint8Array(new Uint32Array([1]).buffer)[0] !== 1, pxLast = false;
+  var pxImg = null, pxBuf = null, gIdx = null, gCov = null, gOff = null, pal = null;
+
+  function pxReady() {
+    if (gOff) return true;
+    if (pxDead) return false;
+    try {
+      var tw = NG * dw, d = actx.getImageData(0, 0, tw, dh).data;   // palette row 0: alpha IS ink
+      var k = dw >= PX_REF ? 1 : 1 + INK * (PX_REF - dw) / PX_REF;
+      var I = [], C = [], off = [0];
+      for (var gI = 0; gI < NG; gI++) {
+        for (var y = 0; gI && y < dh; y++)
+          for (var x = 0; x < dw; x++) {
+            var v = d[(y * tw + gI * dw + x) * 4 + 3] / 255;
+            if (v < 0.02) continue;
+            /* 257, not 256: with the +32768 rounding below a full-ink cell at lum 255 lands on
+             * 255 exactly, as globalAlpha 1 does, instead of a level short. */
+            I.push(y * W + x); C.push(Math.round((1 - Math.pow(1 - v, k)) * 257));
+          }
+        off.push(I.length);
+      }
+      pal = new Uint16Array(NP * 3);
+      for (var q = 0; q < NP; q++) { pal[q * 3] = PALETTE[q][0]; pal[q * 3 + 1] = PALETTE[q][1]; pal[q * 3 + 2] = PALETTE[q][2]; }
+      pxImg = sctx.createImageData(W, H);
+      pxBuf = new Uint32Array(pxImg.data.buffer);
+      gIdx = new Int32Array(I); gCov = new Uint16Array(C); gOff = new Int32Array(off);
+      return true;
+    } catch (e) { pxDead = true; gOff = null; return false; }
+  }
+
+  function glyphPassPx(f) {
+    var b = pxBuf;
+    b.fill(0xFF000000);
+    var ch = f.ch, cl = f.col, lu = f.lum, fc = f.cols;
+    var nc = cols < fc ? cols : fc, nr = rows < f.rows ? rows : f.rows;
+    for (var y = 0; y < nr; y++) {
+      var row = y * fc, base0 = y * dh * W;
+      for (var x = 0; x < nc; x++) {
+        var ci = row + x, gI = ch[ci];
+        if (gI === 0) continue;
+        var L = lu[ci];
+        if (L < LUM_FLOOR) continue;
+        /* lum folded into the colour once per cell; coverage is 0..257, so >>16 is /255 */
+        var c = cl[ci] * 3, r = pal[c] * L, g = pal[c + 1] * L, bl = pal[c + 2] * L;
+        var base = base0 + x * dw, e = gOff[gI + 1];
+        for (var j = gOff[gI]; j < e; j++) {
+          var cv = gCov[j];
+          b[base + gIdx[j]] = 0xFF000000 | (((bl * cv + 32768) >> 16) << 16) |
+                              (((g * cv + 32768) >> 16) << 8) | ((r * cv + 32768) >> 16);
+        }
+      }
+    }
+    sctx.putImageData(pxImg, 0, 0);
+  }
+
+  function setPixelPath(on) { pxMode = on === 'auto' ? on : !!on; }
+
+  /* ---- the underlay --------------------------------------------------------------------------
+   * f.under is RGB per cell (cols*rows*3; the craft prototype's RGBA *4 is accepted too, the
+   * stride is read off the length). Copied into the one-pixel-per-cell buffer every frame, and the
+   * copy doubles as the all-zero test: a field with nothing in it (CC.Compose.UNDER = 0) is never
+   * drawn, so the kill switch restores today's composite op for op, not just to within rounding. */
+  function underlay(f) {
+    var u = f.under, fc = f.cols, s = u && u.length / (fc * f.rows);
+    if (!uimg || (s !== 3 && s !== 4)) return false;
+    var d = uimg.data, any = 0, nc = cols < fc ? cols : fc, nr = rows < f.rows ? rows : f.rows;
+    for (var y = 0; y < nr; y++)
+      for (var x = 0, o = y * cols * 4, i = y * fc * s; x < nc; x++, o += 4, i += s) {
+        any |= (d[o] = u[i]) | (d[o + 1] = u[i + 1]) | (d[o + 2] = u[i + 2]);
+        d[o + 3] = 255;
+      }
+    if (any) uctx.putImageData(uimg, 0, 0);
+    return !!any;
+  }
+
   /* ---- bloom ---------------------------------------------------------------------------------
    * 'copy' rather than clearRect-then-draw: it replaces the destination in one op, which both
    * clears the buffer and writes it, and it is what makes the fallback path free. */
@@ -196,6 +320,14 @@
     ctx.imageSmoothingQuality = 'high';
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'copy';
+    if (underOn) {
+      /* Unsmoothed, so each cell is one flat block and the grid survives; 'copy' clears and
+       * writes in one op, then the scene ADDS over it — light on light, as everything above. */
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(ubuf, 0, 0, W, H);
+      ctx.imageSmoothingEnabled = true;
+      ctx.globalCompositeOperation = 'lighter';
+    }
     ctx.drawImage(scene, 0, 0);
     if (quality <= 0) { ctx.globalCompositeOperation = 'source-over'; return; }
 
@@ -229,12 +361,17 @@
 
   function draw(f) {
     if (!ctx || !atlas) return;
-    glyphPass(f);
+    var D = f.D > 1 ? f.D : 1;
+    if (D !== rD) radii(D);
+    underOn = !!f.under && underlay(f);
+    pxLast = (pxMode === 'auto' ? dw <= PX_CELL : pxMode) && pxReady();
+    if (pxLast) glyphPassPx(f); else glyphPass(f);
     composite();
   }
 
   CC.Canvas = {
-    init: init, setGrid: setGrid, setQuality: setQuality, draw: draw,
+    init: init, setGrid: setGrid, setQuality: setQuality, draw: draw, setPixelPath: setPixelPath,
+    get pixelPath() { return pxLast; },
     get cellAspect() { return dh ? dw / dh : 0.5625; },
     get quality() { return quality; },
     get hasFilter() { return HAS_FILTER; },

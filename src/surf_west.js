@@ -1463,8 +1463,22 @@
        * blue dome and is nowhere near the line — that version put a point of muddy back on.
        *
        * On the fill, so night and both twilights are the identity: at dFill 0 this is exactly 1 and
-       * the sunset ladder above is the one being used anyway. */
-      var dayHz = 1 - 0.20 * dFill;
+       * the sunset ladder above is the one being used anyway.
+       *
+       * 0.65 SINCE THE UNDERPAINTING, and the reason is that the dome is no longer what carries the
+       * sky's colour. core.js lays the sky table under every sky cell, and at noon in the low band
+       * that is already ~(110,137,175); the canvas ADDS the glyph's ink to it, so a white '=' at the
+       * old 0.80 put (154,161,168) on top and burned every stroke to white — the noon dome printed
+       * as venetian blinds, and 66% of the frame's clipped pixels were these two tiers (seed 7: 3.02%
+       * of the frame with the underpainting, 0.03% without). Measured over the low centre sky at seed
+       * 7 noon, 300x95, 6x11: pixels burned WHITE (every channel >= 240) 6.63% -> 1.80%, with the
+       * band's mean luma 131 -> 124, so the sky is the same brightness and the strokes are pale-blue
+       * streaks in it rather than white bars on it. Pixels with any one channel at 250+ only go
+       * 11.2% -> 8.2%: what is left is the BLUE channel of a pale stroke on a blue sky topping out,
+       * which is not a burn. 0.45 was tried first and left most of the white (5.46%). Capping the
+       * UNDERPAINTING under the strokes instead was tried and rejected — per channel it turned the
+       * ice tiers' sky green, and floored it left the few blank cells as bright specks. */
+      var dayHz = 1 - 0.65 * dFill;
       if (e > 0.80) return sset(G_EQ, P.white, dayHz * 214 * (0.80 + 0.24 * e) * (0.88 + 0.18 * hs2));
       if (e > 0.62) return sset(G_DASH, P.white, dayHz * 176 * (0.72 + 0.32 * e) * (0.86 + 0.22 * hs2));
       if (e > 0.38) return sset(G_TICK, P.ice, 168 * (0.62 + 0.50 * e) * (0.82 + 0.30 * hs2));
@@ -1534,6 +1548,13 @@
   CC.SurfWest.dayAt = dayAt;
   /* Self-registration: surfaces.js never learns this file's name. */
   if (!CC.SURFACES) CC.SURFACES = {};
+  /* The frontier's sky for the underpainting (core.js, CC.Compose): night, noon and dusk, each a
+   * zenith then a horizon. Desert air is dry and high, so the noon zenith is a deep saturated blue
+   * and the horizon pales toward dust rather than toward white, and the dusk horizon is the
+   * hottest in the fleet — a clear sky over sand is the one place a sunset is that orange. The
+   * noon pair was 80,130,196 / 214,200,170 and is a step down: the horizon under white sky dashes
+   * and lit cobbles was clipping 4% of the frame to flat white at noon. */
+  CC.SurfWest.SKY_RGB = [3,4,12,26,28,48, 74,122,186,180,170,148, 48,52,96,232,132,60];
   CC.SURFACES.west = CC.SurfWest;
   if (typeof module !== 'undefined') module.exports = CC.SurfWest;
 })(typeof CC !== 'undefined' ? CC : require('./core.js'));

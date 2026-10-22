@@ -1,15 +1,18 @@
-/* CyberCity build — concatenate src/ into one self-contained index.html.
+/* CyberCity build — concatenate src/ into index.html plus one script per secondary world.
  *
  * No dependencies, no bundler, no minifier, no source maps. The modules were written to be
  * concatenated: each is an IIFE that resolves CC out of lexical scope, so wrapping the lot in one
  * more IIFE is the entire "bundling" step. Everything this script does beyond `join('\n')` is
- * removing the CommonJS tails that exist only so tools/headless.cjs can require the same files.
+ * removing the CommonJS tails that exist only so tools/headless.cjs can require the same files,
+ * and — since the split, see THE SPLIT below — parking three worlds' modules in w/*.js so that
+ * the one IIFE can call them back in at exactly the place they used to sit.
  *
  * Run: node build.js
  */
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const ROOT = path.join(__dirname);
 const SRC = path.join(ROOT, 'src');
@@ -195,51 +198,123 @@ function decomment(src) {
   return out.replace(/[ \t]+$/gm, '').replace(/\n{2,}/g, '\n\n').trim();
 }
 
+/* ---- THE SPLIT --------------------------------------------------------------------------------
+ * Three worlds leave index.html. Each one's painter and its prefixed elements go to w/<world>.js,
+ * and the page loads those with plain synchronous <script src> tags placed BEFORE the inline
+ * script — the essay at the bottom of this file is the decision and the reason; this is the how.
+ *
+ * THE CHUNKS DEFINE, THEY DO NOT RUN. Each module in a chunk is wrapped as one function filed under
+ * its src/ path in a single scratch global, self.CCW, and the inline IIFE calls each one back
+ * (`W(path)`) at exactly the place in ORDER the module used to be pasted. That is the whole design,
+ * and the obvious alternative — cut the inline script into two tags and let the chunks run between
+ * them — was measured against it and lost on two counts:
+ *   REGISTRATION ORDER IS STATE. Elements push onto CC.ELEMENTS in file order, main.js sorts by
+ *     layer with ties broken by that order, and every element draws from ONE shared rng in that
+ *     sequence. jp_* sorts between hud.js and market.js; running the chunks as a block would move
+ *     four Edo elements behind eleven shared ones and reseed whatever ties them — a different
+ *     frame in the browser from the one tools/headless.cjs renders, with nothing failing.
+ *   A SECOND TAG IS A SECOND SCOPE. The bundle is one IIFE with one `var CC` and nothing on window;
+ *     two tags cannot share a lexical scope, so CC would have to become a global for good.
+ * Filed-and-called-back keeps both: execution order is byte-for-byte today's ORDER, and the only
+ * global is CCW, which the inline script takes a reference to and deletes on its first line.
+ *
+ * A MISSING CHUNK DEGRADES, IT DOES NOT BREAK. W() skips a path nobody filed, so a w/ file that
+ * failed to load costs that world (it renders as the city, see raycast.js) and the default city
+ * still boots. tools/domshim.cjs runs the real tags in DOM order and fails if any are absent, which
+ * is where that has to be caught — not in the visitor's browser.
+ *
+ * AND A CHUNK THAT THROWS DEGRADES THE SAME WAY, which the sentence above used to promise without
+ * doing. A module is called back synchronously inside the ONE bundle IIFE, so an exception in it
+ * aborted every module after it — render_canvas.js and main.js included — and the page stayed
+ * black. W() now catches, logs, and carries on: the world that threw is lost, the city is not.
+ * The likeliest way to get there is not a bug but a CACHE: the bundle and its chunks are a matched
+ * pair (a chunk's body uses whatever CC API its bundle had), and GitHub Pages serves both with
+ * max-age 600, so for ten minutes after a deploy a visitor can hold a new page and an old chunk.
+ * Each tag therefore carries ?v=<the chunk's content hash>, so a new bundle always asks for its
+ * own chunk by a URL no cache has seen; the catch is for whatever still gets through.
+ *
+ * Routing is by NAME, matching how @painters and @elements already glob: a world's painter plus
+ * every element carrying its prefix. A painter or element no rule claims stays inline, so a new
+ * world lands in index.html until somebody gives it a chunk — the safe default, since inline is
+ * what has always worked. */
+const CHUNKS = [
+  ['west', /^(surf_west\.js|elements\/west_)/],
+  ['jp',   /^(surf_japan\.js|elements\/jp_)/],
+  ['moon', /^(surf_moon\.js|elements\/moon_)/]
+];
+const WDIR = path.join(ROOT, 'w');
+const CAP_PAGE = 600 * 1024, CAP_CHUNK = 160 * 1024;
+
 const files = expand(ORDER);
-const parts = files.map(p => {
-  const rel = path.relative(ROOT, p).split(path.sep).join('/');
-  return '/* ' + rel + ' */\n' + decomment(strip(fs.readFileSync(p, 'utf8'))) + '\n';
-});
+const inline = [], chunkParts = {}, chunkFiles = {};
+for (const [w] of CHUNKS) { chunkParts[w] = []; chunkFiles[w] = []; }
+for (const p of files) {
+  const rel = path.relative(SRC, p).split(path.sep).join('/');
+  /* ---- one 'use strict', not thirty-three -----------------------------------------------------
+   * Every module in src/ opens its IIFE with `'use strict';` because every module is also
+   * `require`d on its own by tools/headless.cjs, where nothing else would supply it. Concatenated,
+   * that is 33 copies of the same 13-byte directive inside one wrapper that is itself sloppy-mode —
+   * so the directive is doing real work per module and cannot simply be deleted.
+   *
+   * Hoisting it is the cut. One directive on the wrapper makes the WHOLE bundle strict, which is
+   * exactly the union of what the 33 were doing individually, and there is no code in the bundle
+   * outside a module IIFE for it to newly apply to. 481 bytes, and the only non-content cut left
+   * after the dead-identifier sweep that does not touch a line of source. A chunked module's
+   * wrapper function carries the directive instead, since a w/ file is its own script and would
+   * otherwise be sloppy.
+   *
+   * The match is deliberately narrow: a line whose ENTIRE content is the directive. A `'use strict'`
+   * inside a string literal or trailing another statement is left alone, because this runs after
+   * decomment() and has no parser to tell it apart. */
+  const body = ('/* src/' + rel + ' */\n' + decomment(strip(fs.readFileSync(p, 'utf8'))) + '\n')
+    .replace(/^[ \t]*(['"])use strict\1;[ \t]*$\n?/gm, '');
+  const hit = CHUNKS.find(c => c[1].test(rel));
+  if (!hit) { inline.push(body); continue; }
+  chunkFiles[hit[0]].push(p);
+  chunkParts[hit[0]].push('W[' + JSON.stringify(rel) + '] = function (CC) {\n\'use strict\';\n' + body + '};\n');
+  inline.push('W(' + JSON.stringify(rel) + ');\n');
+}
 
 /* One IIFE, one `var CC`. core.js declares CC with `var`, so it is hoisted to the top of this
  * function and every later module's `typeof CC !== 'undefined'` guard sees it. Nothing leaks to
- * window, which is the point: the page has no API surface to poke at. */
-/* ---- one 'use strict', not thirty-three -------------------------------------------------------
- * Every module in src/ opens its IIFE with `'use strict';` because every module is also `require`d
- * on its own by tools/headless.cjs, where nothing else would supply it. Concatenated, that is 33
- * copies of the same 13-byte directive inside one wrapper that is itself sloppy-mode — so the
- * directive is doing real work per module and cannot simply be deleted.
- *
- * Hoisting it is the cut. One directive on the wrapper makes the WHOLE bundle strict, which is
- * exactly the union of what the 33 were doing individually, and there is no code in the bundle
- * outside a module IIFE for it to newly apply to. 481 bytes, and the only non-content cut left
- * after the dead-identifier sweep that does not touch a line of source.
- *
- * The match is deliberately narrow: a line whose ENTIRE content is the directive. A `'use strict'`
- * inside a string literal or trailing another statement is left alone, because this runs after
- * decomment() and has no parser to tell it apart. */
-const parts2 = parts.map(p => p.replace(/^[ \t]*(['"])use strict\1;[ \t]*$\n?/gm, ''));
-const bundle = "(function () {\n'use strict';\n" + parts2.join('\n') + '\n})();\n';
+ * window, which is the point: the page has no API surface to poke at. W is declared ahead of
+ * core.js's `var CC` but only ever CALLED after it, so every chunk receives the live object. */
+const bundle = "(function () {\n'use strict';\nvar W = (function (o) { delete self.CCW; " +
+  "return function (k) { if (o[k]) try { o[k](CC); } catch (e) { console.error(k, e); } }; })(self.CCW || {});\n" + inline.join('\n') + '\n})();\n';
+const chunks = CHUNKS.filter(([w]) => chunkParts[w].length).map(([w]) => ({
+  name: w, rel: 'w/' + w + '.js', files: chunkFiles[w],
+  text: '/* CyberCity — ' + w + ' world. Generated by build.js from src/; loaded by index.html, which\n' +
+        ' * calls each function below back at its place in the build order. Do not edit by hand. */\n' +
+        "(function (W) {\n" + chunkParts[w].join('\n') + '})(self.CCW || (self.CCW = {}));\n'
+}));
 
-/* The page must open with ZERO network requests, so nothing may reference a module loader. */
-if (/\brequire\s*\(/.test(bundle)) throw new Error('build: a require() survived the strip');
-if (/\bmodule\.exports\b/.test(bundle)) throw new Error('build: a module.exports survived the strip');
-if (/\bimport\s|\bexport\s/.test(bundle)) throw new Error('build: ESM syntax in the bundle');
-/* A literal closing script tag anywhere in the sources would end the inline block early and dump
- * the rest of the city into the document as text. */
-if (/<\/script/i.test(bundle)) throw new Error('build: source contains a closing script tag');
+/* Every check that used to run on the one bundle now runs on EVERY script that ships, and the
+ * global list runs on their concatenation: a painter that moved to a chunk still has to be in
+ * the deliverable, it just no longer has to be in index.html. */
+const shipped = [{ rel: 'index.html', text: bundle }].concat(chunks);
+for (const c of shipped) {
+  const t = c.text, at = ' (' + c.rel + ')';
+  /* The page must open with no module loader, so nothing may reference one. */
+  if (/\brequire\s*\(/.test(t)) throw new Error('build: a require() survived the strip' + at);
+  if (/\bmodule\.exports\b/.test(t)) throw new Error('build: a module.exports survived the strip' + at);
+  if (/\bimport\s|\bexport\s/.test(t)) throw new Error('build: ESM syntax in the bundle' + at);
+  /* A literal closing script tag anywhere in the sources would end the inline block early and dump
+   * the rest of the city into the document as text. A chunk is not inline and could survive one,
+   * and is held to the same rule anyway so a module can move between the two without re-checking. */
+  if (/<\/script/i.test(t)) throw new Error('build: source contains a closing script tag' + at);
+  /* Compiles each script without running it. This is what makes the comment scanner safe to
+   * trust: if it ever mangles a regex literal or a template string, the build stops here. */
+  try { new Function(t); }
+  catch (e) { throw new Error('build: ' + c.rel + ' does not parse — ' + e.message); }
+}
 
 /* Every module named its global; if one is missing it was dropped, mis-ordered, or the comment
  * scanner ate something structural. Cheap, and it has caught both. */
+const all = shipped.map(c => c.text).join('\n');
 for (const need of ['var CC', 'CC.City', 'CC.Surf', 'CC.Cast', 'CC.Canvas', 'CC.Main',
                     'CC.World', 'CC.SurfWest', 'CC.SurfMoon', 'CC.SurfJapan',
                     'CC.Daylight', 'CC.ELEMENTS.push'])
-  if (!bundle.includes(need)) throw new Error('build: bundle is missing ' + need);
-
-/* Compiles the bundle without running it. This is what makes the comment scanner safe to trust:
- * if it ever mangles a regex literal or a template string, the build stops here. */
-try { new Function(bundle); }
-catch (e) { throw new Error('build: bundle does not parse — ' + e.message); }
+  if (!all.includes(need)) throw new Error('build: bundle is missing ' + need);
 
 /* The page is black before a single pixel of city is drawn — html, body and canvas all — so that
  * entering fullscreen never flashes white and never shows a seam at an edge the canvas overhangs.
@@ -294,19 +369,33 @@ ${BASELINE}<style>
 <canvas id="cc"></canvas>
 <div id="hint">click for fullscreen</div>
 <a id="legal" href="https://carino.systems/legal.html">Legal</a>
-<script>
+${chunks.map(c => '<script src="' + c.rel + '?v=' + crypto.createHash('sha1').update(c.text).digest('hex').slice(0, 10) + '"></script>\n').join('')}<script>
 ${bundle}</script>
 </body>
 </html>
 `;
 
 fs.writeFileSync(OUT, HTML, 'utf8');
+/* w/ is rewritten whole: a chunk this build did not produce (a world renamed or folded back
+ * inline) would otherwise sit there being published and never loaded. */
+fs.mkdirSync(WDIR, { recursive: true });
+for (const f of fs.readdirSync(WDIR))
+  if (f.endsWith('.js') && !chunks.some(c => c.rel === 'w/' + f)) fs.unlinkSync(path.join(WDIR, f));
+for (const c of chunks) fs.writeFileSync(path.join(ROOT, c.rel), c.text, 'utf8');
 
+const kb = n => n + ' bytes  (' + (n / 1024).toFixed(1) + ' KB)';
 const bytes = Buffer.byteLength(HTML, 'utf8');
+let over = false;
 for (const p of files)
   console.log('  + ' + path.relative(ROOT, p).split(path.sep).join('/'));
-console.log('index.html  ' + bytes + ' bytes  (' + (bytes / 1024).toFixed(1) + ' KB)  ' +
-            files.length + ' modules');
+console.log('index.html  ' + kb(bytes) + '  ' + (files.length - chunks.reduce((n, c) => n + c.files.length, 0)) +
+            ' modules  headroom ' + (CAP_PAGE - bytes));
+if (bytes > CAP_PAGE) { console.error('build: index.html is over the 600 KB budget'); over = true; }
+for (const c of chunks) {
+  const n = Buffer.byteLength(c.text, 'utf8');
+  console.log(c.rel.padEnd(11) + ' ' + kb(n) + '  ' + c.files.length + ' modules  headroom ' + (CAP_CHUNK - n));
+  if (n > CAP_CHUNK) { console.error('build: ' + c.rel + ' is over the 160 KB per-world budget'); over = true; }
+}
 /* THE BUDGET WAS 200 KB AND IT IS NOW 300 KB. That is a raise, not a discovery, and it is being
  * written down rather than quietly deleted. src/ went from roughly 190 KB to roughly 530 KB in one
  * pass — twelve new ambient elements, a weather director every element reads, four input devices,
@@ -545,8 +634,39 @@ console.log('index.html  ' + bytes + ' bytes  (' + (bytes / 1024).toFixed(1) + '
  * tree and it is worth two thousand bytes. A world is thirty thousand. Splitting the payload costs
  * the "one self-contained file" property, which is the first line of CONTRACT.md and is a real
  * loss — but it is the only remaining answer that is not "ship less", and it should be taken
- * deliberately, by someone who has decided that trade, rather than discovered at this line again. */
-if (bytes > 600 * 1024) {
-  console.error('build: index.html is over the 600 KB budget');
-  process.exit(1);
-}
+ * deliberately, by someone who has decided that trade, rather than discovered at this line again.
+ *
+ * ---- AND THE PASS AFTER THAT SPLIT IT. ONE 600 KB LINE -> 600 KB + 3 x 160 KB. ----
+ * Seventh time at this line, and the first time the answer is the one the last three paragraphs
+ * asked for. It was DECIDED, by the owner, before a byte of it was written — which is the condition
+ * the paragraph directly above set — and this is the record of what was traded.
+ *
+ * WHY NOW: the high-definition pass (an underpainting behind the glyphs, a pixel-path printer,
+ * density-correct optics) was costed at 8.5-9 KB against 1,983 bytes of headroom. The banked
+ * duplication cut is 2.35 KB of it. No ordering of the three moves closes that, and the fourth
+ * option — the next world — was already known not to fit. So it split.
+ *
+ * WHAT WAS SPENT: the "one self-contained file" property. index.html is still the page, still
+ * opens with no server (file:// runs classic <script src> fine), still makes no request outside
+ * its own folder — but it is now one file and a w/ directory, and copying index.html alone gets
+ * you the city and three worlds that render as the city. CONTRACT.md's first line says so now.
+ *
+ * WHAT WAS CONSIDERED AND REFUSED:
+ *   ONE FILE, COMPRESSED. A deflate-raw blob inflated by DecompressionStream at boot is ~210 KB and
+ *     roughly triples the headroom while keeping one file. It also turns the page source into a
+ *     base64 wall — the thing the indentation refusal has protected three times — puts an async
+ *     step in front of a boot that has never had one, and drops every browser without that API.
+ *   LAZY CHUNKS. Fetching a world when it is first selected is the smaller first load, and it is
+ *     the one that changes behaviour: init order, the shared rng sequence and the world switch would
+ *     all gain an await. Synchronous tags cost ~220 KB of parse on a first visit and nothing else.
+ *   TWO INLINE TAGS WITH THE CHUNKS RUN BETWEEN THEM, which is the plan's first sketch. It reorders
+ *     CC.ELEMENTS and promotes CC to a global — see THE SPLIT above for why both matter.
+ *
+ * WHAT THE LINES ARE NOW, and both are hard stops: index.html at 600 KB (the old number, kept, now
+ * holding the engine and the city with about 220 KB under it), and each w/*.js at 160 KB — a little
+ * over twice the biggest world (the frontier, ~94 KB) so one world can double before anyone is here
+ * again. A fifth world is a fourth chunk and a CHUNKS row, not a raise.
+ *
+ * WHAT IS NOT LICENSED: reading 220 KB of headroom as permission. Every essay above that ended with
+ * room to spare was followed by a pass that spent it. Cut first, still. */
+if (over) process.exit(1);

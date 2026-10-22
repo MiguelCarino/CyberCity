@@ -1,6 +1,19 @@
 /* PHOTOSENSITIVITY REGRESSION TEST for src/elements/weather.js's lightning.
  *
- *   node tools/lightning-rate.cjs [seed] [seconds]
+ *   node tools/lightning-rate.cjs [seed] [seconds] [--sky=storm] [--composite] [--cols=60] [--rows=20]
+ *
+ * --composite IS A DIFFERENT SCENE, NOT JUST A DIFFERENT SUM, and that is deliberate. The flat wall
+ * below is white structure, and white does not emit: on it the underpainting cannot move at all —
+ * its mass term reads the world snapshot taken before the stroke, and its spill only fires on the
+ * emitting swatches — so a composite measured there would be a green light about a wall the stroke
+ * cannot reach through the wash. The way a stroke DOES reach it is a lit sign: the flash adds lum
+ * to an amber or azure cell, the cell crosses the spill's threshold, and the pool round it brightens
+ * with the stroke. So in composite mode the backdrop is the REAL world pass at the start pose, at
+ * night (the darkest baseline is the largest relative flash), rendered once and held, and only the
+ * lightning element is drawn over it. The series is the mean light the screen EMITS above that
+ * held frame, per tools/composite.cjs, and the same two envelope rules are applied to it. Both
+ * modes also run the area-weighted WCAG general-flash check on what prints, because lightning is
+ * the one event in the build that lights the whole viewport at once.
  *
  * Drives the real element against a synthetic uniform wall, so what comes out is the element's own
  * intensity envelope with no city geometry modulating it, sampled once per 60 Hz frame. It prints
@@ -59,6 +72,10 @@ for (const rel of ['src/world.js', 'src/proj.js', 'src/daylight.js', 'src/weathe
 const edir = path.join(root, 'src/elements');
 for (const fn of fs.readdirSync(edir).sort()) if (fn.endsWith('.js')) require(path.join(edir, fn));
 const CC = global.CC;
+const CP = require('./composite.cjs')(CC), M = CP.mode(process.argv, 60, 20);
+/* init() sees the dimensions the shipped run has always handed it unless a size was asked for: the
+ * elements share one rng, and a different deal upstream would be a different storm seed here. */
+const SIZED = process.argv.some(a => /^--(cols|rows)=/.test(a));
 
 const MIN_PEAK_GAP = 0.34;      // seconds
 const MAX_FRAME_STEP = 0.34;    // fraction of the stroke's peak
@@ -86,33 +103,59 @@ function pinSky() {
   P.name = P.from = P.to = PIN.name; P.blend = 1;
 }
 const els = CC.ELEMENTS.filter(function (e) { return CC.inWorld(e, CC.World.id); }).sort((a, b) => (a.layer | 0) - (b.layer | 0));
-for (const el of els) if (el.init) el.init(city, rng, { cols: 200, rows: 60 });
+for (const el of els) if (el.init) el.init(city, rng, SIZED ? { cols: M.cols, rows: M.rows } : { cols: 200, rows: 60 });
 const lg = els.find(e => e.name === 'lightning');
 if (!lg) { console.error('no lightning element'); process.exit(2); }
 
 /* A flat wall at 8 m filling the frame. Every cell is eligible, so the sum of what the element adds
  * is proportional to its intensity and nothing else. */
-const f = CC.makeFrame(60, 20);
+const f = CC.makeFrame(M.cols, M.rows);
 const cam = { x: city.startX, z: city.startZ, yaw: 0, eyeY: 1.7, fov: 1.25,
-              horizon: 11.2, cellAspect: 0.5625, t: 0 };
+              horizon: M.rows * 0.56, cellAspect: 0.5625, t: 0 };
 const N = SECS * 60, S = new Float64Array(N);
+/* COMPOSITE: the held backdrop (see the header). Rendered once, at night, through the same caster
+ * main.js uses, and copied into the frame each tick so the stroke is the only thing that changes. */
+const KS = ['ch', 'col', 'lum', 'dist', 'kind'], HELD = CC.makeFrame(M.cols, M.rows);
+const V = new Float32Array(f.n), Y = new Float32Array(f.n), Y0 = new Float32Array(f.n), fl = CP.Flash(M.cols, M.rows);
+function fill() {
+  if (M.comp) { for (const k of KS) f[k].set(HELD[k]); f.D = HELD.D; CC.Compose.world(f); }
+  else for (let i = 0; i < f.n; i++) { f.ch[i] = 1; f.col[i] = 5; f.lum[i] = 40; f.dist[i] = 8; f.kind[i] = 1; }
+}
+let base = 0;
+if (M.comp) {
+  if (CC.Daylight) CC.Daylight.set('night', 0);
+  CC.clearFrame(HELD); CC.Cast.render(HELD, cam, city);
+}
+fill(); CC.Compose.post(f, cam, 0); CP.light(f, V, Y0);
+for (let i = 0; i < f.n; i++) base += V[i];
+base /= f.n;
 for (let k = 0; k < N; k++) {
   const t = k / 60;
   /* The director is ticked in lockstep, exactly as main.js does it, because the element reads the
    * live P block every frame and a stale one would freeze the storm ramp mid-transition. */
   if (CC.Weather) { CC.Weather.update(1 / 60, t); pinSky(); }
   lg.update(1 / 60, t, cam);
-  for (let i = 0; i < f.n; i++) { f.ch[i] = 1; f.col[i] = 5; f.lum[i] = 40; f.dist[i] = 8; f.kind[i] = 1; }
+  fill();
   lg.draw(f, cam, t);
-  let sum = 0; for (let i = 0; i < f.n; i++) sum += f.lum[i] - 40;
-  S[k] = sum / f.n;
+  /* A frame the stroke did not touch is the held frame, and its light is already known: the print
+   * pass runs only when something moved, which is one tick in fifty under a storm. */
+  let moved = false;
+  if (M.comp) { for (let i = 0; i < f.n && !moved; i++) moved = f.lum[i] !== HELD.lum[i] || f.ch[i] !== HELD.ch[i]; }
+  else { let sum = 0; for (let i = 0; i < f.n; i++) sum += f.lum[i] - 40; S[k] = sum / f.n; moved = sum !== 0; }
+  if (!moved) { fl.push(Y0); continue; }
+  CC.Compose.post(f, cam, t); CP.light(f, V, Y); fl.push(Y);
+  if (M.comp) { let sum = 0; for (let i = 0; i < f.n; i++) sum += V[i]; S[k] = sum / f.n - base; }
 }
+const FL = fl.result();
+console.log(`frames: ${M.tag}${M.comp ? ', held night backdrop at the start pose, light emitted above it' : ''}`);
+console.log(CP.fmt(FL) + (FL.bad ? '   FAIL (general flash)' : '   ok'));
 
 let bi = 0; for (let k = 0; k < N; k++) if (S[k] > S[bi]) bi = k;
 /* An empty window is NOT a pass, and it used to exit 0 right here — see the exit-code table at the
  * top. The flag is carried down instead so that the sky-rate census below still runs and still
  * prints (it reports the honest zeros), and the verdict is decided once, at the bottom. */
 const NOSTRIKE = S[bi] <= 0;
+const UNIT = M.comp ? 'added light emitted per cell, display 0..255' : 'added luminance per cell';
 const a = Math.max(0, bi - 8), b = Math.min(N, bi + 84);
 
 /* HOW OFTEN, across the WHOLE window, not just inside the one stroke printed below. The per-stroke
@@ -150,12 +193,12 @@ if (NOSTRIKE) {
               `NOT exercised — nothing to measure, so nothing is verified. Try another seed, or a ` +
               `sky whose P.storm is non-zero (storm, rain, drizzle) if you meant to test them.`);
   console.log('NOT APPLICABLE');
-  console.log(`RESULT: NOT_APPLICABLE ${SKY}`);
+  console.log(`RESULT: NOT_APPLICABLE ${SKY} ${M.comp ? 'composite' : 'lum'} ${M.cols}x${M.rows}`);
   process.exit(3);
 }
 
 console.log(`seed ${seed}: strongest stroke peaks at t=${(bi / 60).toFixed(2)}s.`);
-console.log('added luminance per cell, one value per 60 Hz frame:');
+console.log(UNIT + ', one value per 60 Hz frame:');
 const ser = []; for (let k = a; k < b; k++) ser.push(S[k].toFixed(2).padStart(6));
 for (let i = 0; i < ser.length; i += 12) console.log('   ' + ser.slice(i, i + 12).join(''));
 
@@ -164,7 +207,7 @@ for (let k = a + 1; k < b - 1; k++)
   if (S[k] >= S[k - 1] && S[k] > S[k + 1] && S[k] > S[bi] * 0.05) pk.push(k);
 console.log('maxima above 5% of peak: ' + (pk.map(k => (k / 60).toFixed(3) + 's').join(', ') || 'one only'));
 
-let ok = !rateBad;
+let ok = !rateBad && !FL.bad;
 for (let i = 1; i < pk.length; i++) {
   const dt = (pk[i] - pk[i - 1]) / 60;
   const bad = dt < MIN_PEAK_GAP;
@@ -184,5 +227,5 @@ console.log(`largest single-frame step ${(ms * 100).toFixed(1)}% of peak at t=${
 console.log(`  stroke peak ${(100 * S[bi] / 255).toFixed(1)}% of full scale; that step is ` +
             `${(100 * ms * S[bi] / 255).toFixed(2)}% of full scale`);
 console.log(ok ? 'PASS' : 'FAIL');
-console.log(`RESULT: ${ok ? 'PASS' : 'FAIL'} ${SKY}`);
+console.log(`RESULT: ${ok ? 'PASS' : 'FAIL'} ${SKY} ${M.comp ? 'composite' : 'lum'} ${M.cols}x${M.rows}`);
 process.exit(ok ? 0 : 1);

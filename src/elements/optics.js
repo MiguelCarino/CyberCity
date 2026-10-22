@@ -174,9 +174,9 @@
       for (var s = 0; s < SHAFTS; s++) {
         var tgt = s < found ? clamp((this.pkS[s] - 150) / 420, 0, 1) : 0;
         if (s < found) {
-          var dxs = this.pkX[s] - this.sx[s];
+          var dxs = this.pkX[s] - this.sx[s], jmp = 14 * (this.D || 1);
           // A jump of more than a few columns is a different source, not the same one moving.
-          if (this.ss[s] < 0.06 || dxs > 14 || dxs < -14) {
+          if (this.ss[s] < 0.06 || dxs > jmp || dxs < -jmp) {
             this.sx[s] = this.pkX[s]; this.sy[s] = this.pkY[s];
           } else {
             this.sx[s] += dxs * eP;
@@ -211,6 +211,7 @@
       var score = this.score, srcY = this.srcY, srcC = this.srcC, hits = this.hits;
       for (x = 0; x < cols; x++) { score[x] = 0; srcY[x] = -1; srcC[x] = 0; hits[x] = 0; }
 
+      var D = f.D || 1, iD = 1 / D, w2 = Math.round(2 * D), w9 = Math.round(9 * D);
       var yEnd = (hz + rows * 0.12) | 0;
       if (yEnd > rows - 1) yEnd = rows - 1;
       for (y = 0; y <= yEnd; y++) {
@@ -220,7 +221,7 @@
           if (l < 150) continue;
           var c = f.col[i];
           if (!this.isSource(c)) continue;
-          score[x] += l - 150;
+          score[x] += (l - 150) * iD;   // a column sum: D rows per reference row
           if (hits[x] < 255) hits[x]++;
           // The shaft hangs below the source, so the anchor is the LOWEST bright row, not the
           // brightest: a beam that starts at the middle of a blade sign reads as a mistake.
@@ -233,7 +234,7 @@
       var sm = this.smooth;
       for (x = 0; x < cols; x++) {
         var a = 0, n = 0;
-        for (i = x - 2; i <= x + 2; i++) if (i >= 0 && i < cols) { a += score[i]; n++; }
+        for (i = x - w2; i <= x + w2; i++) if (i >= 0 && i < cols) { a += score[i]; n++; }
         sm[x] = a / n;
       }
 
@@ -245,13 +246,13 @@
         // The smoothed peak can land a column or two off the actual glyphs, which would leave the
         // anchor row unset. Snap back onto the hottest real column inside the window.
         var pick = best, pv = -1;
-        for (i = best - 2; i <= best + 2; i++)
+        for (i = best - w2; i <= best + w2; i++)
           if (i >= 0 && i < cols && srcY[i] >= 0 && score[i] > pv) { pv = score[i]; pick = i; }
-        if (srcY[pick] < 0 || hits[pick] < 3) { sm[best] = 0; k--; continue; }
+        if (srcY[pick] < 0 || hits[pick] < 3 * D) { sm[best] = 0; k--; continue; }
         this.pkX[found] = pick; this.pkY[found] = srcY[pick];
         this.pkC[found] = srcC[pick]; this.pkS[found] = bv;
         found++;
-        for (i = best - 9; i <= best + 9; i++) if (i >= 0 && i < cols) sm[i] = 0;
+        for (i = best - w9; i <= best + w9; i++) if (i >= 0 && i < cols) sm[i] = 0;
       }
 
       // Sorted by column so slot i keeps tracking the same physical source between frames; an
@@ -271,6 +272,7 @@
       var cols = f.cols, rows = f.rows;
       this.sizeTo(cols);
       var hz = cam && cam.horizon !== undefined ? cam.horizon : rows * 0.56;
+      var D = this.D = f.D || 1;
       var found = this.detect(f, hz);
       /* Handed to update(), which owns the easing. draw() only ever READS the eased slots. */
       this.found = found;
@@ -317,7 +319,7 @@
         if (str < 0.07) continue;
 
         var x0 = this.sx[s], y0 = this.sy[s], hue = this.sc[s], tilt = this.tilt[s];
-        var L = (8 + 10 * str) * reach;
+        var L = (8 + 10 * str) * reach * D;
         // Rain drifting through the beam. Frozen to a constant under reduced motion — a shaft
         // that pulses is the single most distracting thing this file can do.
         var moving = !CC.reducedMotion;
@@ -331,11 +333,11 @@
            * as fast as it widens dies inside six rows and reads as dust round the lamp; keeping a
            * floor under it is what makes the beam reach the ground, which is the whole point. */
           var along = 0.30 + 0.70 * fall;
-          var hw = (0.62 + k * 0.22) * spread;
+          var hw = (0.62 * D + k * 0.22) * spread;
           var cxr = x0 + k * tilt;
           // Minus t, not plus: the sampling point has to travel DOWN the beam for the thickenings
           // to read as rain falling through it rather than as smoke rising out of the street.
-          var breathe = moving ? 0.70 + 0.44 * vnoise(k * 0.42 - t * 1.7 + s * 13.7, this.seed)
+          var breathe = moving ? 0.70 + 0.44 * vnoise(k / D * 0.42 - t * 1.7 + s * 13.7, this.seed)
                                : 0.90;
           var xa = Math.ceil(cxr - hw), xb = Math.floor(cxr + hw);
           for (x = xa; x <= xb; x++) {
@@ -432,9 +434,9 @@
       for (var s = 0; s < WASH; s++) {
         var tgt = s < found ? clamp((this.pkS[s] - W_ON) / (W_FULL - W_ON), 0, 1) : 0;
         if (s < found) {
-          var dxs = this.pkX[s] - this.sx[s];
+          var dxs = this.pkX[s] - this.sx[s], WD = this.D || 1;
           // Beyond a slot's tracking window this is a different lamp, not the same one moving.
-          if (this.ss[s] < 0.05 || dxs > 20 || dxs < -20) {
+          if (this.ss[s] < 0.05 || dxs > 20 * WD || dxs < -20 * WD) {
             this.sx[s] = this.pkX[s]; this.sy[s] = this.pkY[s]; this.lead[s] = 0;
           } else {
             this.sx[s] += dxs * eP;
@@ -443,7 +445,7 @@
              * gets a symmetric pool; something crossing the frame gets a wedge that runs ahead
              * of it, which is what makes a pass read as a sweep rather than as a lamp with a
              * glow stuck to it. */
-            this.lead[s] += (clamp(dxs * 1.7, -10, 10) - this.lead[s]) * eP;
+            this.lead[s] += (clamp(dxs * 1.7, -10 * WD, 10 * WD) - this.lead[s]) * eP;
           }
           this.sc[s] = this.pkC[s]; this.sd[s] = this.pkD[s];
         }
@@ -451,12 +453,16 @@
       }
     },
 
-    sizeTo: function (cols, rows) {
-      if (this.cols === cols && this.rows === rows) return;
-      this.cols = cols; this.rows = rows;
+    sizeTo: function (cols, rows, D) {
+      if (this.cols === cols && this.rows === rows && this.D === D) return;
+      this.cols = cols; this.rows = rows; this.D = D;
+      /* Tile in REFERENCE cells: 6x3 at 200 columns, 6D x 3D on a denser grid, so a tile is the
+       * same patch of screen and a lamp's energy lands in the same number of tiles. */
+      this.tX = Math.max(6, Math.round(6 * D)); this.tY = Math.max(3, Math.round(3 * D));
+      this.iA = 1 / (D * D);
       // Resize-time allocation only; a tile is 6x3 cells, which is about the size of a car at
       // fifteen metres and small enough that one shopfront does not swallow the whole frame.
-      this.tw = Math.ceil(cols / 6); this.th = Math.ceil(rows / 3);
+      this.tw = Math.ceil(cols / this.tX); this.th = Math.ceil(rows / this.tY);
       var n = this.tw * this.th;
       this.te = new Float32Array(n); this.tx = new Float32Array(n); this.ty = new Float32Array(n);
       this.tc = new Uint8Array(n); this.tl = new Uint8Array(n); this.td = new Float32Array(n);
@@ -465,11 +471,11 @@
     detect: function (f) {
       var cols = f.cols, rows = f.rows, tw = this.tw;
       var te = this.te, tx = this.tx, ty = this.ty, tc = this.tc, tl = this.tl, td = this.td;
-      var n = tw * this.th, i, x, y;
+      var n = tw * this.th, i, x, y, tX = this.tX, tY = this.tY, iA = this.iA;
       for (i = 0; i < n; i++) { te[i] = 0; tx[i] = 0; ty[i] = 0; tc[i] = 0; tl[i] = 0; td[i] = 0; }
 
       for (y = 0; y < rows; y++) {
-        var ry = ((y / 3) | 0) * tw;
+        var ry = ((y / tY) | 0) * tw;
         for (x = 0; x < cols; x++) {
           i = y * cols + x;
           var l = f.lum[i];
@@ -484,8 +490,8 @@
            * close. Linear weighting handed the whole frame to the parade of shopfronts at
            * fifteen metres, which is exactly the thing that is NOT a passing light. */
           var w = 1 - dd / W_NEAR; w *= w;
-          var e = (l - 150) * w;
-          var ti = ry + ((x / 6) | 0);
+          var e = (l - 150) * w * iA;   // energy per REFERENCE cell, so W_ON/W_FULL hold
+          var ti = ry + ((x / tX) | 0);
           te[ti] += e; tx[ti] += x * e; ty[ti] += y * e;
           if (l > tl[ti]) { tl[ti] = l; tc[ti] = c; td[ti] = dd; }
         }
@@ -526,8 +532,8 @@
     },
 
     draw: function (f, cam, t) {
-      var cols = f.cols, rows = f.rows;
-      this.sizeTo(cols, rows);
+      var cols = f.cols, rows = f.rows, D = f.D || 1;
+      this.sizeTo(cols, rows, D);
       var found = this.detect(f);
       this.found = found;
 
@@ -567,7 +573,7 @@
         var cx = this.sx[s], cy = this.sy[s], srcD = this.sd[s], hue = this.sc[s];
         // Under reduced motion the wedge stops leaning about; the pool stays, the sweep does not.
         var lead = CC.reducedMotion ? this.lead[s] * 0.25 : this.lead[s];
-        var rx = (8 + 10 * str) * reach, ry = (2.4 + 2.6 * str) * reach;
+        var rx = (8 + 10 * str) * reach * D, ry = (2.4 + 2.6 * str) * reach * D;
         var amp = amp0 * str;
         var skew = 1 + (lead < 0 ? -lead : lead) / rx * 1.6;
         var ya = Math.ceil(cy - ry), yb = Math.floor(cy + ry);
@@ -922,7 +928,7 @@
    * Twenty is enough for the frame to read as being seen THROUGH something and still small enough
    * that the streaks stay countable.
    * ===================================================================================== */
-  var BSRC = 20;
+  var BSRC = 20, BSRC_MAX = 60;
 
   var lensbloom = {
     name: 'lensbloom',
@@ -930,8 +936,8 @@
 
     init: function (city, rng) {
       this.seed = (rng() * 30011) | 0;
-      this.bx = new Int32Array(BSRC); this.by = new Int32Array(BSRC);
-      this.bl = new Int32Array(BSRC); this.bc = new Uint8Array(BSRC);
+      this.bx = new Int32Array(BSRC_MAX); this.by = new Int32Array(BSRC_MAX);
+      this.bl = new Int32Array(BSRC_MAX); this.bc = new Uint8Array(BSRC_MAX);
       this.n = 0;
       // Pan tracking. The smear DIRECTION is the camera's own turn rate and stays that way even
       // now that weather.js exports CC.Wind: a streak across a lens is drawn by the lens moving,
@@ -965,8 +971,14 @@
       /* The streak's length. Wind is in it because wind is what puts the water ON the glass that
        * the flare smears through; the pan supplies the direction and a little more length. */
       var pan = CC.reducedMotion ? this.pan * 0.3 : this.pan;
-      var reach = 2.2 + 1.5 * haze + 1.2 * windy * (0.4 + 0.6 * (pan < 0 ? -pan : pan));
+      var D = f.D || 1;
+      var reach = (2.2 + 1.5 * haze + 1.2 * windy * (0.4 + 0.6 * (pan < 0 ? -pan : pan))) * D;
       var TH = 175;
+      /* A denser grid resolves more of the same lamps as separate peaks, so the budget grows with
+       * it — but by sqrt(D), not by the area D^2. Area was tried: the lamps did not multiply, their
+       * cores just split into neighbouring peaks, and the halo census came out 2.9x the 200-col
+       * frame. sqrt(D) lands it inside 0.7-1.6 of the reference. */
+      var NB = Math.min(BSRC_MAX, Math.round(BSRC * Math.sqrt(D)));
 
       // ---- pick the sources: local peaks only, brightest first, at most BSRC of them.
       var n = 0, bl = this.bl, bx = this.bx, by = this.by, bc = this.bc;
@@ -982,12 +994,12 @@
            * equal cells so exactly one of them wins. */
           if (f.lum[i - 1] > l || f.lum[i + 1] >= l) continue;
           if (f.lum[i - cols] > l || f.lum[i + cols] >= l) continue;
-          if (n < BSRC) {
+          if (n < NB) {
             k = n++;
           } else {
             // Full: replace the weakest, and only if this one beats it.
             var worst = 0;
-            for (k = 1; k < BSRC; k++) if (bl[k] < bl[worst]) worst = k;
+            for (k = 1; k < NB; k++) if (bl[k] < bl[worst]) worst = k;
             if (bl[worst] >= l) continue;
             k = worst;
           }
@@ -1002,10 +1014,28 @@
         // ---- halo: gain on the ring around the source. Orthogonal neighbours get the full
         // scatter, diagonals about half, which is what keeps the halo round rather than square.
         var g1 = 1 + halo * s, g2 = 1 + halo * s * 0.45;
-        gain(f, sx - 1, sy, g1); gain(f, sx + 1, sy, g1);
-        gain(f, sx, sy - 1, g1); gain(f, sx, sy + 1, g1);
-        gain(f, sx - 1, sy - 1, g2); gain(f, sx + 1, sy - 1, g2);
-        gain(f, sx - 1, sy + 1, g2); gain(f, sx + 1, sy + 1, g2);
+        if (D <= 1) {
+          gain(f, sx - 1, sy, g1); gain(f, sx + 1, sy, g1);
+          gain(f, sx, sy - 1, g1); gain(f, sx, sy + 1, g1);
+          gain(f, sx - 1, sy - 1, g2); gain(f, sx + 1, sy - 1, g2);
+          gain(f, sx - 1, sy + 1, g2); gain(f, sx + 1, sy + 1, g2);
+        } else {
+          /* The same ring, measured in reference cells: an ANNULUS 0.6-1.5 out, g1 falling to
+           * g2 at the diagonals' distance. The hole matters. Filling it from the centre gained
+           * the lamp's own core, which at 2x density is several cells of the source and not the
+           * glass round it, and the halo came out 1.6-1.75x its 200-col self; with the hole it
+           * is 0.74-1.58x over eight seeds and worlds. A 0.75 hole cut the diagonals as well and
+           * sank west dusk to 0.66x. */
+          var hr = Math.ceil(1.5 * D), oy2, ox2;
+          for (oy2 = -hr; oy2 <= hr; oy2++)
+            for (ox2 = -hr; ox2 <= hr; ox2++) {
+              var rr = Math.sqrt(ox2 * ox2 + oy2 * oy2) / D;
+              if (rr < 0.6 || rr > 1.5) continue;
+              var gg = rr <= 1 ? g1 : g1 + (g2 - g1) * (rr - 1) / 0.42;
+              var sx2 = sx + ox2, sy2 = sy + oy2;
+              if (sx2 >= 0 && sy2 >= 0 && sx2 < cols && sy2 < rows) gain(f, sx2, sy2, gg);
+            }
+        }
 
         // ---- streak: horizontal only, and longer on the side the world is sliding towards.
         for (var side = -1; side <= 1; side += 2) {
@@ -1024,7 +1054,7 @@
             if (f.ch[i] !== 0 && f.lum[i] > lum) continue;
             var d = nearer(f.dist[i]);
             if (d < 0) continue;
-            put(f, x, sy, j < 2 ? G_DASH : G_TICK, hue, lum, d, 3);
+            put(f, x, sy, j < 2 * D ? G_DASH : G_TICK, hue, lum, d, 3);
           }
         }
       }

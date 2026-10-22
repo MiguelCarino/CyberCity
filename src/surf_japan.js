@@ -442,8 +442,12 @@
     if (dist < 34 && q < 0.34 && bh < (0.20 + 0.24 * wWet) * (0.25 + 0.75 * cv))
       return fset(bh < 0.10 ? G_COMMA : G_QUOTE, P.moss, (24 + 130 * sun) * (0.6 + 0.8 * bh));
     /* The block face. Thin: a dressed-stone field at any density is the mush this world cannot
-     * afford, and the joints above are carrying the picture. */
-    if (bh > 0.62 * cv) return fset(0, P.shadow, 0);
+     * afford, and the joints above are carrying the picture. The blank is written in the block's
+     * own swatch and not in `shadow`: it is dressed stone the dither left without a glyph, not a
+     * hole, and core.js's underpainting reads the swatch on a blank to tell the two apart (see
+     * BARE at the bottom of this file). The glyph layer cannot see the difference — ch 0 prints
+     * nothing in any colour. */
+    if (bh > 0.62 * cv) return fset(0, mid, 0);
     return fset(ink(0.16 + 0.40 * sun + 0.22 * bh),
                 bh < 0.24 ? lit : (bh < 0.46 ? mid : shd),
                 (18 + 200 * sun) * (0.72 + 0.5 * bh));
@@ -611,7 +615,7 @@
         return bu < 0.42 ? fset(G_PIPE, shd, 18 + 60 * L)
                          : fset(G_COLON, mid, 26 + 104 * L);
       }
-      if (ph > 0.62 * cov) return fset(0, P.shadow, 0);
+      if (ph > 0.62 * cov) return fset(0, mat, 0);              // bare plaster, not a hole: see BARE
       return fset(ink(0.10 + 0.46 * L), mat, (30 + 186 * L) * gr);
     }
 
@@ -623,7 +627,7 @@
     var inPanel = fu > (1 - st.panel) * 0.5 && fu < 1 - (1 - st.panel) * 0.5;
     if (!inPanel) {
       var wh = hash2(Math.floor(u * 4.3), Math.floor(v * 4.3), sd ^ 0x2E1);
-      if (wh > 0.56 * cov) return fset(0, P.shadow, 0);
+      if (wh > 0.56 * cov) return fset(0, mat, 0);              // bare infill, not a hole: see BARE
       return fset(ink(0.12 + 0.42 * L), mat, (26 + 190 * L) * gr);
     }
 
@@ -751,9 +755,16 @@
       if (sl < (heavy ? 0.52 : 0.34) && (heavy ? cov > 0.06 : cov > 0.34))
         return fset(heavy ? G_PIPE : G_COLON, heavy ? shd : mid,
                     (14 + 176 * L) * (heavy ? 1 : 0.70) * gr);
-      if (dFill > 0.02 && hash2(Math.floor(u * 6.1), Math.floor(v * 6.1), sd ^ 0x38B) < 0.62 * dFill)
+      var hf = hash2(Math.floor(u * 6.1), Math.floor(v * 6.1), sd ^ 0x38B);
+      if (dFill > 0.02 && hf < 0.62 * dFill)
         return fset(ink(0.10 + 0.34 * L), SHD[hue], (22 + 120 * L) * gr);
-      return fset(0, P.shadow, 0);
+      /* By night the gap is the dark of the room behind the slats and it is a hole. By day the
+       * panel is the shutter, and the cells its fill left blank are shutter board with no glyph —
+       * so they go over to the board's swatch (see BARE) on the SAME hash, a little ahead of the
+       * ink, so a wall changes over cell by cell as the morning fills in and never all at once:
+       * a whole frontage of gaps lifting from a tenth of the ambient to half of it in one frame is
+       * an area step, which is the thing the flash gates exist to catch. */
+      return fset(0, hf < 0.95 * dFill ? SHD[hue] : P.shadow, 0);
     }
 
     /* A horizontal rhythm instead: the tile lattice of a namako wall, or the beam courses of a
@@ -772,7 +783,7 @@
         return fset(G_X, lit, (34 + 190 * L) * gr);
     }
     var fh = hash2(Math.floor(u * 4.9), Math.floor(v * 4.9), sd ^ 0x6D1);
-    if (fh > 0.52 * cov) return fset(0, P.shadow, 0);
+    if (fh > 0.52 * cov) return fset(0, mat, 0);                // bare course, not a hole: see BARE
     return fset(ink(0.10 + 0.40 * L), mat, (24 + 190 * L) * gr);
   }
 
@@ -979,7 +990,7 @@
          * rather than earth and because it is the line that separates the town from the water. */
         var qj = hash2(Math.floor(rx * 1.3), Math.floor(rz * 1.3), 0x5C7);
         if (qj < 0.14) return rset(G_DASH, SHD[P.stone], 14 + 66 * L);
-        if (qj > 0.66 * cov) return rset(0, P.shadow, 0);
+        if (qj > 0.66 * cov) return rset(0, gStone, 0);           // bare quay stone: see BARE
         return rset(ink(0.12 + 0.32 * L), gStone, (26 + 190 * L) * (0.7 + 0.5 * qj));
       }
     }
@@ -1036,10 +1047,10 @@
      * world and is therefore where everybody is standing. Stone slabs where there is a building,
      * bare earth where there is not. */
     if (al > half - 0.2) {
-      if (lod === 0) return rset(0, P.shadow, 0);
+      if (lod === 0) return rset(0, gEarth, 0);
       var sj = hash2(Math.floor(wz * 1.4), Math.floor(al * 1.6), 0x4E1);
       if (sj < 0.16 * cov) return rset(G_DASH, SHD[P.stone], 12 + 60 * L);
-      if (sj > 0.58 * cov) return rset(0, P.shadow, 0);
+      if (sj > 0.58 * cov) return rset(0, gEarth, 0);
       /* Slab and earth, not all slab. This strip is the largest lit area on the ground after the
        * road and putting the whole of it on the wet-stone swatch took `white` to 47% of the frame's
        * lit energy — a wet grey town, which is right, printed as a WHITE one, which is not. A third
@@ -1096,8 +1107,12 @@
 
     /* Wet earth. Thin, dark, and mostly nothing — this is the largest single area in the frame and
      * every cell written into it comes straight off the print's muddy budget. What is drawn is the
-     * rut lines and the stones the rain has washed clear. */
-    if (lod === 0) return rset(0, P.shadow, 0);
+     * rut lines and the stones the rain has washed clear.
+     *
+     * EVERY BLANK ON THE GROUND IS BARE GROUND, so every one is written in the ground's swatch and
+     * none in `shadow` (see BARE): the glyph is what the dither left out, and the earth is still
+     * there under it. At a far LOD that is the whole road. */
+    if (lod === 0) return rset(0, gEarth, 0);
     if (inRut && rut > 0.30 && cov > 0.10)
       return rset(G_UNDER, SHD[P.timber], 14 + 92 * L);
     var eh = hash2(Math.floor(wx * 2.6), Math.floor(wz * 2.6), 0x6C3);
@@ -1107,7 +1122,7 @@
      * straight off the print's muddy budget, so its fill is gated on the light exactly as the
      * walls' is. Under the lanterns it is a real surface; twenty metres up an unlit alley it is
      * nothing at all, which is what an unlit dirt road is. */
-    if (eh > 0.44 * cov) return rset(0, P.shadow, 0);
+    if (eh > 0.44 * cov) return rset(0, gEarth, 0);
     return rset(eh < 0.5 ? G_DOT : G_COMMA, gEarth, (14 + 196 * L) * (0.6 + 0.8 * eh));
   }
 
@@ -1357,6 +1372,29 @@
   Object.defineProperty(CC.SurfJapan, 'dayFill', { get: function () { return dFill; } });
   /* Self-registration: surfaces.js never learns this file's name. */
   if (!CC.SURFACES) CC.SURFACES = {};
+  /* Edo's sky for the underpainting (core.js, CC.Compose): night, noon and dusk, each a zenith then
+   * a horizon. Wetter air than the frontier, so a softer noon and a dusk that is rose-gold at the
+   * end of the street rather than orange. */
+  CC.SurfJapan.SKY_RGB = [3,4,12,24,28,50, 100,132,176,196,200,204, 40,46,96,236,150,80];
+  /* BARE = [wall, floor]: what a blank cell written in a LIT swatch takes of the
+   * underpainting's ambient, where a blank in `shadow` is a hole at the city's 0.1 (wall) and 0.5
+   * (floor). This world is the reason the export exists. Its walls and its road thin their glyphs
+   * by the light (`cov`, cubed) and so most of its blanks are timber, plaster and earth with no
+   * glyph on them, and core.js, reading every blank as a hole, printed the noon street as night
+   * tarmac and the facades as black perforation.
+   *
+   * 0.8 on a bare wall: the inked cells still lead it, since they take the whole ambient plus a
+   * mass panel plus the glyph, but after the underpainting's toe a bare cell at 0.5 printed 11
+   * against an inked cell's 40 and the facade still read as holes; at 0.8 it prints ~20 and reads
+   * as the same timber in shade. 1.6 on bare ground, over the whole ambient, and that is this
+   * file's own physics rather than a lift: the ground takes SKY_UP, the whole hemisphere — "an
+   * overcast street photograph is always brightest at your feet" (floorTex) — where core.js's floor
+   * ambient was fitted on the city, a canyon whose road is in the shadow of its towers. Measured,
+   * seed 7, 300x95: noon bottom-40% luma 18.4 -> 30.2 (dusk 25.7, so noon is lighter than dusk
+   * again), the crowd against the road 1.07:1 -> 1.99:1, wall cells printing pure black 29.6% ->
+   * 10.3%, what is left being the eaves and the mid-rail, which are `shadow` by name. Seed 11:
+   * 1.04:1 -> 1.62:1. */
+  CC.SurfJapan.BARE = [0.8, 1.6];
   CC.SURFACES.japan = CC.SurfJapan;
   if (typeof module !== 'undefined') module.exports = CC.SurfJapan;
 })(typeof CC !== 'undefined' ? CC : require('./core.js'));

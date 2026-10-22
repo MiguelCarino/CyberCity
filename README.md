@@ -1,9 +1,9 @@
 # CyberCity
 
-Four walkable worlds drawn entirely in text characters, in one self-contained HTML file, with the
-sun going round.
+Four walkable worlds drawn entirely in text characters, in one HTML page and three small scripts
+beside it, with the sun going round.
 
-No build step to run it, no dependencies, no network requests. Open `index.html` and you are
+No build step to run it, no dependencies, no requests outside its own folder. Open `index.html` and you are
 standing on a street in the rain. Press **2** and you are on a dirt road on the frontier; press
 **3** and you are on the Moon; press **4** and you are in a castle town on a wet evening.
 
@@ -64,8 +64,8 @@ still burning after dawn. `T` steps the clock through its six stops — night, d
 afternoon, dusk — and `Y` stops and restarts the automatic cycle.
 
 That was not a free feature, and the reason is worth stating: the whole print pipeline is fitted to
-a frame that is more than half pure black with a thin scatter of bright glyphs, and daylight is the
-inverse of that picture. It is answered with a **second exposure ladder** — one entry per swatch,
+a glyph layer that is more than half pure black with a thin scatter of bright glyphs, and daylight
+is the inverse of that picture. It is answered with a **second exposure ladder** — one entry per swatch,
 twenty of each. By day the two night pillars go out (a sodium lamp at noon is a grey tube, a screen
 is a dark rectangle) and the surfaces take the top of the table: white 0.92, sand 0.90, stone 0.82,
 slate 0.78, moss 0.74, timber 0.72, because in daylight the bright things are surfaces rather than
@@ -90,8 +90,8 @@ and it moves the other way. Both, measured at 200x60 on frame 300 at two seeds, 
 |---|---|---|---|
 | **city** seed 42 | 30.0 / 7.27 | 53.1 / 0.41 | 52.0 / 3.46 |
 | **city** seed 7 | 32.6 / 2.32 | 54.5 / 0.27 | 56.1 / 4.03 |
-| **frontier** seed 42 | 40.9 / 0.18 | 46.5 / 0.28 | 49.0 / 5.31 |
-| **frontier** seed 7 | 26.5 / 0.24 | 38.7 / 1.03 | 40.9 / 7.16 |
+| **frontier** seed 42 | 40.9 / 0.18 | 46.5 / 0.28 | 51.2 / 5.34 |
+| **frontier** seed 7 | 26.5 / 0.24 | 38.7 / 1.03 | 59.7 / 6.02 |
 | **Moonwalk** seed 42 | 5.5 / 1.64 | 6.6 / 2.27 | 5.0 / 2.85 |
 | **Moonwalk** seed 7 | 11.8 / 1.27 | 7.2 / 3.88 | 6.2 / 3.60 |
 | **Edo** seed 42 | 37.1 / 0.70 | 44.8 / 3.06 | 52.5 / 3.23 |
@@ -103,6 +103,14 @@ meant every call from the road landed on the canal painter — so the numbers ab
 from a world whose largest wet surface was never drawn. A wet road is mid-luminance almost
 everywhere, which is the muddy band by definition, and that is the honest price of the feature
 existing.
+
+The frontier's noon column moved for a different reason, and the same kind of honest price: the
+pale band of its noon sky (the two white tiers) is now written at 0.35 of its base luminance in full
+day rather than 0.80 (surf_west.js, `dayHz`), because the underpainting carries the sky's colour and a full-strength
+white dash added on top of it burned to white. Glyph layer only, at seed 7 that puts the sky's
+dashes in the middle of the range — 40.9 / 7.16 became 59.7 / 6.02, and seed 42 49.0 / 5.31 became
+51.2 / 5.34 — while the printed composite at seed 7 goes from p99 255 to 248 and loses its white
+bars.
 
 Four things in that table are worth saying out loud rather than leaving for someone to notice.
 
@@ -212,9 +220,10 @@ like and it hands them over; stop steering and it picks the walk back up from wh
 ## What is in Moonwalk
 
 The Moon is the world this renderer was waiting for, and that is not a flourish — it is why the
-third world is the Moon and not, say, a jungle. The art direction is a frame that is more than half
-pure black with a thin scatter of very bright glyphs, and every other world has to be composed to
-deliver that. The Moon delivers it by having no air: a shadow with nothing to fill it is genuinely
+third world is the Moon and not, say, a jungle. The art direction is a glyph layer that is more than
+half pure black with a thin scatter of very bright glyphs (the printed frame, with the underpainting
+under it, keeps at least a third of it black at night), and every other world has to be
+composed to deliver that. The Moon delivers it by having no air: a shadow with nothing to fill it is genuinely
 lum 0, a sunlit surface under an unfiltered sun is genuinely the brightest thing there is, and the
 sky is the same absolute black at noon as at midnight. Measured, a lunar frame prints **5.0% of its
 cells in the muddy band** against the project's under-30% target and the city's 30.0%.
@@ -488,7 +497,8 @@ an empty 3-20 Hz band, in every weather state.
 
 ## Running it
 
-Open `index.html`. That is the whole thing.
+Open `index.html` — over `file://` or any static server, as long as the `w/` folder sits next to
+it. That is the whole thing.
 
 To rebuild it from `src/`:
 
@@ -496,14 +506,23 @@ To rebuild it from `src/`:
 node build.js
 ```
 
-`index.html` is generated — don't edit it by hand. `build.js` concatenates the modules in
-`src/`, strips the CommonJS tails that exist only so the offline tools can `require` the same
-files, strips the comments, halves the leading indentation, and writes one file. There is no
-bundler and no minifier: the page source stays readable in View Source, which is half the point of
-shipping it as a single file.
+`index.html` and `w/*.js` are generated — don't edit them by hand. `build.js` concatenates the
+modules in `src/`, strips the CommonJS tails that exist only so the offline tools can `require` the
+same files, strips the comments, halves the leading indentation, and writes the page plus one
+script per secondary world: the engine and the city inline, the frontier, the Moon and Edo in
+`w/west.js`, `w/moon.js` and `w/jp.js`. There is no bundler and no minifier: the page source stays
+readable in View Source.
+
+It was one self-contained file until the high-definition pass, and that was given up deliberately:
+the HD work needed ~9 KB and the single file had 2 KB left under a line that had already been raised
+five times. The chunks are loaded by plain synchronous `<script src>` tags and only *define* their
+modules; the inline script calls each one back at the place it always ran, so the order the city
+boots in — and therefore every frame — is exactly what it was as one file. `build.js`'s essay has
+the trade and the alternatives that lost (one compressed file, lazy loading). The lines are now
+600 KB for `index.html` and 160 KB for each world.
 
 The half-indent is the only thing in that list that was not always there, and it is a budget note
-rather than a formatting preference. `build.js` fails the build over 560 KB, and the essay attached
+rather than a formatting preference. `build.js` failed the build over 560 KB at the time, and the essay attached
 to that line says in as many words that the next pass over it must **cut** rather than move the
 number. This pass went over, at 575.5 KB. The two things the essay names as cuttable are content
 (which is the deliverable — the wrong way round) and indentation, which it refuses on the grounds
@@ -523,14 +542,43 @@ buildings, all for free and all at character resolution.
 
 Everything after that — rain, people, signage, cars, optics — is an *element*: a small module with
 `init`, `update` and `draw`, drawn in layer order onto the same character buffer, depth-tested
-against the world so a walker goes behind a lamp post. There are 70 of them. Each one belongs to
+against the world so a walker goes behind a lamp post. There are 79 of them. Each one belongs to
 one world or to several — an element carries `world: 'cyber'`, or an array of ids, on itself and
-`main.js` filters the list on a rebuild, so the city gets 42, the frontier 33 and the Moon 16.
+`main.js` filters the list on a rebuild, so the city gets 42, the frontier 33, the Moon 16 and
+Edo 26.
 
 The last stage is a print. Each of the twenty colours has **two** exposure weights, night and day,
 blended by the clock, then a gamma lift, a knee and a shoulder rolloff, bucketed by distance. It is
 the difference between a frame that is technically correct and one that reads as a photograph of a
 dark street, and most of the tuning in this repo is about it.
+
+## The underpainting
+
+Under the glyphs sits one more layer: one RGB value per **cell**, `f.under`, written by
+`CC.Compose.post` after the print and drawn first, unsmoothed, so every cell is one flat block and
+the grid survives. It exists because a glyph inks about a fifth of its cell and half the cells are
+blank, so a wall the painters lit at full brightness reached the screen at a fifth of its value. It
+is five terms: **mass** (the cell's own colour at a share of its lum — signs capped lower than
+walls, and the share falling by day because the day ladder has already lifted the glyphs), **sky**
+(a zenith-to-horizon gradient per world and hour, from each painter's `SKY_RGB`; the Moon has none),
+**haze** (far cells walking toward the horizon colour, 0.8 of it by day and 0.5 at night), **rim**
+(the sky wrapping a roofline) and **spill** (emitters lighting the cells round them, a tent nine by
+five reference cells wide). Ambient light is weighted by ink, so a blank doorway stays dark at noon —
+unless the painter wrote the blank in a lit swatch, which is how Edo says "plaster with no glyph on
+it" rather than "a hole" (its `BARE` export; CONTRACT has the rule).
+The bloom reads the glyphs only, so the blacks between lit cells stay black.
+
+What it is held to, measured at 300x95 on 6x11 cells, seeds 7 and 11: night zenith rows stay
+under 12 (cyber 8.3 and 6.5); cyber night keeps **46% and 59% of the composite pure black** (target
+35%), with the glyph layer alone at 67% and 80%. In the three worlds with air, dusk keeps 8-39%
+pure black (the field off: 64-89%) and noon 6-17% (the field off: 28-72%); Edo sits at the bottom of
+both ranges because its bare plaster and earth take their share of the ambient rather than printing
+as holes. The Moon, which has no ambient, keeps 51-54% at dusk and 49-56% at noon. A lit cell's gaps
+never lift toward its own stroke, so signs keep their letters. `CC.Compose.UNDER = 0` is the kill switch: it
+restores the frame data and the glyph layer byte-for-byte and removes the underlay draw. It does
+not undo the rest of the HD print — the pixel-write glyph pass on small cells, the screen-sized
+bloom and the denser cell band stay on, so the browser picture with it off is the glyph layer of
+this build, not the page as it was before the HD pass.
 
 ## Tools
 
@@ -538,11 +586,12 @@ Everything here runs without a browser, which is how the thing gets verified at 
 
 | | |
 |---|---|
-| `tools/headless.cjs` | render any frame of any seed offline, as a text dump — `--west` / `--moon` / `--japan`, `--time=`, `--weather=`, `--yaw=` |
-| `tools/topng.py` | turn that dump into a PNG, with the bloom the canvas applies |
-| `tools/metrics.py` | the print census — exposure bands, colour split, what each layer costs |
+| `tools/headless.cjs` | render any frame of any seed offline, as a text dump — `--west` / `--moon` / `--japan`, `--time=`, `--weather=`, `--yaw=`, `--under=k` (underpainting strength; 0 dumps no `UNDER` line), `--cell=WxH` (the cell the frame will be printed on, so frame.D matches the browser's) |
+| `tools/topng.py` | turn that dump into a PNG composited the way the canvas does it — `--u[=k]` draws the underpainting, `--cell=WxH`, `--q=0/1/2` bloom quality, `--bloom=ref/cell`, `--cov` prints the coverage tables (the 9x16 reference and the ink-compensated pixel-path cells; redirect it to `tools/cov.json`). Needs Pillow **and numpy** |
+| `tools/metrics.py` | the print census — exposure bands, colour split, what each layer costs; `--composite` adds the census of the printed composite (glyph ink by coverage plus the underpainting), the old one is the glyph layer only |
+| `tools/composite.cjs` | shared by every probe below: the `--composite` / `--cols=` / `--rows=` / `--cell=` parser, per-cell emitted light from `tools/cov.json` (weighted at the cell the grid stands for — 1920 px across by default, so a 400-column gate reads the 5x9 ink-compensated table), and the WCAG area-weighted flash check |
 | `tools/peds.cjs` | the crowd alone, against an empty frame, at a size you can actually see |
-| `tools/flicker-rate.cjs` | the photosensitivity gate, for the city's signage — run it with **no arguments**, see above |
+| `tools/flicker-rate.cjs` | the photosensitivity gate, for the city's signage — run it with **no arguments**, see above. It and every probe below also run with `--cols=400 --rows=120` and with `--composite` (CONTRACT has the four-mode rule) |
 | `tools/lightning-rate.cjs` | the same, for storms |
 | `tools/west-flicker.cjs` | the same, for every world that is not the city — pinned camera, per cell, against the city as its baseline |
 | `tools/canal-flicker.cjs` | the same, for Edo's canal — pins the camera **on the water**, which the gate above structurally cannot do |
@@ -557,6 +606,8 @@ and in `headless.cjs`, which is what makes any of the above worth running.
 
 They are rendered with `tools/headless.cjs` and `tools/topng.py`, not captured from a browser
 window. The frames are the real output of the real renderer at 213×67 cells, and `topng.py`
-applies the same bloom the canvas does — but the font is Liberation Mono rather than whatever your
-browser picks, so the shapes of individual characters will differ slightly from what you get on
-screen.
+applies the same bloom the canvas does. They are the **glyph layer only**: they were printed
+before the underpainting shipped, so they show the page as `CC.Compose.UNDER = 0` draws it: darker,
+and with no sky gradient. A current print is `topng.py f.txt out.png --u`. The font is Liberation
+Mono rather than whatever your browser picks, so the shapes of individual characters will differ
+slightly from what you get on screen.

@@ -26,6 +26,21 @@
    * geometric step was tried first and was both SLOWER at 400x100 (5.7 ms vs 4.0) and lossy: it
    * strides over one-cell slivers of frontage and drops them out of the skyline. */
   var MAXSTEP = 512;
+  /* DETAIL SCALE. Every painter's LOD ladder is keyed on world distance (13/34 m, 18/44 m...), which
+   * is only a proxy for how many metres one CELL covers — and it was tuned at 200 columns. At 400
+   * columns a cell covers half the wall, yet the painter still drops to its coarse tier at the same
+   * metres, so the extra columns re-print coarse glyphs twice instead of resolving panes. The
+   * painters are handed an APPARENT distance, dist * SREF/scale, so their tiers follow the cell's
+   * footprint; fog and frame.dist keep the true distance. SREF is scale at 200 cols, fov 1.25,
+   * 9x16 cell — the grid every ladder was signed off on — so a 200-col frame is byte-identical AT
+   * FOV 1.25, and only there. scale carries the fov, so the viewer's wheel zoom (control.js, fovT
+   * 1.02..1.52) moves it too: zoomed IN, a 200-column frame resolves finer tiers, because a zoomed
+   * cell really does cover less wall — that is the same rule, not a leak, and it is kept. Zoomed
+   * out it cannot coarsen past today's tiers (dK is capped at 1). The gates cannot see the zoomed
+   * case: every probe and fixture pins fov at 1.25. The finest tier a zoom reaches at 200 columns is
+   * the tier 250 columns gets unzoomed, which the 400x120 gate pass already covers. */
+  var SREF = 200 * 0.5625 / (2 * Math.tan(0.625));
+  var dK = 1;
 
   /* ---- the record handed to CC.Surf.facade --------------------------------------------------
    * city.js stores `seed` as a 0..1 float and surfaces coerces it with `|0`, which would collapse
@@ -246,7 +261,7 @@
     if (den < 1e-3) { poke(frame, i, 0, P.shadow, 0, 1e6, 2); mirA[r] = 0; return; }
     var w = eyeY * scale / den, d = w * len;
     var px = ox + dx * w, pz = oz + dz * w;
-    var o = swapFloor ? Surf.floorTex(pz, px, d, t) : Surf.floorTex(px, pz, d, t);
+    var o = swapFloor ? Surf.floorTex(pz, px, d * dK, t) : Surf.floorTex(px, pz, d * dK, t);
     poke(frame, i, o.ch, o.col, Surf.fog(o.lum, d), d, 2);
     /* Parked for the reflect pass at the end of the column. It cannot run here: the wall this
      * cell is going to mirror has not been painted yet. */
@@ -377,6 +392,20 @@
      * escape hatch for a caller that really does want a different vertical zoom. */
     var cellA = cam.cellAspect || 0.5625;             // 9x16 cell, as tools/topng.py draws
     var scale = cam.scaleY !== undefined ? cam.scaleY : (cols * cellA) / (2 * halfPlane);
+    /* An AIRLESS painter is handed the true distance. The moon's dist is not an LOD key: its lit
+     * ramp (+0.62 lum/m to the 125 m cliff) cancels the print's depth bucket, which reads the TRUE
+     * frame.dist, so an apparent distance there prints a rock at 200 m with the 100 m ramp in the
+     * brightest bucket — a bright band. Its dither lattice is already solved against screen columns
+     * at 400 (see qOf), so it needs no help from here either. The flag is the painter's own; the
+     * engine does not name the world. */
+    var Wp = CC.SURFACES && CC.World ? CC.SURFACES[CC.World.id] : null;
+    dK = (CC.DETAIL_SCALE === 0 || (Wp && Wp.airless)) ? 1 : Math.min(1, SREF / scale);
+    /* frame.D: cells per reference cell (200 cols x 9:16), >= 1. Published on the frame because
+     * every element draws into the frame after this pass and has no camera-independent way to
+     * know the grid's density otherwise. 1.0 on every grid up to the reference, so those frames
+     * do not move. */
+    var Dd = (cols * cellA) / (200 * 0.5625);
+    frame.D = (CC.DETAIL_SCALE === 0 || !(Dd > 1)) ? 1 : Dd;
     var t = cam.t || 0;
     var ox = cam.x, oz = cam.z, yaw = cam.yaw || 0;
 
@@ -465,7 +494,7 @@
           }
           mirA[r] = 0;                    // wall, not water: nothing here reflects anything
           var v = eyeY + (horizon - rowC) * w / scale;
-          var o = Surf.facade(u, v, sc, dist, t);
+          var o = Surf.facade(u, v, sc, dist * dK, t);
           var ch = o.ch, cl = o.col, lm = o.lum, sg;
           if (sign && (sg = signPixel(rec, u, v, faceX, t))) { ch = sg.ch; cl = sg.col; lm = sg.lum; }
           poke(frame, i, ch, cl, Surf.fog(lm, dist), dist, 1);

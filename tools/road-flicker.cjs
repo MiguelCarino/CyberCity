@@ -26,14 +26,19 @@
  * 0.00 for a feature that was not on screen — the failure CONTRACT.md's newest rule is about. The
  * reduced-motion row must come back exactly still: `rp` is gated on CC.reducedMotion at source.
  *
- *   node tools/road-flicker.cjs
+ *   node tools/road-flicker.cjs [--composite] [--cols=120] [--rows=40]
+ *
+ * --composite scores the light each cell EMITS (tools/composite.cjs) and grows the road mask by the
+ * underpainting's spill box, because a puddle that flickers a reflected sign lights the kerb and
+ * the wall foot with it. Both modes run the WCAG general-flash check, absolute.
  */
 const R=require('path').join(__dirname,'..')+'/',fs=require('fs');
 global.CC=require(R+'src/core.js');global.window=undefined;
 ['world','proj','daylight','weather_state','city','surfaces','raycast','control'].forEach(m=>require(R+'src/'+m+'.js'));
 fs.readdirSync(R+'src').sort().forEach(p=>{if(/^surf_.*\.js$/.test(p))require(R+'src/'+p)});
 fs.readdirSync(R+'src/elements').sort().forEach(p=>require(R+'src/elements/'+p));
-const COLS=120,ROWS=40,WARM=360,NF=WARM+600,PROBES=[3.5,5,7,9,12,15,19];
+const CP=require('./composite.cjs')(CC),M=CP.mode(process.argv,120,40);
+const COLS=M.cols,ROWS=M.rows,WARM=360,NF=WARM+600,PROBES=[3.5,5,7,9,12,15,19];
 const BIG=255/3, RATE_CAP=1.00, BAND_CAP=2.00;
 function goertzel(x,f){const n=x.length,w=2*Math.PI*f/60,c=2*Math.cos(w);let s1=0,s2=0,m=0;
  for(let i=0;i<n;i++)m+=x[i];m/=n;
@@ -57,18 +62,21 @@ function run(preset,seed,reduced){
   if(!found) return null;
   const drawn=live.filter(e=>e.world&&CC.inWorld(e,'japan')&&!CC.inWorld(e,'cyber'));
   const f=CC.makeFrame(COLS,ROWS),N=COLS*ROWS,keep=NF-WARM,s=new Uint8Array(N*keep);
+  const V=new Float32Array(N),Y=new Float32Array(N),fl=CP.Flash(COLS,ROWS);
   for(let k=0;k<NF;k++){const t=(pin+k)/60;
     if(!CC.Weather.P.forced)CC.Weather.set(preset,t);
     CC.Daylight.update(1/60,t);CC.Weather.update(1/60,t);
     for(const el of live) if(el.update) el.update(1/60,t,cam);
     cam.t=t;CC.clearFrame(f);CC.Cast.render(f,cam,city);
+    if(M.comp)CC.Compose.world(f);   // the underpainting's world snapshot, where main.js takes it
     for(const el of drawn) if(el.draw) el.draw(f,cam,t);
     if(CC.Compose&&CC.Compose.post)CC.Compose.post(f,cam,t);
-    if(k>=WARM){const b=(k-WARM)*N;for(let i=0;i<N;i++)s[b+i]=f.lum[i];}
+    if(k>=WARM){const b=(k-WARM)*N,src=M.comp?V:f.lum;CP.light(f,V,Y);fl.push(Y);for(let i=0;i<N;i++)s[b+i]=src[i]+0.5;}
   }
   /* The road is the FLOOR below the horizon, which is what kind 2 means here. */
-  let road=0,lit=0;const isRoad=new Uint8Array(N);
+  let road=0,lit=0,isRoad=new Uint8Array(N);
   for(let i=0;i<N;i++){const rz=(i/COLS)|0; if(f.kind[i]===2&&rz>ROWS*0.56){isRoad[i]=1;road++;}}
+  if(M.comp)isRoad=CP.dilate(isRoad,COLS,ROWS,f.D);
   let big=0,band=0,worst=0;const x=new Float64Array(keep);
   for(let i=0;i<N;i++){ if(!isRoad[i]) continue;
     let b=0,mx=0,prev=s[i];x[0]=prev;let anyLit=0;
@@ -79,15 +87,15 @@ function run(preset,seed,reduced){
     const r=b/(keep/60); if(r>big)big=r;
     for(const pf of PROBES){const a=goertzel(x,pf); if(a>band)band=a;}
   }
-  return {road,lit,worst:100*worst/255,big,band:100*band/255,pin};
+  return {road,lit,worst:100*worst/255,big,band:100*band/255,pin,flash:fl.result()};
 }
-console.log(`road puddle rate gate — ${COLS}x${ROWS}, ${(NF-WARM)/60}s measured, ${WARM} discarded, pinned >28 m from the channel\n`);
+console.log(`road puddle rate gate — ${M.tag}, ${(NF-WARM)/60}s measured, ${WARM} discarded, pinned >28 m from the channel\n`);
 const rows=[];
 for(const seed of [42,3,404]) for(const p of ['tsuyu','typhoon']){
   const r=run(p,seed,false); rows.push(r);
   console.log(`  seed ${String(seed).padStart(4)}  ${p.padEnd(8)}` + (!r ? '(never left the channel)' :
     `roadCells ${String(r.road).padStart(4)}(${String(r.lit).padStart(4)} lit)  worstStep ${r.worst.toFixed(1).padStart(5)}%  ` +
-    `bigSteps ${r.big.toFixed(2).padStart(5)}/s  3-20Hz ${r.band.toFixed(2).padStart(5)}%  pinned f${r.pin}`));
+    `bigSteps ${r.big.toFixed(2).padStart(5)}/s  3-20Hz ${r.band.toFixed(2).padStart(5)}%  pinned f${r.pin}\n      ${CP.fmt(r.flash)}`));
 }
 const rm=run('typhoon',42,true);
 console.log(`\n  reduced motion: ` + (!rm ? '(not reached)' :
@@ -95,9 +103,11 @@ console.log(`\n  reduced motion: ` + (!rm ? '(not reached)' :
 const seen=rows.filter(r=>r&&r.lit>0);
 if(!seen.length){console.log('\nRESULT: NOT_MEASURED — no pose put lit road in frame; this is the probe failing, not a PASS');process.exit(3);}
 const wBig=Math.max(...seen.map(r=>r.big)),wBand=Math.max(...seen.map(r=>r.band));
+/* the flash rule is absolute and is judged on every row that rendered, the reduced-motion one included */
+const wFl=rows.concat([rm]).filter(Boolean).reduce((a,r)=>r.flash.area>a.area||(r.flash.area===a.area&&r.flash.swing>a.swing)?r.flash:a,seen[0].flash);
 const rmBad=rm&&(rm.big>0||rm.band>0.5);
 const bad=(wBig>RATE_CAP?` big steps ${wBig.toFixed(2)}/s over ${RATE_CAP.toFixed(2)}/s`:'')+
           (wBand>BAND_CAP?` 3-20Hz ${wBand.toFixed(2)}% over ${BAND_CAP.toFixed(2)}%`:'')+
-          (rmBad?' reduced motion is not still':'');
-console.log(`\nRESULT: ${bad?'FAIL'+bad:'PASS'}  (worst big steps ${wBig.toFixed(2)}/s, worst 3-20Hz ${wBand.toFixed(2)}%, ${seen.length}/${rows.length} rows measured)`);
+          (rmBad?' reduced motion is not still':'')+(wFl.bad?' general flash':'');
+console.log(`\nRESULT: ${bad?'FAIL'+bad:'PASS'}  (worst big steps ${wBig.toFixed(2)}/s, worst 3-20Hz ${wBand.toFixed(2)}%, ${seen.length}/${rows.length} rows measured; ${CP.fmt(wFl)})`);
 process.exit(bad?1:0);

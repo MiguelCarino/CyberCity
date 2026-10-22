@@ -53,6 +53,9 @@ for (let k = 0; k <= N; k++) ped.update(1 / 60, k / 60, cam(k / 60));
 
 CC.clearFrame(f);
 ped.draw(f, cam(N / 60), N / 60);
+/* Lum only: this tool counts printed glyphs and never reads f.under, so the underpainting is off
+   for the run — and it draws no world pass, so post() would otherwise snapshot the crowd itself. */
+CC.Compose.UNDER = 0;
 CC.Compose.post(f);
 
 let lit = 0;

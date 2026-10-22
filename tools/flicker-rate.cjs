@@ -3,6 +3,12 @@
  *
  *   node tools/flicker-rate.cjs [signage.js path] [seconds] [phases]
  *   node tools/flicker-rate.cjs [seconds] [phases]          — a bare number first IS the window
+ *   ... [--composite] [--cols=200] [--rows=60]              — see tools/composite.cjs
+ *
+ * --composite scores sections 2-4 on the light each cell EMITS (glyph plus underpainting) instead
+ * of the element's raw lum, and both modes now also run the area-weighted WCAG general-flash rule
+ * on what prints. --cols/--rows size the fixture frame: a fixture that is fine at 200 columns can
+ * spill over more CELLS at 400, and the spill box is the part of the composite that scales.
  *
  * RUN IT WITH NO ARGUMENTS to get a verdict. The default 60 s window is the one the 3-20 Hz limit
  * was fitted at; below it that rule is printed but not judged and the process exits 3, because a
@@ -121,6 +127,9 @@ const BAND_JUDGED = SECS >= BAND_CALIBRATION_SECS;
 global.CC = require(path.join(root, 'src/core.js'));
 global.window = undefined;
 const CC = global.CC;
+/* --composite, --cols=, --rows=: see tools/composite.cjs. Section 1 is a function and has no frame,
+ * so only sections 2-4 change with them. */
+const CP = require('./composite.cjs')(CC), M = CP.mode(process.argv, 200, 60);
 
 /* ---- lift flick() out of the shipped source ------------------------------------------------ */
 function lift(file, name) {
@@ -143,7 +152,7 @@ function lift(file, name) {
 }
 const lifted = lift(SRC, 'flick');
 const flick = lifted.fn;
-console.log(`source: ${path.relative(root, SRC)}   ${SECS}s @60Hz x ${PHASES} phases`);
+console.log(`source: ${path.relative(root, SRC)}   ${SECS}s @60Hz x ${PHASES} phases   frames: ${M.tag}`);
 console.log('lifted flick():\n' + lifted.text.split('\n').map(l => '    ' + l).join('\n') + '\n');
 
 /* ---- the personalities, as the draw loops call them ----------------------------------------- */
@@ -348,20 +357,28 @@ const NAMES = ['neon', 'shopSpill', 'signals', 'holo', 'police', 'ads', 'skylane
  * skylanes is the expected answer under mist. A NOT_APPLICABLE naming anything else, or any FAIL,
  * is a finding. */
 const MAX_CELL_RATE = 1.0;      // big steps a second in one cell, above which it is flicker
-const COLS = 200, ROWS = 60;
+const COLS = M.cols, ROWS = M.rows;
+/* The worst general-flash area any fixture reached, per tools/composite.cjs. Judged in sections 2
+ * and 3; section 4's rule (nothing moves at all) is already stricter than it. */
+let flashWorst = { area: 0, swing: 0, transitions: 0, at: -1 }, flashWhat = 'nothing measured';
 
 /* One element, one seed, eight compass bearings, 20 s each at 60 Hz. */
 function fixture(name, seed, els, secsEach) {
   const el = els.find(e => e.name === name);
   if (!el) return null;
   const f = CC.makeFrame(COLS, ROWS);
-  const big = new Uint32Array(f.n);
-  let worst = 0, worstYaw = 0, worstT = 0, painted = 0, rate = 0;
+  /* The density the raycast would have published for this grid (raycast.js, frame.D), written by
+   * hand because there is no world pass here to publish it — without it the spill box stays nine
+   * cells wide at 400 columns and the composite measures a lamp lighting a quarter of its street. */
+  f.D = Math.max(1, COLS / 200);
+  const big = new Uint32Array(f.n), V = new Float32Array(f.n), Y = new Float32Array(f.n);
+  let worst = 0, worstYaw = 0, worstT = 0, painted = 0, rate = 0, fla = null;
   for (let yi = 0; yi < 8; yi++) {
     const yaw = yi * Math.PI / 4;
     /* Per bearing: a cell index is a different fixture in every direction, so the counts cannot be
      * pooled across them without diluting the one view that has a sign in it. */
     big.fill(0);
+    const fl = CP.Flash(COLS, ROWS);
     const cam = { x: city_.startX, z: city_.startZ, yaw: yaw, eyeY: 1.7, fov: 1.25,
                   horizon: ROWS * 0.56, cellAspect: 0.5625, t: 0 };
     let prev = null;
@@ -371,10 +388,24 @@ function fixture(name, seed, els, secsEach) {
       // Every tick, exactly as main.js does it: the element reads the live P block from update().
       if (CC.Weather) { CC.Weather.update(1 / 60, t); pinSky(); }
       for (let i = 0; i < f.n; i++) { f.ch[i] = 1; f.col[i] = 5; f.lum[i] = 0; f.dist[i] = 1e6; f.kind[i] = 1; }
+      /* The empty far wall is the world pass here, so it is what the underpainting's snapshot has
+       * to hold: the element is drawn OVER it, and its mass and spill are read against it. */
+      if (M.comp) CC.Compose.world(f);
       if (el.update) el.update(1 / 60, t, cam);
       el.draw(f, cam, t);
-      const cur = Float64Array.from(f.lum);
-      for (let i = 0; i < f.n; i++) if (cur[i] > 0) painted++;
+      /* LUM mode scores the element's raw lum, as this section always has, and is copied BEFORE
+       * the print pass tones it. Composite mode scores the light the cell emits. The print pass runs
+       * in both, because the flash rule is about what reaches the glass — the glyph layer alone in
+       * lum mode (the underpainting is off there), glyphs plus wash in composite. The frame is
+       * refilled at the top of every tick, so toning it in place costs the next tick nothing. */
+      const raw = M.comp ? null : Float64Array.from(f.lum);
+      /* PAINTED is what the ELEMENT wrote, in both modes. Counted on the composite it would be every
+       * cell of the frame — the wash lies behind all of them — and the NOT MEASURED check below
+       * would never fire again, which is the exact hole this file's exit code 3 exists to close. */
+      for (let i = 0; i < f.n; i++) if (f.lum[i] > 0) painted++;
+      CC.Compose.post(f, cam, t);
+      CP.light(f, V, Y); fl.push(Y);
+      const cur = M.comp ? Float64Array.from(V) : raw;
       if (prev) {
         let fw = 0;
         for (let i = 0; i < f.n; i++) {
@@ -388,8 +419,10 @@ function fixture(name, seed, els, secsEach) {
     }
     let mx = 0; for (let i = 0; i < big.length; i++) if (big[i] > mx) mx = big[i];
     if (mx / secsEach > rate) rate = mx / secsEach;
+    const fr = fl.result(); fr.yaw = yaw;
+    if (!fla || fr.area > fla.area || (fr.area === fla.area && fr.swing > fla.swing)) fla = fr;
   }
-  return { worst, rate, painted, worstYaw, worstT };
+  return { worst, rate, painted, worstYaw, worstT, flash: fla };
 }
 
 let city_ = null;
@@ -415,13 +448,17 @@ for (const seed of SEEDS) {
     if (r.painted === 0)
       notApplicable.push(`2. seed ${seed} ${name}: painted no cell in any of the 8 bearings, nothing measured`);
     if (r.painted > 0 && r.worst > liveWorst) { liveWorst = r.worst; liveWorstWhat = `seed ${seed} ${name}, yaw ${r.worstYaw.toFixed(2)}, t=${r.worstT.toFixed(2)}s, sky '${SKY}'`; }
-    const bad = r.painted > 0 && r.worst > MAX_FRAME_STEP && r.rate > MAX_CELL_RATE;
+    const flBad = r.painted > 0 && r.flash.bad;
+    const bad = r.painted > 0 && r.worst > MAX_FRAME_STEP && r.rate > MAX_CELL_RATE || flBad;
     if (bad) ok = false;
+    if (r.painted > 0 && (r.flash.area > flashWorst.area || r.flash.swing > flashWorst.swing))
+      flashWorst = r.flash, flashWhat = `seed ${seed} ${name}, yaw ${r.flash.yaw.toFixed(2)}`;
     console.log(`  seed ${String(seed).padStart(3)}  ${name.padEnd(10)} cells painted ${String(r.painted).padStart(7)}` +
                 `   worst per-cell frame step ${(r.worst * 100).toFixed(1)}% of 255` +
                 `   busiest cell over-${MAX_FRAME_STEP * 100 | 0}% ${r.rate.toFixed(3)}/s` +
                 `  (yaw ${r.worstYaw.toFixed(2)}, t=${r.worstT.toFixed(2)}s)   ` +
-                (r.painted === 0 ? 'NOT MEASURED — no fixture in view' : bad ? 'FAIL' : 'ok'));
+                (r.painted === 0 ? 'NOT MEASURED — no fixture in view' : bad ? 'FAIL' + (flBad ? ' (general flash)' : '') : 'ok') +
+                `\n      ${CP.fmt(r.flash)}`);
   }
 }
 
@@ -458,11 +495,12 @@ if (src.indexOf(bobLine) < 0) {
     }
     if (r.painted === 0)
       notApplicable.push(`3. seed ${seed} holo (still): no panel in view, nothing measured`);
-    const bad = r.painted > 0 && r.worst > HOLO_STILL_MAX;
+    const bad = r.painted > 0 && (r.worst > HOLO_STILL_MAX || r.flash.bad);
     if (bad) ok = false;
     console.log(`  seed ${String(seed).padStart(3)}  holo (still)  worst per-cell frame step ` +
                 `${(r.worst * 100).toFixed(1)}% of 255   busiest cell ${r.rate.toFixed(3)}/s   ` +
-                (r.painted === 0 ? 'NOT MEASURED — no panel in view' : bad ? `FAIL (> ${HOLO_STILL_MAX * 100}%)` : 'ok'));
+                (r.painted === 0 ? 'NOT MEASURED — no panel in view' : bad ? `FAIL (> ${HOLO_STILL_MAX * 100}% or general flash)` : 'ok') +
+                `\n      ${CP.fmt(r.flash)}`);
   }
   fs.unlinkSync(tmp);
 }
@@ -510,8 +548,9 @@ if (notApplicable.length) {
  * live build and section 4 is reduced motion, and a report has already quoted the second as if it
  * were the first. See the note at the top of this file. */
 console.log(`\nSUMMARY: live worst per-cell step ${(liveWorst * 100).toFixed(1)}% of 255 (${liveWorstWhat}) | ` +
-            `reduced-motion worst ${(rmWorst * 255).toFixed(0)}/255`);
+            `reduced-motion worst ${(rmWorst * 255).toFixed(0)}/255 | ${M.tag} | ` +
+            `${CP.fmt(flashWorst)} (${flashWhat})`);
 const verdict = !ok ? 'FAIL' : (notApplicable.length ? 'NOT_APPLICABLE' : 'PASS');
 console.log(verdict === 'NOT_APPLICABLE' ? 'NOT APPLICABLE' : verdict);
-console.log(`RESULT: ${verdict} ${SKY}`);
+console.log(`RESULT: ${verdict} ${SKY} ${M.comp ? 'composite' : 'lum'} ${COLS}x${ROWS}`);
 process.exit(verdict === 'PASS' ? 0 : verdict === 'FAIL' ? 1 : 3);
