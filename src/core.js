@@ -1082,7 +1082,7 @@ var CC = (function () {
         r[0] = q[0]; r[1] = q[1]; r[2] = q[2];
         /* An element: dense ink hides the world and hairlines do not, so rain over a wall keeps the
          * wall. Against open sky it IS the sky's silhouette. The visor (HUD, dist < 0.1) is a stencil
-         * on the glass and gets nothing at all — not a wash, not a spill.
+         * on the glass and gets nothing of the world — not a wash, not a spill — only its own flat paint.
          *
          * AND AN ELEMENT HIDES THE WALL IN PROPORTION TO WHAT IT PRINTS, full only from lum 24 up.
          * The deliberate occluders — a police cordon's body, a cat, a dark figure — are drawn in the
@@ -1095,23 +1095,55 @@ var CC = (function () {
          * right rule — a hologram composites as LIGHT and never darkens what it lands on — and a
          * ramp on printed lum is that rule without naming any one element: a thing too dim to see
          * is too dim to stand in front of anything, and a lit figure is still a solid one. */
-        var vis = kd === 3 && d < 0.1, op = vis ? 1 : kd === 3 && d < wd ? (c === SH || !wk ? 1 : (THIN[gc] ? 0.25 : 0.75) * (L < 24 ? L / 24 : 1)) : 0;
-        if (op && !vis) fld(c, L, wk && 3, d, (d - f0) / fs, gc);
-        else if (vis) q[0] = q[1] = q[2] = 0;
+        /* THE VISOR IS PAINTED FLAT, AND IT IS THE ONE PLACE IN THE FIELD THAT IGNORES THE WORLD. Its
+         * plate cells used to take a black wash and its letters whatever the passes below laid on a
+         * cell — the rim, the Moon's regolith grey, a neighbour sign's spill — so the help strip read
+         * as dim slate '@'s on a blotched slab: ~15 grey levels under every letter on the lit plain,
+         * spill of up to 8 levels on 125 of the 1,195 plate cells in cyber night (seed 11), and
+         * letters that printed (17,27,38) by day because tone() had darkened them with the city.
+         * Now the plate is an even black and every lit pixel of a letter is a solid block of its
+         * own swatch, scaled so its brightest channel lands at 200 whatever the hour or world —
+         * slate keys at (90,142,200), the white status line brighter at (183,192,200) — times the
+         * overlay's own fade (Compose.HUD, set by hud.js each frame it draws), so the panel still
+         * warms up and lets go, and times G like every other cell, so a headless --under=0.5 dims
+         * the visor with the field instead of leaving it lit at full over a half-strength frame.
+         * Nothing reaches it: not the rim, not the floor, not the spill sweep further down, which
+         * skips these cells.
+         *
+         * A LETTER IS TOLD BY ITS DEPTH, not by having a glyph: hud.js prints letters at 0.02 and
+         * its plate at 0.03, and optics.js's lens drops land on the plate a hair nearer than it
+         * (0.02999) carrying the hue of the letter they bend. Keyed on `gc` alone, one such drop on
+         * the frontier (seed 11, cell 37,75) printed a full slate block above the E of MOVE. */
+        if (kd === 3 && d < 0.1) {
+          for (t = gc && d < 0.025 ? G * Compose.HUD * 200 / Math.max(p[0], p[1], p[2]) : 0, k = 0; k < 3; k++) u[o + k] = p[k] * t, sp[o + k] = 0;
+          continue;
+        }
+        var op = kd === 3 && d < wd ? (c === SH || !wk ? 1 : (THIN[gc] ? 0.25 : 0.75) * (L < 24 ? L / 24 : 1)) : 0;
+        if (op) fld(c, L, wk && 3, d, (d - f0) / fs, gc);
         /* AN EMITTER SPILLS ONLY ONTO SOMETHING. The test is the world under the cell: a sign over a
          * wall lights the wall, but an amber cloud-bar dash over open night sky (west, seed 7) has
          * nothing within a hundred metres to light, and it was printing hard-edged horizontal slabs
          * of (26,29,21) into a sky of (3,5,13). Sky elements carry a distance past SKY_D and are out
          * for the same reason. */
-        var rim = y && wk === 1 && Wk[i - C] === 0, e = S && !vis && wk && d < SKY_D && L > 90 && EM[c] ? (L - 90) / 165 * 0.7 : 0;
-        /* Lit regolith: grey with a breath of warmth, floors brighter than walls. Only lightly
+        var rim = y && wk === 1 && Wk[i - C] === 0, e = S && wk && d < SKY_D && L > 90 && EM[c] ? (L - 90) / 165 * 0.7 : 0;
+        /* Lit regolith: grey with a breath of warmth, floors brighter than walls. Only partly
          * ink-weighted on the floor — the plain is one lit surface, and a weight that followed every
-         * pebble's lum printed it as a grey checkerboard — but walked 0.6 -> 1.0 along the depth
-         * ramp's end, so it recedes instead of printing 3,555 cells of one value. The WALLS are wholly
+         * pebble's lum printed it as a grey checkerboard.
+         *
+         * THE DEPTH RAMP FADES THE PLAIN TOWARD THE HORIZON, NOT UP TO IT. It used to walk 0.6 -> 1.0
+         * out to the depth ramp's end, which put the brightest grey of the whole floor in the last
+         * row before the sky and cut it straight to black: a ruler-edged band across every lit frame
+         * (seed 11 noon). It is 1 - 0.85 d^2 now, d the share of the ramp: square, so the near and
+         * middle plain keep their light and only the far reach goes, down to 0.15 at the edge, where
+         * the toe below takes it to ~1 level and the ground meets the sky without a seam. The base is
+         * near half the old one (0.18 against 0.32 at the near end) and the ink share is 0.16 of 255
+         * on top: about 1.9x between a bare cell and the brightest pebble, against 1.6x before, which
+         * gives the plain back the texture the halving would have flattened and stops short of the
+         * checkerboard. Tuned by eye on seeds 7, 11 and 42 from morning to dusk. The WALLS are wholly
          * ink-weighted: a shadow face on an airless world is black, and a constant here printed
          * every blank cell of every unlit rock face at one identical grey, a slab of cardboard. */
         var hk = wk && L ? (EM[c] ? 1.7 : 1.25) * L / 255 : 0;
-        var mf = sun && kd ? sun * (kd === 2 ? (0.32 + 0.2 * L / 255) * (0.6 + 0.4 * (wd < FE ? wd / FE : 1)) : 0.43 * L / 255) : 0;
+        var mf = sun && kd ? sun * (kd === 2 ? (0.18 + 0.16 * L / 255) * (wd < FE ? (t = wd / FE, 1 - 0.85 * t * t) : 0.15) : 0.43 * L / 255) : 0;
         for (k = 0; k < 3; k++) {
           v = r[k] + (op ? (q[k] - r[k]) * op : 0);
           if (rim) v = Math.max(v, Z[k + 6] * 0.9);
@@ -1182,7 +1214,7 @@ var CC = (function () {
        * so a pool's faint skirt dies to black instead of greying the negative space round it. An
        * emitter's own cell takes the pool at (1 - its emission): the sign is lit from inside, the
        * wall beside it from the sign. The headroom cap again last, over the sum. */
-      for (i = y0 * C, j = a0; i < (y1 + 1) * C; i++, j += 3) if (tq[j] + tq[j + 1] + tq[j + 2] > 0.02 / A) {
+      for (i = y0 * C, j = a0; i < (y1 + 1) * C; i++, j += 3) if (tq[j] + tq[j + 1] + tq[j + 2] > 0.02 / A && !(fk[i] === 3 && fd[i] < 0.1)) {
         p = PALETTE[fc[i]]; b = Wk[i] && fh[i] ? (EM[fc[i]] ? 1.7 : 1.25) * fl[i] / 255 : 0;
         for (k = 0; k < 3; k++) if ((t = tq[j + k] * A) > 0.02) {
           pc = p[k]; v = 1 - sp[j + k] / (pc + 1); v *= v * t; v = 72 * v / (v + 72);
@@ -1211,7 +1243,8 @@ var CC = (function () {
       f.uon = !!Compose.UNDER;
     },
     world: world,
-    UNDER: 1
+    UNDER: 1,
+    HUD: 1                      // the help strip's fade, 0..1 — hud.js writes it; see under()
   };
 
   /* HOW WIDE THE PAVEMENT IS, in metres from the building face to the kerb face, and it lives here

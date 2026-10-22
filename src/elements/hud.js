@@ -113,6 +113,11 @@
   var LH = 5, LGAP = 1;        // line box and the row between lines
 
   function textW(s) { return s.length * CW - 1; }
+  /* The column of air after a word that is followed by another one. Plated, not skipped: the
+   * status line printed 'MOONWALK', stepped one character and printed 'VACUUM', and the three
+   * columns between the two plates were the only unplated cells in the strip — a bar of lit
+   * regolith or frontier boards between two words, cut into the panel like a stray stroke. */
+  function gap(f, x, y, a) { plate(f, x, y, a); return x + CW; }
 
   /* The dark a single character stands on: its 3x5 box plus a ring of one, laid down cell by cell
    * as the line is walked so the field of black ends exactly where the writing does. The first
@@ -167,9 +172,13 @@
    * is edited. */
   var TIERS = [
     ['WASD MOVE',                        'DRAG LOOK'],
-    ['WASD MOVE  SHIFT RUN',             'DRAG LOOK  1-3 WORLD  T TIME'],
-    ['WASD MOVE  SHIFT RUN  C CROUCH',   'DRAG LOOK  1-3 WORLD  T TIME  Y HOLD  N SEED']
+    ['WASD MOVE  SHIFT RUN',             'DRAG LOOK  1-4 WORLD  T TIME'],
+    ['WASD MOVE  SHIFT RUN  C CROUCH',   'DRAG LOOK  1-4 WORLD  T TIME  Y HOLD  N SEED']
   ];
+  /* 1-4 because control.js takes any digit up to CC.World.count and there are four worlds — it said
+   * 1-3, which hid the fourth (Edo, LIST[3]) behind a key the help text told nobody about. A
+   * literal and not a count read at draw time: the tiers are measured as written, and a fifth
+   * world is a line edited here on purpose, not a string that grows by itself. */
 
   /* THE SAME LIST FOR A DEVICE WITH NO KEYS ON IT. Every string above names a key — WASD, SHIFT,
    * C, 1-6, N, P — and a phone has none of them; printing 'WASD MOVE' on a touchscreen is only
@@ -249,6 +258,11 @@
     draw: function (f, cam, t) {
       if (!CC.Control || !CC.Control.hintAlpha) return;
       var a = CC.Control.hintAlpha(t);
+      /* The fade is handed to core's underpainting as well as baked into the lum, because the visor
+       * is painted there as solid letter blocks at a fixed brightness (see under() in core.js) and a
+       * block that ignored the envelope would snap on at full strength under a letter still fading
+       * in. Written before the early return so a closed overlay can never leave a stale value. */
+      if (CC.Compose) CC.Compose.HUD = a;
       if (a <= 0.01) return;
       var cols = f.cols, rows = f.rows;
       if (cols < MIN_COLS) return;
@@ -284,9 +298,9 @@
 
       // ---- status: what the sky is doing, and who is driving --------------------------------
       var x = MARGIN_X;
-      if (paused) x = text(f, 'PAUSED', x, y, WHITE, sl, a) + CW;
+      if (paused) x = gap(f, text(f, 'PAUSED', x, y, WHITE, sl, a), y, a);
       else if (mode) {
-        x = text(f, 'MANUAL', x, y, WHITE, sl, a) + CW;
+        x = gap(f, text(f, 'MANUAL', x, y, WHITE, sl, a), y, a);
         /* The speed only appears where there is room for it. On the narrow tier those four extra
          * characters are the difference between a status line and a status line and a half. */
         if (tier > 0) {
@@ -294,7 +308,7 @@
           var d = Math.round(this.spd);
           if (!(d > 0)) d = 0; else if (d > 9) d = 9;
           x = text(f, this.dig[d], x, y, SLATE, kl, a);
-          x = text(f, 'M/S', x, y, SLATE, kl, a) + CW;
+          x = gap(f, text(f, 'M/S', x, y, SLATE, kl, a), y, a);
         }
       }
       /* WHICH WORLD, ahead of what the sky is doing, and only when the frame is wide enough to
@@ -325,7 +339,7 @@
        * one frame. Naming the old world in that frame is the one wrong answer available here. */
       if (tier > 0 && CC.World && CC.World.name) {
         var wn = CC.World.name;
-        if (x + textW(wn) + CW + 44 <= cols - MARGIN_X) x = text(f, wn, x, y, SLATE, kl, a) + CW;
+        if (x + textW(wn) + CW + 44 <= cols - MARGIN_X) x = gap(f, text(f, wn, x, y, SLATE, kl, a), y, a);
       }
       /* THE HOUR, between the world and the weather, and only on the widest tier. The status line
        * is read left to right as "where, when, what" — CYBERCITY NOON RAIN — which is the order a
@@ -335,7 +349,7 @@
       if (tier > 1 && CC.Daylight) {
         var dn = CC.Daylight.P.name.toUpperCase();
         if (CC.Daylight.P.frozen) dn = '-' + dn;
-        if (x + textW(dn) + CW + 24 <= cols - MARGIN_X) x = text(f, dn, x, y, SLATE, kl, a) + CW;
+        if (x + textW(dn) + CW + 24 <= cols - MARGIN_X) x = gap(f, text(f, dn, x, y, SLATE, kl, a), y, a);
       }
       var w = CC.Weather ? CC.Weather.P.name : '';
       for (var wi = 0; wi < this.wnames.length; wi++) {

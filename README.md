@@ -438,8 +438,11 @@ crossing the sunset; it is now a continuous plume, drawn far paler, so the cells
 occupied and only the sway moves them. Measured now, at a four-second window with the camera
 pinned: the frontier's own elements take a big step 1.50 times a second against the city's own
 1.50, and carry 2.53% of full scale in the 3-20 Hz band against the city's 2.28% — the two worlds
-are the same shape, which is what the gate was for. The Moon's own elements are 0.00/s and 0.00%,
-because `vacuum` has every parameter at zero and there is nothing out there that modulates. Edo's
+are the same shape, which is what the gate was for. That comparison is judged in lum mode only up
+to the 200x60 grid it was fitted on, counted in cells; on a grid of more cells the absolute
+backstops gate and the comparison is printed, not judged — `CONTRACT.md` has the numbers and the
+reason. The Moon's own elements are 0.00/s and 0.00%, because `vacuum` has every parameter at
+zero and there is nothing out there that modulates. Edo's
 are 0.75/s and 2.23%. With every element in a world switched on at once, which is context rather
 than a gate, the big-step rates are 4.75/s for the city, 7.25/s for the frontier, 0.25/s for the
 Moon and 1.50/s for Edo. The tumbleweed's roll rate and the cloud bars' drift were sized against

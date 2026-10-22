@@ -255,8 +255,21 @@ const SEEDS = [3, 42];
 /* The backstop, not the gate — see the header. Nothing may be more than this bad in absolute
  * terms whatever the city does, and the city itself sits under both. */
 const STEP_RATE_CAP = 8.0, BAND_CAP = 9.0;
-/* The gate: the frontier's own worst, against the city's own worst, plus 15%. */
-const TOLERANCE = 1.15;
+/* The gate: the frontier's own worst, against the city's own worst, plus 15%.
+ *
+ * IN LUM MODE IT IS JUDGED ONLY UP TO THE GRID IT WAS FITTED ON, 200x60 — counted in cells,
+ * 12,000, not per axis, so the 120x40 default is judged and so is a wide short 201x40 (8,040
+ * cells, coarser than the fit), which an axis test silently dropped — and reported above it.
+ * At 400x120 it fails by a hair — 3.25/s against the city's 2.75 x 1.15 = 3.16 — and what is left
+ * is a horse's or the wagon team's solid legs crossing a lit road cell, an object passing once at
+ * twice the resolution, not a beat (the aliasing that was a beat, the wagon bed's comb, was fixed
+ * by scaling it with frame.D). Lum mode is also not the frame anybody sees: it switches the
+ * underpainting off, and the browser always runs with Compose.UNDER = 1 — nothing at runtime sets
+ * it to 0 — and on the composite, the light actually emitted, the same legs score 0.00 big steps a
+ * second at both sizes. So the owner's call: on a larger grid lum mode enforces the absolute backstops
+ * (8.0/s, 9%) and the flash rule and PRINTS the comparison with its numbers, never silently skipping
+ * it; composite mode keeps judging the project's absolute 1.0/s and 2% at every size. */
+const TOLERANCE = 1.15, FIT_COLS = 200, FIT_ROWS = 60;
 
 let fail = 0;
 console.log(`frontier flicker gate — ${M.tag}, ${SECONDS}s measured of ${NF} frames, ` +
@@ -315,16 +328,22 @@ for (const seed of SEEDS) {
  * the day this landed, 200x60: the frontier's own 1.18% in band against the city's 0.79% on the
  * composite — and 1.14% against 0.80% on the glyph print with the underpainting OFF, so the wash
  * contributes 0.04 of it and the inversion is the averaging. Gating that ratio would be gating
- * on how thin rain is. The lum run keeps the comparative rule, where it was fitted. */
+ * on how thin rain is. The lum run keeps the comparative rule, at the 200x60 it was fitted on. */
 const cmpRate = liveRate > cityRate * TOLERANCE, cmpBand = liveBand > cityBand * TOLERANCE;
 if (M.comp) {
   console.log(`    comparison (printed, not judged in composite mode): rate ${liveRate.toFixed(2)} vs ${cityRate.toFixed(2)}/s` +
               `${cmpRate ? ' — over' : ''}, band ${liveBand.toFixed(2)}% vs ${cityBand.toFixed(2)}%${cmpBand ? ' — over' : ''}`);
   if (liveRate > 1.0) { fail++; console.log(`    FAIL: big-step rate ${liveRate.toFixed(2)}/s over the absolute 1.0/s`); }
   if (liveBand > 2.0) { fail++; console.log(`    FAIL: 3-20 Hz ${liveBand.toFixed(2)}% over the absolute 2%`); }
-} else {
+} else if (COLS * ROWS <= FIT_COLS * FIT_ROWS) {
   if (cmpRate) { fail++; console.log('    FAIL: the frontier steps more often than the city'); }
   if (cmpBand) { fail++; console.log('    FAIL: the frontier carries more 3-20 Hz than the city'); }
+} else {
+  console.log(`    comparison (REPORTED, NOT ENFORCED: lum mode judges it only up to ${FIT_COLS}x${FIT_ROWS} in cells, where it ` +
+              `was fitted; the backstops above are the gate here): rate ${liveRate.toFixed(2)} vs ` +
+              `${cityRate.toFixed(2)} x ${TOLERANCE} = ${(cityRate * TOLERANCE).toFixed(2)}/s${cmpRate ? ' — over' : ''}, ` +
+              `band ${liveBand.toFixed(2)}% vs ${cityBand.toFixed(2)}% x ${TOLERANCE} = ` +
+              `${(cityBand * TOLERANCE).toFixed(2)}%${cmpBand ? ' — over' : ''}`);
 }
 
 console.log('\n  reduced motion');

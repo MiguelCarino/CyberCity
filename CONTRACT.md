@@ -321,15 +321,22 @@ already carries.
 WHAT THEY SAID WHEN THIS LANDED. All seven passed in all four modes but one: lum-mode west-flicker
 at 400x120 FAILS at 10.75 big steps a second against the 8.0 backstop (seed 3, every preset), and the
 untouched tree at 7425bb2 fails identically, so this is not the underpainting or the density work. It
-is `west-wagon` alone — 1.50/s at 200 columns, 3.00/s at 300, 10.00/s at 360 — and the shipped band
-reached 360 (main.js MAXC) with this note still open, so it was chased down in the fix pass. It was not the rim: it
+is `west-wagon` alone — 1.50/s at 200 columns, 3.00/s at 300, 10.00/s at 360 — inside the band the
+browser ships (main.js MAXC is 360), so it was chased down in the fix pass. It was not the rim: it
 was the BED, 27 fixed samples printing as a comb once the wagon spans more columns than that, with
 the teeth sliding a sub-cell phase as it moves; and then the team's legs, one cell wide at 25 m on a
 400-column grid so a near and far leg crossed a lit road cell as two pulses. Both now scale by
-frame.D (identical at 200 columns): 10.75/s -> 3.25/s, 3-20 Hz 3.93% -> 3.07%, backstops passed. It
-STILL FAILS the comparative rule at 400x120 — 3.25/s against the city's own 2.75 x 1.15 = 3.16 —
-and that residual is the legs crossing the road at all, a solid object passing once, not an
-aliasing beat. Composite mode, the light actually emitted, is 0.00 big steps a second at both sizes.
+frame.D (identical at 200 columns): 10.75/s -> 3.25/s, 3-20 Hz 3.93% -> 3.07%, backstops passed. The
+comparative rule at 400x120 still reads over — 3.25/s against the city's own 2.75 x 1.15 = 3.16 —
+and that residual is solid legs crossing a lit road cell at all, an object passing once, not an
+aliasing beat. Composite mode, the light actually emitted, is 0.00 big steps a second at both sizes,
+and the browser never runs in lum mode: Compose.UNDER is 1 and nothing at runtime sets it to 0. So,
+by the owner's decision, LUM MODE JUDGES THE COMPARATIVE RULE ONLY UP TO THE GRID IT WAS FITTED ON,
+200x60, counted in cells (12,000) and not per axis, so the 120x40 default is judged and so is a
+wide short grid like 201x40. On a grid of more cells lum mode enforces the absolute backstops
+(8.0/s, 9%) and the general-flash rule, and prints the comparison with both numbers and
+`REPORTED, NOT ENFORCED` rather than skipping it. Composite mode is unchanged at every size: it
+judges the project's absolute 1.0/s and 2% and prints its ratio, for the reason below.
 Flash area was 0.0% in every real run. Lightning passes with the underpainting on: on the composite
 (2026-10-21, after the composite model learned the pixel path's ink lift — see below) the strongest
 stroke is 0.9% of full scale above the held night frame at 200x60 and 1.1% at 400x120, its largest

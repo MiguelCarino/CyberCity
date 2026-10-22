@@ -409,14 +409,17 @@ var CC = (function () {
     fld(Wc[i], Wh[i] ? Wl[i] : 0, wk, wd, a, Wh[i]);
     r[0] = q[0]; r[1] = q[1]; r[2] = q[2];
 
-    var vis = kd === 3 && d < 0.1, op = vis ? 1 : kd === 3 && d < wd ? (c === SH || !wk ? 1 : (THIN[gc] ? 0.25 : 0.75) * (L < 24 ? L / 24 : 1)) : 0;
-    if (op && !vis) fld(c, L, wk && 3, d, (d - f0) / fs, gc);
-    else if (vis) q[0] = q[1] = q[2] = 0;
+    if (kd === 3 && d < 0.1) {
+     for (t = gc && d < 0.025 ? G * Compose.HUD * 200 / Math.max(p[0], p[1], p[2]) : 0, k = 0; k < 3; k++) u[o + k] = p[k] * t, sp[o + k] = 0;
+     continue;
+    }
+    var op = kd === 3 && d < wd ? (c === SH || !wk ? 1 : (THIN[gc] ? 0.25 : 0.75) * (L < 24 ? L / 24 : 1)) : 0;
+    if (op) fld(c, L, wk && 3, d, (d - f0) / fs, gc);
 
-    var rim = y && wk === 1 && Wk[i - C] === 0, e = S && !vis && wk && d < SKY_D && L > 90 && EM[c] ? (L - 90) / 165 * 0.7 : 0;
+    var rim = y && wk === 1 && Wk[i - C] === 0, e = S && wk && d < SKY_D && L > 90 && EM[c] ? (L - 90) / 165 * 0.7 : 0;
 
     var hk = wk && L ? (EM[c] ? 1.7 : 1.25) * L / 255 : 0;
-    var mf = sun && kd ? sun * (kd === 2 ? (0.32 + 0.2 * L / 255) * (0.6 + 0.4 * (wd < FE ? wd / FE : 1)) : 0.43 * L / 255) : 0;
+    var mf = sun && kd ? sun * (kd === 2 ? (0.18 + 0.16 * L / 255) * (wd < FE ? (t = wd / FE, 1 - 0.85 * t * t) : 0.15) : 0.43 * L / 255) : 0;
     for (k = 0; k < 3; k++) {
      v = r[k] + (op ? (q[k] - r[k]) * op : 0);
      if (rim) v = Math.max(v, Z[k + 6] * 0.9);
@@ -437,7 +440,7 @@ var CC = (function () {
      bs = sp.subarray(a0, a1), bp = tp.subarray(a0, a1), bq = tq.subarray(a0, a1);
    hbox(bs, bp, Rb, C, h1); hbox(bp, bq, Rb, C, h2); vbox(bq, bp, Rb, C3, v1); vbox(bp, bq, Rb, C3, v2);
 
-   for (i = y0 * C, j = a0; i < (y1 + 1) * C; i++, j += 3) if (tq[j] + tq[j + 1] + tq[j + 2] > 0.02 / A) {
+   for (i = y0 * C, j = a0; i < (y1 + 1) * C; i++, j += 3) if (tq[j] + tq[j + 1] + tq[j + 2] > 0.02 / A && !(fk[i] === 3 && fd[i] < 0.1)) {
     p = PALETTE[fc[i]]; b = Wk[i] && fh[i] ? (EM[fc[i]] ? 1.7 : 1.25) * fl[i] / 255 : 0;
     for (k = 0; k < 3; k++) if ((t = tq[j + k] * A) > 0.02) {
      pc = p[k]; v = 1 - sp[j + k] / (pc + 1); v *= v * t; v = 72 * v / (v + 72);
@@ -462,7 +465,8 @@ var CC = (function () {
    f.uon = !!Compose.UNDER;
   },
   world: world,
-  UNDER: 1
+  UNDER: 1,
+  HUD: 1
  };
 
  var PAVE = 2.15;
@@ -4325,6 +4329,8 @@ W("surf_west.js");
 
  function textW(s) { return s.length * CW - 1; }
 
+ function gap(f, x, y, a) { plate(f, x, y, a); return x + CW; }
+
  var PSEED = 1471;
 
  function plate(f, x, y, a) {
@@ -4357,8 +4363,8 @@ W("surf_west.js");
 
  var TIERS = [
   ['WASD MOVE',                        'DRAG LOOK'],
-  ['WASD MOVE  SHIFT RUN',             'DRAG LOOK  1-3 WORLD  T TIME'],
-  ['WASD MOVE  SHIFT RUN  C CROUCH',   'DRAG LOOK  1-3 WORLD  T TIME  Y HOLD  N SEED']
+  ['WASD MOVE  SHIFT RUN',             'DRAG LOOK  1-4 WORLD  T TIME'],
+  ['WASD MOVE  SHIFT RUN  C CROUCH',   'DRAG LOOK  1-4 WORLD  T TIME  Y HOLD  N SEED']
  ];
 
  var TOUCH = [
@@ -4403,6 +4409,8 @@ W("surf_west.js");
   draw: function (f, cam, t) {
    if (!CC.Control || !CC.Control.hintAlpha) return;
    var a = CC.Control.hintAlpha(t);
+
+   if (CC.Compose) CC.Compose.HUD = a;
    if (a <= 0.01) return;
    var cols = f.cols, rows = f.rows;
    if (cols < MIN_COLS) return;
@@ -4429,28 +4437,28 @@ W("surf_west.js");
    if (sl < 1) return;
 
    var x = MARGIN_X;
-   if (paused) x = text(f, 'PAUSED', x, y, WHITE, sl, a) + CW;
+   if (paused) x = gap(f, text(f, 'PAUSED', x, y, WHITE, sl, a), y, a);
    else if (mode) {
-    x = text(f, 'MANUAL', x, y, WHITE, sl, a) + CW;
+    x = gap(f, text(f, 'MANUAL', x, y, WHITE, sl, a), y, a);
 
     if (tier > 0) {
 
      var d = Math.round(this.spd);
      if (!(d > 0)) d = 0; else if (d > 9) d = 9;
      x = text(f, this.dig[d], x, y, SLATE, kl, a);
-     x = text(f, 'M/S', x, y, SLATE, kl, a) + CW;
+     x = gap(f, text(f, 'M/S', x, y, SLATE, kl, a), y, a);
     }
    }
 
    if (tier > 0 && CC.World && CC.World.name) {
     var wn = CC.World.name;
-    if (x + textW(wn) + CW + 44 <= cols - MARGIN_X) x = text(f, wn, x, y, SLATE, kl, a) + CW;
+    if (x + textW(wn) + CW + 44 <= cols - MARGIN_X) x = gap(f, text(f, wn, x, y, SLATE, kl, a), y, a);
    }
 
    if (tier > 1 && CC.Daylight) {
     var dn = CC.Daylight.P.name.toUpperCase();
     if (CC.Daylight.P.frozen) dn = '-' + dn;
-    if (x + textW(dn) + CW + 24 <= cols - MARGIN_X) x = text(f, dn, x, y, SLATE, kl, a) + CW;
+    if (x + textW(dn) + CW + 24 <= cols - MARGIN_X) x = gap(f, text(f, dn, x, y, SLATE, kl, a), y, a);
    }
    var w = CC.Weather ? CC.Weather.P.name : '';
    for (var wi = 0; wi < this.wnames.length; wi++) {
