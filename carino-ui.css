@@ -394,6 +394,10 @@
     .kbd.accent { color: var(--accent); border-color: var(--accent-dim); }
     .kbd-legend { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; font-family: var(--mono); font-size: var(--fs-btn); color: var(--text-muted); }
     .kbd-legend .lbl { text-transform: uppercase; letter-spacing: 0.06em; }
+    /* help dialogs: keys beside what they do, as a <dl> */
+    .kbd-grid { display: grid; grid-template-columns: max-content 1fr; gap: 8px 14px; align-items: center; margin: 0; font-family: var(--mono); font-size: var(--fs-btn); color: var(--text-sec); }
+    .kbd-grid dt { white-space: nowrap; }
+    .kbd-grid dd { margin: 0; text-transform: uppercase; letter-spacing: 0.06em; }
 
 
     /* ── Data Viz ──────────────────────────────────────────────────────────
@@ -657,6 +661,25 @@
       .slice-menu.collapsed .s-num, body.state-module .slice-menu .s-num { display: none; }
     }
     @media (prefers-reduced-motion: reduce) { .slice-menu .slice, .slice-menu .slice::before { transition: none; } .slice-menu .slice:hover { flex: 1; } }
+    /* .grid: many modules (a course). The overview wraps into tiles instead of
+       one row of columns, and the open-module bar keeps each tab at its
+       natural width and scrolls sideways. Reference: Learn, Hash. */
+    .slice-menu.grid { flex-wrap: wrap; }
+    .slice-menu.grid:not(.collapsed) .slice { flex: 1 1 280px; min-width: 240px; justify-content: flex-start; gap: 8px; padding: 22px 20px; border-bottom: 1px solid var(--border); }
+    .slice-menu.grid:not(.collapsed) .slice:hover, .slice-menu.grid:not(.collapsed) .slice:focus-visible { flex: 1.12 1 280px; }
+    .slice-menu.grid:not(.collapsed) .s-text { font-size: var(--fs-h3); }
+    body.state-module .slice-menu.grid, .slice-menu.grid.collapsed { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+    @media (min-width: 641px) { body.state-module .slice-menu.grid .slice, .slice-menu.grid.collapsed .slice { flex: 0 0 auto; min-width: 110px; } }
+    @media (max-width: 640px) {
+      .slice-menu.grid:not(.collapsed) .slice, .slice-menu.grid:not(.collapsed) .slice:hover { flex: none; min-width: 0; padding: 18px 16px; }
+    }
+    /* a tile's own progress: "3 / 8" and a fluid .progress bar */
+    .slice .s-count { font-family: var(--mono); font-size: var(--fs-label); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    .slice.is-complete .s-count { color: var(--accent); }
+    .slice .s-prog { width: 100%; height: 5px; }
+    body.state-module .slice-menu .s-prog, .slice-menu.collapsed .s-prog,
+    body.state-module .slice-menu .s-count, .slice-menu.collapsed .s-count { display: none; }
+    .slice-menu.grid:not(.collapsed) .s-count { margin-top: auto; padding-top: 6px; }
 
     /* ============ filter chips ============
        A Reference page's first control: a sticky bar of facet chips, one

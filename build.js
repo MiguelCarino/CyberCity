@@ -368,15 +368,9 @@ ${BASELINE}<link rel="stylesheet" href="fonts/carino-fonts.css">
      for good after one play and never reappears on resize or fullscreen change. */
   @keyframes hint { 0% { opacity: 0 } 12% { opacity: .6 } 70% { opacity: .6 } 100% { opacity: 0 } }
   @media (prefers-reduced-motion: reduce) { #hint { animation-duration: 14s } }
-  /* The help overlay: Branding's modal; the touch section shows on coarse pointers only. */
-  .cc-keys { display: grid; grid-template-columns: max-content 1fr; gap: 8px 14px; align-items: center;
-             margin: 12px 0 0; font-family: var(--mono); font-size: var(--fs-btn); color: var(--text-muted); }
-  .cc-keys dt { white-space: nowrap; }
-  .cc-keys dd { margin: 0; text-transform: uppercase; letter-spacing: .06em; }
-  .cc-touch { display: none; margin: 14px 0 0; }
-  .modal-head > div:first-child { flex: 1; }
-  @media (pointer: coarse) { .cc-touch { display: block; } }
-  #ccPause[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: var(--accent-faint); }
+  /* The help overlay: Branding's modal, .kbd-grid key list and .touch-only touch section. */
+  .cc-keys { margin: 12px 0 0; }
+  .cc-touch { margin: 14px 0 0; }
 </style>
 </head>
 <body class="play-body">
@@ -396,11 +390,11 @@ ${BASELINE}<link rel="stylesheet" href="fonts/carino-fonts.css">
     </div>
     <div class="modal-body">
       <p style="margin:0" data-i18n>Four worlds drawn in text characters. Leave it alone and it walks itself; take the camera whenever you like. Opening this pauses the city.</p>
-      <div class="cc-touch">
+      <div class="cc-touch touch-only">
         <div class="modal-sub" data-i18n>Touch</div>
         <p style="margin:6px 0 0" data-i18n>Left half of the screen walks, right half looks. Tap the city for fullscreen.</p>
       </div>
-      <dl class="cc-keys">
+      <dl class="kbd-grid cc-keys">
         <dt><span class="kbd">W</span> <span class="kbd">A</span> <span class="kbd">S</span> <span class="kbd">D</span></dt><dd data-i18n>Walk</dd>
         <dt><span class="kbd">←</span> <span class="kbd">→</span> <span class="kbd">↑</span> <span class="kbd">↓</span></dt><dd data-i18n>Look (or drag)</dd>
         <dt><span class="kbd">Shift</span> <span class="kbd">C</span></dt><dd data-i18n>Run, crouch</dd>
