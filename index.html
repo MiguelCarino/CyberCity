@@ -22,39 +22,88 @@
 <meta name="twitter:card" content="summary_large_image">
 <script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebApplication", "name": "CyberCity", "url": "https://cybercity.carino.systems/", "description": "Four walkable worlds drawn entirely in text characters — a rain-lit city, an 1880s frontier town, the Moon and a castle town at dusk — with the sun going round.", "operatingSystem": "Any (runs in a web browser)", "isAccessibleForFree": true, "author": {"@type": "Person", "name": "Miguel Cariño", "url": "https://carino.systems/"}}</script>
 <!-- /carino:head -->
+<link rel="stylesheet" href="fonts/carino-fonts.css">
+<link rel="stylesheet" href="carino-ui.css">
 <style>
   html, body { margin: 0; padding: 0; background: #000; height: 100%; overflow: hidden; }
-  /* The canvas is allowed to overhang the viewport by a fraction of a cell (see main.js layout),
-     so it is pinned to the origin and the overflow above hides the remainder. */
-  #cc { position: fixed; inset: 0; display: block; background: #000;
+  body { overscroll-behavior: none; }
+  .play-stage { background: #000; }
+  /* The canvas is allowed to overhang the stage by a fraction of a cell (see main.js layout), so
+     it is pinned to the stage's corner and the stage's overflow hides the remainder. main.js
+     sizes it from the stage, not the window, so the navbar never covers a row of city. */
+  #cc { position: absolute; left: 0; top: 0; display: block; background: #000;
         image-rendering: auto; }
-  /* Nothing here is selectable, draggable or scrollable: every gesture is a fullscreen request. */
-  body { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
-         touch-action: none; overscroll-behavior: none; }
+  /* Nothing on the stage is selectable, draggable or scrollable: every gesture is a fullscreen
+     request. Kept off the body so the help overlay can still scroll on a phone. */
+  .play-stage { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+                touch-action: none; }
   #hint {
-    position: fixed; left: 50%; bottom: 6vh; transform: translateX(-50%);
-    font: 500 12px/1 ui-monospace, "Liberation Mono", "DejaVu Sans Mono", monospace;
-    letter-spacing: .28em; text-transform: uppercase; color: #d8e84a;
+    position: absolute; left: 50%; bottom: 6vh; transform: translateX(-50%);
+    font: 500 var(--fs-sm)/1 var(--mono);
+    letter-spacing: .28em; text-transform: uppercase; color: var(--text-sec); white-space: nowrap;
     pointer-events: none; opacity: 0;
     animation: hint 9s ease-in-out .8s 1 forwards;
   }
+  #hint .h-coarse { display: none; }
+  @media (pointer: coarse) { #hint .h-fine { display: none; } #hint .h-coarse { display: inline; } }
   /* Ends at opacity 0 and stays there — 'forwards' holds the last keyframe, so the hint is gone
      for good after one play and never reappears on resize or fullscreen change. */
-  @keyframes hint { 0% { opacity: 0 } 12% { opacity: .34 } 70% { opacity: .34 } 100% { opacity: 0 } }
+  @keyframes hint { 0% { opacity: 0 } 12% { opacity: .6 } 70% { opacity: .6 } 100% { opacity: 0 } }
   @media (prefers-reduced-motion: reduce) { #hint { animation-duration: 14s } }
-  /* The one link on the page: the fleet's legal notice. Dim and small, in the corner the
-     city's skyline never needs; it brightens only under the pointer. */
-  #legal { position: fixed; right: 10px; bottom: 8px; z-index: 1;
-           font: 500 10px/1 ui-monospace, "Liberation Mono", "DejaVu Sans Mono", monospace;
-           letter-spacing: .12em; text-transform: uppercase; color: #d8e84a; opacity: .28;
-           text-decoration: none; }
-  #legal:hover, #legal:focus-visible { opacity: .8; }
+  /* The help overlay: Branding's modal; the touch section shows on coarse pointers only. */
+  .cc-keys { display: grid; grid-template-columns: max-content 1fr; gap: 8px 14px; align-items: center;
+             margin: 12px 0 0; font-family: var(--mono); font-size: var(--fs-btn); color: var(--text-muted); }
+  .cc-keys dt { white-space: nowrap; }
+  .cc-keys dd { margin: 0; text-transform: uppercase; letter-spacing: .06em; }
+  .cc-touch { display: none; margin: 14px 0 0; }
+  .modal-head > div:first-child { flex: 1; }
+  @media (pointer: coarse) { .cc-touch { display: block; } }
+  #ccPause[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: var(--accent-faint); }
 </style>
 </head>
-<body>
+<body class="play-body">
+<div data-carino-actions>
+  <button type="button" class="cs-btn" id="ccPause" aria-pressed="false">Pause</button>
+  <button type="button" class="cs-btn" id="ccHelpBtn" data-priority="1" aria-haspopup="dialog" aria-controls="ccHelp">? <span data-i18n>Help</span></button>
+</div>
+<main class="play-stage" id="stage">
 <canvas id="cc"></canvas>
-<div id="hint">click for fullscreen</div>
-<a id="legal" href="https://carino.systems/legal.html">Legal</a>
+<div id="hint"><span class="h-fine" data-i18n>click for fullscreen</span><span class="h-coarse" data-i18n>tap for fullscreen</span></div>
+</main>
+<div class="modal-scrim" id="ccHelp" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ccHelpTitle">
+    <div class="modal-head">
+      <div><div class="modal-title" id="ccHelpTitle" data-i18n>How to play</div><div class="modal-sub">CyberCity</div></div>
+      <button type="button" class="modal-x" id="ccHelpX" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0" data-i18n>Four worlds drawn in text characters. Leave it alone and it walks itself; take the camera whenever you like. Opening this pauses the city.</p>
+      <div class="cc-touch">
+        <div class="modal-sub" data-i18n>Touch</div>
+        <p style="margin:6px 0 0" data-i18n>Left half of the screen walks, right half looks. Tap the city for fullscreen.</p>
+      </div>
+      <dl class="cc-keys">
+        <dt><span class="kbd">W</span> <span class="kbd">A</span> <span class="kbd">S</span> <span class="kbd">D</span></dt><dd data-i18n>Walk</dd>
+        <dt><span class="kbd">←</span> <span class="kbd">→</span> <span class="kbd">↑</span> <span class="kbd">↓</span></dt><dd data-i18n>Look (or drag)</dd>
+        <dt><span class="kbd">Shift</span> <span class="kbd">C</span></dt><dd data-i18n>Run, crouch</dd>
+        <dt><span class="kbd">1</span>–<span class="kbd">4</span></dt><dd data-i18n>Change world</dd>
+        <dt><span class="kbd">[</span> <span class="kbd">]</span></dt><dd data-i18n>Change the weather</dd>
+        <dt><span class="kbd">T</span> <span class="kbd">Y</span></dt><dd data-i18n>Time of day, stop the clock</dd>
+        <dt><span class="kbd">N</span></dt><dd data-i18n>New city</dd>
+        <dt><span class="kbd">Tab</span></dt><dd data-i18n>Take or give back the camera</dd>
+        <dt><span class="kbd accent">P</span> <span class="kbd accent">Space</span></dt><dd data-i18n>Pause</dd>
+        <dt><span class="kbd">F</span></dt><dd data-i18n>Fullscreen</dd>
+        <dt><span class="kbd">?</span> <span class="kbd">H</span></dt><dd data-i18n>Help</dd>
+        <dt><span class="kbd">Esc</span></dt><dd data-i18n>Close</dd>
+      </dl>
+      <p style="margin:14px 0 0;font-size:var(--fs-sm);color:var(--text-muted)" data-i18n>No sound. Nothing is sent anywhere.</p>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" id="ccFull" data-i18n>Fullscreen</button>
+      <button type="button" class="btn btn-primary" id="ccResume" data-i18n>Resume</button>
+    </div>
+  </div>
+</div>
 <script src="w/west.js?v=baf528f930"></script>
 <script src="w/jp.js?v=fa656c3016"></script>
 <script src="w/moon.js?v=b38866aba9"></script>
@@ -3577,6 +3626,11 @@ W("surf_west.js");
   hintClose = t + HINT_IN + HINT_HOLD;
  }
 
+ function setPaused(v) {
+  paused = v ? 1 : 0; Control.paused = paused;
+  if (hooksRef && hooksRef.paused) hooksRef.paused(paused);
+ }
+
  var el = null;
 
  var hooksRef = null;
@@ -3615,9 +3669,13 @@ W("surf_west.js");
                  hooks && hooks.now ? hooks.now() : 0); idle = 0;
       if (doc.exitPointerLock) doc.exitPointerLock();
       break;
-     case 'KeyH': hintToggle(hooks && hooks.now ? hooks.now() : 0); break;
 
-     case 'KeyP': paused = paused ? 0 : 1; Control.paused = paused; break;
+     case 'KeyH':
+      hintToggle(hooks && hooks.now ? hooks.now() : 0);
+      if (hooks && hooks.help) hooks.help();
+      break;
+
+     case 'KeyP': case 'Space': setPaused(!paused); e.preventDefault(); break;
      case 'KeyF': if (hooks && hooks.fullscreen) hooks.fullscreen(); break;
      case 'KeyN': if (hooks && hooks.reseed) hooks.reseed(); break;
 
@@ -3633,6 +3691,10 @@ W("surf_west.js");
      default: hit = 0;
     }
 
+    if (!hit && h === '?') {
+     if (hooks && hooks.help) hooks.help(); else hintToggle(hooks && hooks.now ? hooks.now() : 0);
+     hit = 2;
+    }
     var dg = /^Digit[1-9]$/.test(c) ? parseInt(c.slice(5), 10)
        : (h && h.length === 1 && h >= '1' && h <= '9' ? h.charCodeAt(0) - 48 : 0);
     if (!hit && dg) {
@@ -3657,6 +3719,11 @@ W("surf_west.js");
 
   win.addEventListener('keydown', function (e) {
    if (e.metaKey || e.ctrlKey && e.code !== 'ControlLeft' || e.altKey) return;
+
+   if (hooks && hooks.blocked && hooks.blocked()) return;
+   var tg = e.target;
+   if (tg && (tg.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName || ''))) return;
+   if (e.code === 'Space' && tg && /^(BUTTON|A)$/.test(tg.tagName || '')) return;
    if (e.repeat) { K.any = 1; return; }
    if (set(e, 1) && e.code !== 'Tab') {   }
   });
@@ -3682,7 +3749,7 @@ W("surf_west.js");
    if (!isTouch(e)) { mouseDrag = 1; mlx = e.clientX; mly = e.clientY; return; }
 
    Control.touch = 1;
-   var w = win.innerWidth || el.clientWidth || 800;
+   var w = el.clientWidth || win.innerWidth || 800;
    if (e.clientX < w * 0.5) {
     if (stickId < 0) { stickId = e.pointerId; stickX0 = e.clientX; stickY0 = e.clientY; }
    } else if (lookId < 0) { lookId = e.pointerId; llx = e.clientX; lly = e.clientY; }
@@ -3755,6 +3822,7 @@ W("surf_west.js");
   touch: 0,
 
   paused: 0,
+  setPaused: function (v) { setPaused(v); },
 
   hintAlpha: hintAlpha,
 
@@ -3770,6 +3838,7 @@ W("surf_west.js");
    seedWanted = 0; padWorld = 0;
 
    paused = 0; Control.paused = 0;
+   if (hooksRef && hooksRef.paused) hooksRef.paused(0);
    hintOpen = 0; hintClose = HINT_IN + HINT_HOLD;
   }
  };
@@ -11969,9 +12038,16 @@ W("elements/west_town.js");
   return w * zoom;
  }
 
+ function stageSize() {
+  var p = canvas && canvas.parentNode;
+  var w = p && p.clientWidth, h = p && p.clientHeight;
+  return (w > 0 && h > 0) ? [w, h] : [window.innerWidth, window.innerHeight];
+ }
+
  function layout() {
-  var vw = Math.max(window.innerWidth || 320, 200);
-  var vh = Math.max(window.innerHeight || 240, 160);
+  var sz = stageSize();
+  var vw = Math.max(sz[0] || 320, 200);
+  var vh = Math.max(sz[1] || 240, 160);
 
   var dpr = Math.min(window.devicePixelRatio || 1, 2);
 
@@ -12104,6 +12180,15 @@ W("elements/west_town.js");
   adapt(nowMs() - t0, now);
  }
 
+ var modalOpen = false;
+ function emit(name, detail) {
+  try { window.dispatchEvent(new CustomEvent(name, { detail: detail })); } catch (err) { }
+ }
+
+ function onStage(e) {
+  var t = e && e.target;
+  return !modalOpen && !!e && !(t && t.closest && t.closest('#carinoNav, .modal-scrim, [data-carino-actions]'));
+ }
  var rzT = 0;
  function onResize() {
   window.clearTimeout(rzT);
@@ -12131,6 +12216,9 @@ W("elements/west_town.js");
    document.body.appendChild(canvas);
   }
 
+  try {
+   if (CC.Control && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) CC.Control.touch = 1;
+  } catch (err) { }
   var mq = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
   CC.reducedMotion = !!(mq && mq.matches);
   if (mq && mq.addEventListener)
@@ -12155,6 +12243,14 @@ W("elements/west_town.js");
 
   window.addEventListener('resize', onResize, { passive: true });
   window.addEventListener('orientationchange', onResize, { passive: true });
+
+  if (typeof ResizeObserver === 'function' && canvas.parentNode && canvas.parentNode.nodeType === 1)
+   new ResizeObserver(onResize).observe(canvas.parentNode);
+  window.addEventListener('carino:navbar', onResize);
+  window.addEventListener('cybercity:modal', function (e) { modalOpen = !!(e && e.detail && e.detail.open); });
+  window.addEventListener('cybercity:pause', function (e) {
+   if (CC.Control && CC.Control.setPaused) CC.Control.setPaused(!!(e && e.detail && e.detail.paused));
+  });
   document.addEventListener('fullscreenchange', onResize);
 
   document.addEventListener('webkitfullscreenchange', onResize);
@@ -12166,9 +12262,9 @@ W("elements/west_town.js");
    if (ns !== null && ns !== seed) moved = 1;
    if (moved) build(ns === null ? seed : ns);
   });
-  window.addEventListener('pointerdown', goFullscreen, { passive: true });
+  window.addEventListener('pointerdown', function (e) { if (onStage(e)) goFullscreen(); }, { passive: true });
   window.addEventListener('keydown', function (e) {
-   if (!e.metaKey && !e.ctrlKey && !e.altKey) goFullscreen();
+   if (!e.metaKey && !e.ctrlKey && !e.altKey && onStage(e) && e.key !== 'Escape') goFullscreen();
   });
 
   if (CC.Control && CC.Control.attach) {
@@ -12176,6 +12272,9 @@ W("elements/west_town.js");
     city: function () { return city; },
     now: function () { return simT; },
     fullscreen: goFullscreen,
+    help: function () { emit('cybercity:help', {}); },
+    blocked: function () { return modalOpen; },
+    paused: function (p) { emit('cybercity:paused', { paused: !!p }); },
     reseed: function () {
      var ns = (Math.random() * 4294967296) >>> 0;
      seed = ns;
@@ -12192,8 +12291,8 @@ W("elements/west_town.js");
     worldName: function () { return CC.World ? CC.World.name : ''; }
    });
 
-   window.addEventListener('pointerdown', function () {
-    if (CC.Control.requestLook) CC.Control.requestLook();
+   window.addEventListener('pointerdown', function (e) {
+    if (onStage(e) && CC.Control.requestLook) CC.Control.requestLook();
    }, { passive: true });
   }
 
@@ -12217,5 +12316,9 @@ W("elements/west_town.js");
 
 })();
 </script>
+<script src="carino-navbar.js" data-app="CyberCity" data-repo="CyberCity" data-immersive defer></script>
+<script src="carino-lang.js" defer></script>
+<script src="i18n.js" defer></script>
+<script src="ui.js" defer></script>
 </body>
 </html>

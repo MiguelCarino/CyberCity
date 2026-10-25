@@ -319,11 +319,15 @@ for (const need of ['var CC', 'CC.City', 'CC.Surf', 'CC.Cast', 'CC.Canvas', 'CC.
 /* The page is black before a single pixel of city is drawn — html, body and canvas all — so that
  * entering fullscreen never flashes white and never shows a seam at an edge the canvas overhangs.
  * The hint is CSS-only on purpose: it fades itself out and no JavaScript ever has to know it
- * existed, which keeps main.js free of anything resembling UI. */
-/* The baseline head block (description, canonical, Open Graph, JSON-LD) is written into
- * index.html by Carino-Systems/baseline/apply.py, between two marker comments. This build
- * regenerates index.html from scratch, so it carries that block over from the previous
- * output instead of dropping it. */
+ * existed, which keeps main.js free of anything resembling UI. Its wording is picked by
+ * (pointer: coarse) in CSS, so a phone reads "tap" from the first frame.
+ *
+ * The fleet chrome sits around the city, never in it: carino-ui.css (tokens and components,
+ * linked before the page's own style), carino-navbar.js with data-immersive (it slides away in
+ * fullscreen or after 3 s idle), carino-lang.js + i18n.js, and ui.js, which owns the help
+ * overlay and the pause button and talks to main.js only through window events. The body is
+ * Branding's play column: the navbar on top, .play-stage taking every remaining pixel, the
+ * canvas inside it. None of those files is part of the bundle. */
 const PREV = fs.existsSync(OUT) ? fs.readFileSync(OUT, 'utf8') : '';
 const BASELINE = (PREV.match(/<!-- carino:head[\s\S]*?<!-- \/carino:head -->\n/) || [''])[0];
 
@@ -336,41 +340,94 @@ const HTML = `<!doctype html>
 <meta name="theme-color" content="#000000">
 <title>CyberCity</title>
 <link rel="icon" type="image/webp" href="logo.webp">
-${BASELINE}<style>
+${BASELINE}<link rel="stylesheet" href="fonts/carino-fonts.css">
+<link rel="stylesheet" href="carino-ui.css">
+<style>
   html, body { margin: 0; padding: 0; background: #000; height: 100%; overflow: hidden; }
-  /* The canvas is allowed to overhang the viewport by a fraction of a cell (see main.js layout),
-     so it is pinned to the origin and the overflow above hides the remainder. */
-  #cc { position: fixed; inset: 0; display: block; background: #000;
+  body { overscroll-behavior: none; }
+  .play-stage { background: #000; }
+  /* The canvas is allowed to overhang the stage by a fraction of a cell (see main.js layout), so
+     it is pinned to the stage's corner and the stage's overflow hides the remainder. main.js
+     sizes it from the stage, not the window, so the navbar never covers a row of city. */
+  #cc { position: absolute; left: 0; top: 0; display: block; background: #000;
         image-rendering: auto; }
-  /* Nothing here is selectable, draggable or scrollable: every gesture is a fullscreen request. */
-  body { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
-         touch-action: none; overscroll-behavior: none; }
+  /* Nothing on the stage is selectable, draggable or scrollable: every gesture is a fullscreen
+     request. Kept off the body so the help overlay can still scroll on a phone. */
+  .play-stage { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+                touch-action: none; }
   #hint {
-    position: fixed; left: 50%; bottom: 6vh; transform: translateX(-50%);
-    font: 500 12px/1 ui-monospace, "Liberation Mono", "DejaVu Sans Mono", monospace;
-    letter-spacing: .28em; text-transform: uppercase; color: #d8e84a;
+    position: absolute; left: 50%; bottom: 6vh; transform: translateX(-50%);
+    font: 500 var(--fs-sm)/1 var(--mono);
+    letter-spacing: .28em; text-transform: uppercase; color: var(--text-sec); white-space: nowrap;
     pointer-events: none; opacity: 0;
     animation: hint 9s ease-in-out .8s 1 forwards;
   }
+  #hint .h-coarse { display: none; }
+  @media (pointer: coarse) { #hint .h-fine { display: none; } #hint .h-coarse { display: inline; } }
   /* Ends at opacity 0 and stays there — 'forwards' holds the last keyframe, so the hint is gone
      for good after one play and never reappears on resize or fullscreen change. */
-  @keyframes hint { 0% { opacity: 0 } 12% { opacity: .34 } 70% { opacity: .34 } 100% { opacity: 0 } }
+  @keyframes hint { 0% { opacity: 0 } 12% { opacity: .6 } 70% { opacity: .6 } 100% { opacity: 0 } }
   @media (prefers-reduced-motion: reduce) { #hint { animation-duration: 14s } }
-  /* The one link on the page: the fleet's legal notice. Dim and small, in the corner the
-     city's skyline never needs; it brightens only under the pointer. */
-  #legal { position: fixed; right: 10px; bottom: 8px; z-index: 1;
-           font: 500 10px/1 ui-monospace, "Liberation Mono", "DejaVu Sans Mono", monospace;
-           letter-spacing: .12em; text-transform: uppercase; color: #d8e84a; opacity: .28;
-           text-decoration: none; }
-  #legal:hover, #legal:focus-visible { opacity: .8; }
+  /* The help overlay: Branding's modal; the touch section shows on coarse pointers only. */
+  .cc-keys { display: grid; grid-template-columns: max-content 1fr; gap: 8px 14px; align-items: center;
+             margin: 12px 0 0; font-family: var(--mono); font-size: var(--fs-btn); color: var(--text-muted); }
+  .cc-keys dt { white-space: nowrap; }
+  .cc-keys dd { margin: 0; text-transform: uppercase; letter-spacing: .06em; }
+  .cc-touch { display: none; margin: 14px 0 0; }
+  .modal-head > div:first-child { flex: 1; }
+  @media (pointer: coarse) { .cc-touch { display: block; } }
+  #ccPause[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: var(--accent-faint); }
 </style>
 </head>
-<body>
+<body class="play-body">
+<div data-carino-actions>
+  <button type="button" class="cs-btn" id="ccPause" aria-pressed="false">Pause</button>
+  <button type="button" class="cs-btn" id="ccHelpBtn" data-priority="1" aria-haspopup="dialog" aria-controls="ccHelp">? <span data-i18n>Help</span></button>
+</div>
+<main class="play-stage" id="stage">
 <canvas id="cc"></canvas>
-<div id="hint">click for fullscreen</div>
-<a id="legal" href="https://carino.systems/legal.html">Legal</a>
+<div id="hint"><span class="h-fine" data-i18n>click for fullscreen</span><span class="h-coarse" data-i18n>tap for fullscreen</span></div>
+</main>
+<div class="modal-scrim" id="ccHelp" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ccHelpTitle">
+    <div class="modal-head">
+      <div><div class="modal-title" id="ccHelpTitle" data-i18n>How to play</div><div class="modal-sub">CyberCity</div></div>
+      <button type="button" class="modal-x" id="ccHelpX" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0" data-i18n>Four worlds drawn in text characters. Leave it alone and it walks itself; take the camera whenever you like. Opening this pauses the city.</p>
+      <div class="cc-touch">
+        <div class="modal-sub" data-i18n>Touch</div>
+        <p style="margin:6px 0 0" data-i18n>Left half of the screen walks, right half looks. Tap the city for fullscreen.</p>
+      </div>
+      <dl class="cc-keys">
+        <dt><span class="kbd">W</span> <span class="kbd">A</span> <span class="kbd">S</span> <span class="kbd">D</span></dt><dd data-i18n>Walk</dd>
+        <dt><span class="kbd">←</span> <span class="kbd">→</span> <span class="kbd">↑</span> <span class="kbd">↓</span></dt><dd data-i18n>Look (or drag)</dd>
+        <dt><span class="kbd">Shift</span> <span class="kbd">C</span></dt><dd data-i18n>Run, crouch</dd>
+        <dt><span class="kbd">1</span>–<span class="kbd">4</span></dt><dd data-i18n>Change world</dd>
+        <dt><span class="kbd">[</span> <span class="kbd">]</span></dt><dd data-i18n>Change the weather</dd>
+        <dt><span class="kbd">T</span> <span class="kbd">Y</span></dt><dd data-i18n>Time of day, stop the clock</dd>
+        <dt><span class="kbd">N</span></dt><dd data-i18n>New city</dd>
+        <dt><span class="kbd">Tab</span></dt><dd data-i18n>Take or give back the camera</dd>
+        <dt><span class="kbd accent">P</span> <span class="kbd accent">Space</span></dt><dd data-i18n>Pause</dd>
+        <dt><span class="kbd">F</span></dt><dd data-i18n>Fullscreen</dd>
+        <dt><span class="kbd">?</span> <span class="kbd">H</span></dt><dd data-i18n>Help</dd>
+        <dt><span class="kbd">Esc</span></dt><dd data-i18n>Close</dd>
+      </dl>
+      <p style="margin:14px 0 0;font-size:var(--fs-sm);color:var(--text-muted)" data-i18n>No sound. Nothing is sent anywhere.</p>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" id="ccFull" data-i18n>Fullscreen</button>
+      <button type="button" class="btn btn-primary" id="ccResume" data-i18n>Resume</button>
+    </div>
+  </div>
+</div>
 ${chunks.map(c => '<script src="' + c.rel + '?v=' + crypto.createHash('sha1').update(c.text).digest('hex').slice(0, 10) + '"></script>\n').join('')}<script>
 ${bundle}</script>
+<script src="carino-navbar.js" data-app="CyberCity" data-repo="CyberCity" data-immersive defer></script>
+<script src="carino-lang.js" defer></script>
+<script src="i18n.js" defer></script>
+<script src="ui.js" defer></script>
 </body>
 </html>
 `;

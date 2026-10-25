@@ -357,7 +357,7 @@ It plays itself, so all of this is optional.
 | scroll wheel | zoom |
 | `Tab` | take the controls / give them back |
 | `Esc` | give them back |
-| `P` | photo mode — freezes the world, you can still look and move |
+| `P` or `Space` | photo mode — freezes the world, you can still look and move (also the Pause button in the top bar) |
 | `1` `2` `3` `4` | world: CyberCity, Frontier, Moonwalk, Edo (gamepad: `Y` / triangle cycles) |
 | `T` | step the time of day (`Shift`+`T` steps back) |
 | `Y` | stop / restart the automatic day cycle |
@@ -365,7 +365,7 @@ It plays itself, so all of this is optional.
 | `[` `]` | cycle weather |
 | `N` | new seed |
 | `F` | fullscreen |
-| `H` | show the controls |
+| `?` or `H` | the help screen: every key, the touch gestures, and it pauses the city while open (also Help in the top bar) |
 
 The weather presets are `clear, drizzle, rain, downpour, mist, storm` in the city,
 `blazing, breeze, dust, squall, overcast, thunder` on the frontier, `clear, haze, tsuyu, shower,

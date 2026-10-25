@@ -1,0 +1,763 @@
+/* ============================================================
+   carino-ui.css — the shared Carino UI: design tokens, base and every
+   production component. Canonical copy: Branding/carino-ui.css.
+   Carino-Systems/propagate.sh copies it byte-for-byte into each site, the
+   same way it copies carino-navbar.js; a site opts in by linking it BEFORE
+   its own stylesheet. Sites may add new tokens (--kind-*, --cat-*) but never
+   redefine one declared here. Documented at https://branding.carino.systems/
+   ============================================================ */
+    /* ============================================================
+       Carino Branding — the canonical design tokens & components.
+       This file IS the reference: view-source, or use the per-section
+       Copy buttons to lift a snippet into another project.
+       Hosted at branding.carino.systems. Tokens mirror
+       Carino-Systems/index.html :root.
+       ============================================================ */
+    :root {
+      --bg:            #050505;   /* near-black page background        */
+      --bg-elev:       #0d0d0d;   /* elevated surface (inputs, code)   */
+      --bg-card:       #0b0b0b;   /* card / panel background           */
+      --accent:        #eab308;   /* Sharp Gold — the one accent       */
+      --accent-faint:  rgba(234,179,8,0.05);
+      --accent-glow:   rgba(234,179,8,0.15);
+      --accent-dim:    rgba(234,179,8,0.30);
+      --border:        #262626;   /* hairline borders                  */
+      --border-hv:     #eab308;   /* border on hover/focus             */
+      --text:          #ffffff;   /* primary text                      */
+      --text-sec:      #a3a3a3;   /* secondary text                    */
+      --text-muted:    #8a8a8a;   /* muted / labels                    */
+      --ok:            #22c55e;
+      --warn:          #eab308;
+      --err:           #ef4444;
+      --info:          #38bdf8;   /* informational; the fourth toast state, previously a magic number */
+      --stage-grad:    radial-gradient(1200px 520px at 50% -12%, rgba(234,179,8,0.08) 0%, transparent 60%), linear-gradient(180deg,#0b0b0b 0%,#050505 100%);
+      --gold-text:     linear-gradient(130deg,#fef08a 0%,#eab308 50%,#b45309 100%);
+      --sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+      --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      --display: 'Red Hat Display', var(--sans);
+      --radius: 10px;
+      --nav-h: 60px;     /* carino-navbar.js height; it scrolls with the page */
+      /* Breakpoints (media queries cannot read a token, so these are the rule):
+         900px and below, a workspace settings rail becomes a drawer;
+         640px and below, the phone layout. Nothing else. */
+
+      /* ---- type scale ----------------------------------------------
+         Thirteen named steps and nothing in between: size text with a
+         token, never a raw value. --fs-micro is the legibility floor —
+         no UI text below it, ever. Display sizes are fluid (clamp), so
+         heroes never overflow a laptop. Body base stays 15–16px.
+         (Decorative glyphs — watermark numerals, emoji, SVG-canvas
+         labels — may size freely; the scale governs readable text.)
+         px equivalents assume the 16px root. */
+      --fs-micro:   0.6rem;    /*  9.6px  tiny tags, fine print, table meta   */
+      --fs-label:   0.65rem;   /* 10.4px  mono uppercase labels, chips        */
+      --fs-btn:     0.7rem;    /* 11.2px  buttons, tabs, kickers, nav         */
+      --fs-sm:      0.8rem;    /* 12.8px  dense UI text, tables, alerts, code */
+      --fs-mono:    0.85rem;   /* 13.6px  mono data, ledes in mono            */
+      --fs-sec:     0.9rem;    /* 14.4px  secondary prose                     */
+      --fs-body:    1rem;      /* 16px    primary reading text                */
+      --fs-lg:      1.05rem;   /* 16.8px  emphasised body, card titles        */
+      --fs-h3:      1.2rem;    /* 19.2px  card / panel headings               */
+      --fs-h2:      1.5rem;    /* 24px    section headings                    */
+      --fs-h1:      1.9rem;    /* 30.4px  page headings                       */
+      --fs-display: 2.4rem;    /* 38.4px  display text, the wordmark          */
+      --fs-hero:    clamp(2.6rem, 7vw, 4.6rem);  /* landing hero — always fluid */
+    }
+
+    * { box-sizing: border-box; }
+
+    /* Slim scrollbars in every engine — the cross-browser recipe projects copy.
+       ::-webkit-scrollbar covers Chromium + WebKit; Firefox has no pseudo-element,
+       only these two inherited properties, so setting them on :root cascades to
+       every scroll container. Keep both — neither engine reads the other's. */
+    :root { scrollbar-width: thin; scrollbar-color: #3a3a3a transparent; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 6px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent-dim); }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: var(--sans); font-size: 15px; line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--accent); }
+    /* Components below set display:flex/grid; the hidden attribute still wins. */
+    [hidden] { display: none !important; }
+    code, .mono { font-family: var(--mono); }
+    /* ============ 3. typography ============ */
+    .t-hero { font-family: var(--display); font-weight: 900; font-size: var(--fs-hero); text-transform: uppercase; line-height: 0.95; }
+    .t-display { font-family: var(--display); font-weight: 900; font-size: var(--fs-display); text-transform: uppercase; line-height: 1; }
+    .t-h1 { font-family: var(--display); font-weight: 900; font-size: var(--fs-h1); text-transform: uppercase; }
+    .t-h2 { font-family: var(--display); font-weight: 900; font-size: var(--fs-h2); text-transform: uppercase; }
+    .t-h3 { font-family: var(--display); font-weight: 900; font-size: var(--fs-h3); text-transform: uppercase; }
+    .t-lg { font-family: var(--sans); font-size: var(--fs-lg); font-weight: 700; color: var(--text); }
+    .t-body { font-family: var(--sans); font-size: var(--fs-body); color: var(--text); }
+    .t-sec { font-family: var(--sans); font-size: var(--fs-sec); color: var(--text-sec); }
+    .t-mono { font-family: var(--mono); font-size: var(--fs-mono); color: var(--text); }
+    .t-sm { font-family: var(--sans); font-size: var(--fs-sm); color: var(--text-sec); }
+    .t-btn-sample { font-family: var(--mono); font-size: var(--fs-btn); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-sec); }
+    .t-label { font-family: var(--mono); font-size: var(--fs-label); text-transform: uppercase; letter-spacing: 0.14em; color: var(--text-muted); }
+    .t-micro { font-family: var(--mono); font-size: var(--fs-micro); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+    .wordmark { font-family: var(--display); font-weight: 900; font-size: var(--fs-display); background: var(--gold-text); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+
+    /* ============ 4. buttons ============ */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--mono); font-size: var(--fs-btn); font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      padding: 0 16px; height: 38px; border-radius: 6px; cursor: pointer;
+      border: 1px solid var(--border); background: transparent; color: var(--text-sec);
+      transition: 0.18s; text-decoration: none;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-faint); }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: #050505; }
+    .btn-primary:hover { background: #fbbf24; color: #050505; box-shadow: 0 4px 16px var(--accent-glow); }
+    .btn-ghost { border-color: transparent; }
+    .btn-ghost:hover { border-color: var(--border); background: transparent; color: var(--text); }
+    .btn:disabled, .btn.disabled { opacity: 0.35; pointer-events: none; }
+
+    /* toggle / segmented buttons (module & template style) */
+    .toggle-btn {
+      font-family: var(--mono); font-size: var(--fs-btn); text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 8px 14px; border-radius: 4px; cursor: pointer; transition: 0.18s;
+      border: 1px solid var(--border); background: transparent; color: var(--text-sec);
+    }
+    .toggle-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-faint); }
+    .toggle-btn.active { background: var(--accent); border-color: var(--accent); color: #050505; font-weight: 700; }
+
+    /* ============ 5. tabs ============ */
+    .tabbar { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+    .tabbtn {
+      font-family: var(--mono); font-size: var(--fs-btn); text-transform: uppercase; letter-spacing: 0.06em;
+      padding: 10px 16px; cursor: pointer; color: var(--text-sec); background: transparent;
+      border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: 0.15s;
+    }
+    .tabbtn:hover { color: var(--text); }
+    .tabbtn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tabpane { padding: 18px 2px 2px; color: var(--text-sec); font-size: var(--fs-sec); }
+
+    /* ============ 6. forms ============ */
+    .field { display: flex; flex-direction: column; gap: 6px; min-width: 220px; }
+    .field label { font-family: var(--mono); font-size: var(--fs-micro); text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
+    .input, .select, .textarea {
+      background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text); font-family: var(--mono); font-size: var(--fs-sm);
+      padding: 9px 11px; width: 100%; transition: 0.15s;
+    }
+    .input:focus, .select:focus, .textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-faint); }
+    .textarea { resize: vertical; min-height: 84px; line-height: 1.5; }
+    .select option { background: #111; }
+    .check { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: var(--fs-btn); text-transform: uppercase; color: var(--text-sec); cursor: pointer; }
+    .check input { accent-color: var(--accent); width: 15px; height: 15px; }
+    /* switch */
+    .switch { position: relative; width: 42px; height: 22px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .switch .track { position: absolute; inset: 0; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 999px; transition: 0.2s; }
+    .switch .track::before { content: ""; position: absolute; width: 16px; height: 16px; left: 2px; top: 2px; background: var(--text-muted); border-radius: 50%; transition: 0.2s; }
+    .switch input:checked + .track { background: var(--accent-faint); border-color: var(--accent); }
+    .switch input:checked + .track::before { transform: translateX(20px); background: var(--accent); }
+
+    /* ============ 7. alerts ============ */
+    .alert { border: 1px solid; border-radius: 8px; padding: 12px 14px; font-family: var(--mono); font-size: var(--fs-sm); line-height: 1.5; margin-bottom: 10px; }
+    .alert:last-child { margin-bottom: 0; }
+    .alert.ok   { color: #86efac; background: rgba(34,197,94,0.08);  border-color: rgba(34,197,94,0.5); }
+    .alert.warn { color: #fcd34d; background: rgba(234,179,8,0.08);  border-color: rgba(234,179,8,0.45); }
+    .alert.err  { color: #fca5a5; background: rgba(239,68,68,0.08);  border-color: rgba(239,68,68,0.5); }
+    .alert.info { color: #bae6fd; background: color-mix(in srgb, var(--info) 8%, transparent); border-color: color-mix(in srgb, var(--info) 50%, transparent); }
+    .alert code { background: #1a1a1a; padding: 1px 5px; border-radius: 3px; color: #fde68a; }
+    .alert b { color: #fde68a; }
+
+    /* ============ 8. badges & chips ============ */
+    .chip-tag { font-family: var(--mono); font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; text-decoration: none; }
+    /* split-brand: in the navbar the chip is an <a href="./"> (app reload) next
+       to the wordmark's <a href="https://carino.systems/"> (hub) */
+    a.chip-tag { transition: 0.2s; }
+    a.chip-tag:hover { border-color: var(--accent); background: var(--accent-glow); }
+    .chip-tz { font-family: var(--mono); font-size: var(--fs-micro); font-weight: 700; color: #050505; background: var(--accent); padding: 2px 5px; border-radius: 3px; }
+    .pill { font-family: var(--mono); font-size: var(--fs-micro); text-transform: uppercase; letter-spacing: 0.05em; border-radius: 999px; padding: 3px 10px; border: 1px solid; }
+    .pill.ok  { color: var(--ok);  border-color: rgba(34,197,94,0.4);  background: rgba(34,197,94,0.08); }
+    .pill.warn{ color: var(--warn);border-color: rgba(234,179,8,0.4);  background: rgba(234,179,8,0.08); }
+    .pill.err { color: var(--err); border-color: rgba(239,68,68,0.4);  background: rgba(239,68,68,0.08); }
+    .dot { display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: var(--fs-btn); color: var(--text-sec); }
+    .dot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    .dot.live::before { animation: pulse 1.6s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+    /* AI Bloat Certified: a two-part seal for the top of a project page. Gold half with the
+       rosette, dark half with the verdict; one gold hairline around both. */
+    .cert-badge { display: inline-flex; align-items: stretch; vertical-align: middle; font-family: var(--mono); font-size: var(--fs-label); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; line-height: 1; border: 1px solid var(--accent); border-radius: 5px; overflow: hidden; white-space: nowrap; box-shadow: 0 0 14px var(--accent-glow); }
+    .cert-badge .cert-l { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px 5px 5px; background: var(--accent); color: #050505; }
+    .cert-badge .cert-r { display: inline-flex; align-items: center; padding: 5px 9px; background: var(--bg-card); color: var(--accent); }
+    .cert-badge .cert-seal { width: 15px; height: 15px; flex: none; }
+    .cert-badge .cert-rosette { fill: #050505; }
+    .cert-badge .cert-check { fill: none; stroke: var(--accent); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* ============ 9. cards ============ */
+    .card {
+      display: flex; flex-direction: column; background: var(--bg-card);
+      border: 1px solid var(--border); padding: 22px; border-radius: 12px; transition: 0.22s;
+    }
+    .card:hover { border-color: var(--accent); background: linear-gradient(145deg,#17120a 0%,#0b0b0b 100%); transform: translateY(-4px); box-shadow: 0 14px 28px rgba(0,0,0,0.6), 0 0 22px var(--accent-glow); }
+    .c-title { font-size: var(--fs-lg); font-weight: 700; margin-bottom: 6px; }
+    .c-desc { font-size: var(--fs-mono); color: var(--text-sec); line-height: 1.6; flex: 1; }
+    .c-link { margin-top: 16px; font-family: var(--mono); font-size: var(--fs-btn); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; color: var(--accent); }
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 14px; }
+    .panel-header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid var(--border); padding-bottom: 14px; }
+    .panel-title { font-family: var(--display); font-weight: 900; font-size: var(--fs-h1); text-transform: uppercase; letter-spacing: 1px; }
+    .panel-desc { font-family: var(--mono); font-size: var(--fs-sm); color: var(--text-sec); margin-top: 6px; }
+    .panel-num { font-family: var(--display); font-weight: 900; font-size: 3.2rem; line-height: 0.8; color: rgba(234,179,8,0.12); user-select: none; }
+
+    /* ============ 10. dropdown / diagnostics ============ */
+    .diag-wrap { position: relative; display: inline-block; }
+    .diag-toggle {
+      display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+      background: transparent; border: 1px solid var(--border); color: var(--text-sec);
+      font-family: var(--mono); font-size: var(--fs-btn); text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 8px 12px; border-radius: 6px; transition: 0.18s;
+    }
+    .diag-toggle:hover, .diag-toggle.open { border-color: var(--accent); color: var(--accent); background: var(--accent-faint); }
+    .diag-dropdown {
+      position: absolute; top: calc(100% + 8px); right: 0; width: 260px;
+      background: var(--bg-card); border: 1px solid var(--accent-dim); border-radius: 8px;
+      padding: 14px; box-shadow: 0 18px 40px rgba(0,0,0,0.7); display: none; z-index: 20;
+    }
+    .diag-dropdown.open { display: block; }
+    .diag-section { font-family: var(--mono); font-size: var(--fs-micro); text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); opacity: 0.6; border-bottom: 1px solid var(--border); padding-bottom: 3px; margin: 4px 0 8px; }
+    .diag-row { display: flex; justify-content: space-between; font-family: var(--mono); font-size: var(--fs-btn); margin-bottom: 6px; }
+    .diag-lbl { color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .diag-val { color: var(--text); }
+    /* Wrap two short readings in .diag-pair to put them on one line. Each half
+       keeps its natural width, so a long value or translation wraps the pair
+       back into full-width rows instead of truncating. */
+    .diag-pair { display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 20px; }
+    .diag-pair > .diag-row { flex: 0 1 auto; min-width: max-content; gap: 8px; }
+
+    /* ============ 11. table ============ */
+    table.data { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: var(--fs-sm); }
+    table.data th { text-align: left; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; font-size: var(--fs-micro); font-weight: 700; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    table.data td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--text-sec); }
+    table.data tr:hover td { background: var(--accent-faint); color: var(--text); }
+
+    /* ============ 12. code ============ */
+    pre.code { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; font-family: var(--mono); font-size: var(--fs-sm); line-height: 1.6; color: #e0e0e0; margin: 0; }
+    pre.code .k { color: var(--accent); }
+    pre.code .c { color: var(--text-muted); }
+
+    /* ============ 13. loading ============ */
+    .spinner { width: 26px; height: 26px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .progress { width: 260px; height: 6px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+    .progress > span { display: block; height: 100%; width: 62%; background: var(--accent); border-radius: 999px; box-shadow: 0 0 10px var(--accent-glow); }
+    .ekg { width: 180px; height: 44px; }
+    .ekg .trace { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 4px var(--accent-glow)); stroke-dasharray: 320; stroke-dashoffset: 320; animation: ekg 1.8s linear infinite; }
+    @keyframes ekg { to { stroke-dashoffset: -320; } }
+
+
+    /* ============ 15. toast ============ */
+    .toast {
+      position: fixed; top: 76px; right: 20px; z-index: 9999;
+      display: inline-flex; align-items: center; gap: 10px;
+      font-family: var(--mono); font-size: var(--fs-sm); font-weight: 700;
+      padding: 11px 16px; border-radius: 8px; border: 1px solid;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+      opacity: 0; transform: translateY(-10px); pointer-events: none; transition: 0.2s ease;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    .toast.ok   { color: #86efac; background: rgba(34,197,94,0.10); border-color: rgba(34,197,94,0.5); }
+    .toast.info { color: #bae6fd; background: color-mix(in srgb, var(--info) 10%, transparent); border-color: color-mix(in srgb, var(--info) 50%, transparent); }
+    .toast.warn { color: #fde68a; background: rgba(234,179,8,0.10); border-color: rgba(234,179,8,0.45); }
+    .toast.err  { color: #fca5a5; background: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.5); }
+
+    /* ============ 16. navbar action portal ============ */
+    /* carino-navbar.js relocates the real DOM node marked [data-carino-actions]
+       into the navbar's .cn-right (handlers and ids survive) and removes the
+       [data-carino-strip] wrapper. Controls riding in the bar follow this 32px
+       recipe — the compact sibling of .btn. */
+    .cs-btn {
+      display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
+      font-family: var(--mono); font-size: var(--fs-label); font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap;
+      border: 1px solid var(--border); border-radius: 6px; background: transparent;
+      color: var(--text-sec); cursor: pointer; transition: 0.18s; text-decoration: none;
+    }
+    .cs-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-faint); }
+    .cs-btn:disabled, .cs-btn.disabled { opacity: 0.35; pointer-events: none; }
+    /* a toggle that is on (pause, a chosen view, sound) */
+    .cs-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-faint); }
+    /* the one filled control in the bar: a page's main action */
+    .cs-btn.primary { background: var(--accent); border-color: var(--accent); color: #050505; }
+    .cs-btn.primary:hover { background: #fbbf24; color: #050505; box-shadow: 0 4px 16px var(--accent-glow); }
+
+    /* ---- Export menu: every output of a tool behind one navbar button ----
+       <div class="cs-menu">
+         <button class="cs-btn" aria-haspopup="true" aria-expanded="false">Export ▾</button>
+         <div class="cs-menu-panel" role="menu" hidden>
+           <button class="cs-menu-item" role="menuitem">PDF <span class="cs-menu-note">printable</span></button>
+           <div class="cs-menu-div"></div> …
+         </div>
+       </div>
+       carino-ui.js opens and closes it. When the navbar folds the controls
+       into its ⋯ menu, the items show there directly. Reference: Topo. */
+    .cs-menu { position: relative; display: flex; }
+    .cs-caret { font-size: 0.6rem; opacity: 0.7; margin-left: 1px; }
+    .cs-menu-panel {
+      position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; min-width: 210px; padding: 6px;
+      display: flex; flex-direction: column; gap: 1px;
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 12px 32px rgba(0,0,0,0.55);
+    }
+    .cs-menu-item {
+      display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px; border: none; border-radius: 5px;
+      background: transparent; color: var(--text-sec); font-family: var(--sans); font-size: var(--fs-sm);
+      text-align: left; white-space: nowrap; cursor: pointer; transition: 0.15s; text-decoration: none;
+    }
+    .cs-menu-item:hover, .cs-menu-item:focus-visible { background: var(--accent-faint); color: var(--accent); outline: none; }
+    .cs-menu-item.danger { color: #fca5a5; }
+    .cs-menu-item.danger:hover { background: rgba(239,68,68,0.08); color: var(--err); }
+    .cs-menu-item:disabled { opacity: 0.35; pointer-events: none; }
+    .cs-menu-note { margin-left: auto; padding-left: 14px; font-family: var(--mono); font-size: var(--fs-micro); color: var(--text-muted); }
+    .cs-menu-div { height: 1px; background: var(--border); margin: 4px; }
+    /* On a phone the panel hangs from the screen's right edge, not the
+       button's, so it never runs off the left side. */
+    @media (max-width: 640px) { .cs-menu-panel { position: fixed; top: calc(var(--nav-h) + 6px); right: 12px; } }
+    #carinoNav .cn-more-menu .cs-menu { flex-basis: 100%; }
+    #carinoNav .cn-more-menu .cs-menu > [aria-haspopup] { display: none; }
+    #carinoNav .cn-more-menu .cs-menu-panel, #carinoNav .cn-more-menu .cs-menu-panel[hidden] {
+      display: flex !important; position: static; min-width: 0; padding: 0; border: 0; box-shadow: none; background: transparent;
+    }
+
+    /* ============ 17. dropzone ============ */
+    .dropzone {
+      border: 2px dashed var(--border); border-radius: 10px; padding: 30px 18px;
+      text-align: center; cursor: pointer; background: var(--bg-elev);
+      color: var(--text-sec); font-size: var(--fs-sec); transition: 0.18s;
+    }
+    .dropzone strong { font-family: var(--mono); color: var(--accent); font-weight: 700; }
+    .dropzone:hover, .dropzone.dragover { border-color: var(--accent); background: var(--accent-faint); box-shadow: 0 0 24px var(--accent-glow); }
+    .dropzone.success { border-color: var(--ok); border-style: solid; }
+    .dz-icon { font-size: 1.6rem; margin-bottom: 8px; opacity: 0.8; }
+    .dz-hint { font-family: var(--mono); font-size: var(--fs-label); color: var(--text-muted); margin-top: 6px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+    /* ============ 18. modal & scrim ============ */
+    /* Above the navbar (which sits at 2147483000 to stay over app content),
+       so a tall dialog's head is never hidden under it. */
+    .modal-scrim {
+      position: fixed; inset: 0; z-index: 2147483600; padding: 24px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.65); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    }
+    .modal-scrim[hidden] { display: none; }
+    /* .modal on a native <dialog>: closed, it stays closed (.modal sets display). */
+    dialog.modal:not([open]) { display: none; }
+    dialog.modal { padding: 0; color: inherit; }
+    dialog.modal::backdrop { background: rgba(0,0,0,0.65); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+    .modal {
+      display: flex; flex-direction: column; width: 100%; max-width: 520px;
+      max-height: min(90vh, 640px); overflow: hidden;
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.75);
+    }
+    .modal-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--border); }
+    /* the title (or the block wrapping title + subtitle) takes the row, so ✕ sits at the end */
+    .modal-head > :first-child { flex: 1; min-width: 0; }
+    .modal-title { font-family: var(--display); font-weight: 900; font-size: var(--fs-lg); text-transform: uppercase; letter-spacing: 0.5px; flex: 1; }
+    .modal-sub { font-family: var(--mono); font-size: var(--fs-label); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+    .modal-x { border: none; background: transparent; color: var(--text-muted); font-size: var(--fs-lg); line-height: 1; cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: 0.15s; }
+    .modal-x:hover { color: var(--accent); background: var(--accent-faint); }
+    .modal-body { padding: 18px; color: var(--text-sec); font-size: var(--fs-sec); overflow-y: auto; }
+    .modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--border); }
+
+    /* copy button: the per-section Copy on the reference page and the
+       floating copy on a command block (.copy-btn.term-copy) */
+    .copy-btn {
+      flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;
+      font-family: var(--mono); font-size: var(--fs-micro); font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      padding: 7px 11px; border-radius: 6px; cursor: pointer; white-space: nowrap;
+      border: 1px solid var(--border); background: transparent; color: var(--text-sec); transition: 0.18s;
+    }
+    .copy-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-faint); }
+    .copy-btn.done { border-color: var(--ok); color: var(--ok); background: rgba(34,197,94,0.08); }
+    .copy-btn svg { width: 13px; height: 13px; }
+
+    /* ============ 19. command block ============ */
+    .terminal-wrapper { position: relative; }
+    .terminal { background: #000; border: 1px solid var(--border); border-radius: 12px; padding: 1.4rem 1.6rem; overflow-x: auto; }
+    .terminal code { display: block; font-family: var(--mono); font-size: var(--fs-sm); line-height: 1.7; color: var(--ok); white-space: pre; }
+    .terminal .prompt { color: var(--accent); user-select: none; }
+    .term-copy { position: absolute; top: 10px; right: 10px; background: rgba(5,5,5,0.85); }
+
+    /* ============ 21. key caps ============ */
+    .kbd {
+      display: inline-block; font-family: var(--mono); font-size: var(--fs-label); font-weight: 700;
+      color: var(--text-sec); background: var(--bg-elev);
+      border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 2px 7px;
+    }
+    .kbd.accent { color: var(--accent); border-color: var(--accent-dim); }
+    .kbd-legend { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; font-family: var(--mono); font-size: var(--fs-btn); color: var(--text-muted); }
+    .kbd-legend .lbl { text-transform: uppercase; letter-spacing: 0.06em; }
+
+
+    /* ── Data Viz ──────────────────────────────────────────────────────────
+       Dashboard/monitoring primitives. Gains --ok, losses --err, gold stays the
+       brand/interactive accent. All figures use tabular-nums via .num.
+       Reference: Stocks (stocks.carino.systems). */
+    .num, .amount { font-variant-numeric: tabular-nums; }
+
+    .stat-tile { border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); padding: 8px 12px; min-width: 132px; }
+    .stat-tile .st-label { font-family: var(--mono); font-size: var(--fs-micro); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+    .stat-tile .st-value { font-family: var(--mono); font-size: var(--fs-lg); font-weight: 700; margin: 2px 0; }
+
+    /* signed change chip */
+    .delta { display: inline-flex; align-items: center; gap: 3px; font-family: var(--mono); font-size: var(--fs-btn); font-weight: 600; padding: 2px 6px; border-radius: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .delta.up { color: var(--ok); background: rgba(34,197,94,0.1); }
+    .delta.down { color: var(--err); background: rgba(239,68,68,0.1); }
+    .delta.flat { color: var(--text-muted); background: var(--border); }
+
+    /* dependency-free SVG sparkline; direction class tints line/area/dot */
+    .spark { width: 100%; height: 40px; display: block; }
+    .spark-line { stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+    .spark-area { fill: currentColor; opacity: 0.08; }
+    .spark.up   .spark-line, .spark.up   .spark-dot { stroke: var(--ok);     fill: var(--ok); }
+    .spark.down .spark-line, .spark.down .spark-dot { stroke: var(--err);    fill: var(--err); }
+    .spark.flat .spark-line, .spark.flat .spark-dot { stroke: var(--accent); fill: var(--accent); }
+    .spark.up .spark-area { color: var(--ok); } .spark.down .spark-area { color: var(--err); } .spark.flat .spark-area { color: var(--accent); }
+    .spark-dot { stroke: none; }
+
+    /* low→high range bar with a current-value marker */
+    .rangebar { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: var(--fs-micro); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    .rangebar .rb-track { flex: 1; position: relative; height: 4px; background: var(--border); border-radius: 2px; }
+    .rangebar .rb-mark { position: absolute; top: -2px; width: 2px; height: 8px; background: var(--accent); border-radius: 1px; box-shadow: 0 0 6px var(--accent-glow); }
+
+    /* threshold rule row: switch + condition + remove */
+    .rule-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 5px; }
+    .rule-row .rule-cond { font-family: var(--mono); font-size: var(--fs-btn); color: var(--text-sec); flex: 1; }
+    /* scoped to .rule-row so it doesn't collide with the Forms toggle (§05 .switch/.track) */
+    .rule-row .switch { width: 34px; height: 18px; border-radius: 9px; background: var(--border); border: none; position: relative; cursor: pointer; flex-shrink: 0; transition: 0.15s; }
+    .rule-row .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--text-muted); transition: 0.15s; }
+    .rule-row .switch.on { background: var(--accent); } .rule-row .switch.on::after { left: 18px; background: #050505; }
+    .icon-mini { width: 24px; height: 24px; border: 1px solid var(--border); border-radius: 5px; background: transparent; color: var(--text-muted); cursor: pointer; font-size: var(--fs-btn); display: inline-flex; align-items: center; justify-content: center; transition: 0.15s; }
+    .icon-mini:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* data-freshness chip (extends .dot.live semantics into a labelled pill) */
+    .live-chip { font-family: var(--mono); font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; white-space: nowrap; }
+    .live-chip.live { color: var(--ok); border-color: rgba(34,197,94,0.4); }
+
+    /* screenshot-safe privacy blur: toggle body.privacy-on to hide sensitive figures */
+    body.privacy-on .amount { filter: blur(6px); }
+    body.privacy-on .amount:hover { filter: none; }
+
+
+    /* ============ 24. finance / currency ============ */
+    /* Composite cards from Currency (currency.carino.systems); they reuse the
+       Data-Viz .spark micro-chart and .delta chip. Gold/green = the target
+       currency strengthening vs base, red = weakening. */
+    .fx-card { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 7px; padding: 11px 12px; min-width: 200px; }
+    .fx-card .fx-top { display: flex; align-items: center; gap: 7px; }
+    .fx-card .fx-flag { font-size: var(--fs-lg); }
+    .fx-card .fx-pair { font-family: var(--mono); font-size: var(--fs-btn); color: var(--text); font-weight: 600; }
+    .fx-card .fx-name { font-family: var(--mono); font-size: var(--fs-micro); color: var(--text-muted); margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fx-card .fx-rate { font-family: var(--display); font-weight: 700; font-size: var(--fs-h3); margin: 6px 0 2px; }
+    .fx-card .fx-spark { height: 40px; margin: 4px 0 2px; }
+    .fx-card .fx-foot { display: flex; align-items: center; justify-content: space-between; }
+
+    .movers { display: flex; flex-wrap: wrap; gap: 8px; }
+    .mover { flex: 1 1 auto; min-width: 130px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; padding: 8px 11px; }
+    .mover .mv-l { font-family: var(--mono); font-size: var(--fs-micro); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+    .mover .mv-v { font-family: var(--display); font-weight: 700; font-size: var(--fs-sec); margin-top: 2px; display: flex; align-items: baseline; gap: 6px; }
+    .mover .mv-code { color: var(--text); }
+    .mover .mv-pct { font-family: var(--mono); font-size: var(--fs-sm); }
+    .mv-pct.up { color: var(--ok); } .mv-pct.down { color: var(--err); } .mv-pct.flat { color: var(--text-muted); }
+
+    .news-feed { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+    .news-item { display: block; background: var(--bg-elev); border: 1px solid var(--border); border-left: 2px solid var(--border); border-radius: 6px; padding: 10px 12px; text-decoration: none; color: var(--text); transition: 0.15s; }
+    .news-item:hover { border-color: var(--accent-dim); border-left-color: var(--accent); }
+    .news-item.pos { border-left-color: var(--ok); } .news-item.neg { border-left-color: var(--err); }
+    .news-item .news-title { font-size: var(--fs-sm); line-height: 1.35; margin: 0 0 6px; }
+    .news-item .news-src { font-family: var(--mono); font-size: var(--fs-micro); color: var(--text-muted); display: flex; gap: 8px; justify-content: space-between; }
+    .news-item .news-tone { font-weight: 600; }
+
+    /* ============ utilities ============ */
+    .gold { color: var(--accent); }
+    /* shown only where the pointer is a finger (help's touch section) */
+    @media (pointer: fine) { .touch-only { display: none !important; } }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+    button.chip-tag { background: transparent; cursor: pointer; transition: 0.2s; }
+    button.chip-tag:hover, button.chip-tag:focus-visible { border-color: var(--accent); background: var(--accent-glow); outline: none; }
+    .progress.fluid { width: 100%; }
+
+    /* ============ command block: room for the copy button ============
+       The floating Copy sat on top of the command on phones. Desktop
+       reserves the right edge; a phone gives the button its own band. */
+    .terminal-wrapper:has(.term-copy) .terminal { padding-right: 6.5rem; }
+    /* .band: commands long enough to scroll get the button's own band at
+       every width, so the text never slides under it. */
+    .terminal-wrapper.band:has(.term-copy) .terminal { padding: 3.1rem 1.1rem 1.1rem; }
+    @media (max-width: 640px) {
+      .terminal-wrapper:has(.term-copy) .terminal { padding: 3.1rem 1.1rem 1.1rem; }
+    }
+
+    /* ============ landing hero ============
+       The gold-C hero of every landing page (hub, Product, Reference,
+       Learning overview, a Suite's overview). Reference: dicom.carino.systems.
+       Top-anchored, and every size is `base + --tall × rate`: --tall is the
+       height a screen has beyond 900px, so a short screen keeps exactly the
+       base sizes and a tall one grows continuously, with no breakpoint jump. */
+    .landing-hero {
+      --tall: max(0px, 100vh - 900px);
+      padding: min(72px, calc(clamp(12px, 2.4vh, 46px) + var(--tall) * .07)) 0 clamp(10px, 2vh, 34px);
+      text-align: center;
+      background: radial-gradient(1100px 360px at 50% -12%, rgba(234,179,8,.10), transparent 70%);
+    }
+    .lh-wrap { width: min(1040px, 90%); margin: 0 auto; }
+    .lh-mark {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: min(34px, calc(9px + var(--tall) * .05));
+      margin: 0 auto min(56px, calc(clamp(3px, .7vh, 12px) + var(--tall) * .11));
+    }
+    .lh-mark .mark { display: block; width: auto; height: min(136px, calc(clamp(19px, 3.5vh, 44px) + var(--tall) * .21)); }
+    /* optional decorative motif under the mark (dicom's EKG): aria-hidden,
+       5:1, gone on phones, still under reduced motion */
+    .lh-motif { display: block; width: auto; aspect-ratio: 5 / 1; overflow: visible; height: min(72px, calc(clamp(16px, 3vh, 38px) + var(--tall) * .10)); }
+    .landing-hero h1 {
+      font-family: var(--sans); font-weight: 800; line-height: 1.1; letter-spacing: -.01em; margin: 0 0 min(64px, calc(clamp(8px, 1.5vh, 16px) + var(--tall) * .11));
+      font-size: min(3.6rem, calc(clamp(1.6rem, 3.6vw + .4vh, 2.7rem) + var(--tall) * .035));
+    }
+    .lh-lede {
+      color: #d4d4d4; margin: 0 auto 10px;
+      max-width: min(820px, calc(660px + var(--tall) * .35));
+      font-size: min(1.32rem, calc(clamp(.92rem, .55rem + .5vh, 1.05rem) + var(--tall) * .012));
+    }
+    .lh-lede strong { color: var(--text); }
+    .lh-situations {
+      list-style: none; padding: 0; text-align: left; color: #cfcfcf;
+      max-width: min(720px, calc(600px + var(--tall) * .3));
+      font-size: min(1.08rem, calc(clamp(.86rem, .5rem + .45vh, .98rem) + var(--tall) * .008));
+      margin: 0 auto min(52px, calc(clamp(12px, 2.4vh, 26px) + var(--tall) * .07));
+    }
+    .lh-situations li { padding-left: 1.1em; position: relative; margin: .25em 0; }
+    .lh-situations li::before { content: "›"; color: var(--accent); position: absolute; left: 0; }
+    .lh-stats, .sys-line {
+      font-family: var(--mono); color: var(--text-muted); margin: 0 0 min(28px, calc(clamp(7px, 1.2vh, 14px) + var(--tall) * .035));
+      font-size: min(1rem, calc(.78rem + var(--tall) * .008));
+    }
+    .lh-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+    @media (max-width: 640px) {
+      .lh-motif { display: none; }
+      .lh-mark .mark { height: clamp(46px, 13vw, 78px); }
+    }
+
+    /* ============ short hero ============
+       A tool's empty state: it sits IN the work pane (never as a band above
+       it) and leaves as soon as there is work. Mark, a two-line claim with
+       the second line gold, a lede of two lines at most, one input target,
+       example chips, then the privacy line. .rail-head is the compact form
+       for tools that always open with content (Desk, Password, Aldis). */
+    .short-hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; max-width: 640px; margin: 0 auto; padding: 40px 16px; }
+    .short-hero .mark { width: 48px; height: 48px; display: block; }
+    .short-hero h1 { font-family: var(--sans); font-weight: 800; font-size: var(--fs-h1); line-height: 1.15; letter-spacing: -.01em; margin: 0; }
+    .sh-lede { color: var(--text-sec); font-size: var(--fs-sec); line-height: 1.55; max-width: 52ch; margin: 0; }
+    .sh-input { width: 100%; }
+    .short-hero.rail-head { flex-direction: row; align-items: center; text-align: left; gap: 12px; max-width: none; margin: 0; padding: 0 0 14px; border-bottom: 1px solid var(--border); }
+    .short-hero.rail-head .mark { width: 32px; height: 32px; flex: none; }
+    .short-hero.rail-head h1 { font-size: var(--fs-h3); }
+    .short-hero.rail-head .sh-lede { font-size: var(--fs-sm); }
+
+    /* example chips: the empty state's second door — "Try: …" */
+    .examples { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; }
+    .examples .ex-label { font-family: var(--mono); font-size: var(--fs-label); text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-right: 2px; }
+
+    /* ============ privacy line ============
+       Required on Tool, Suite, Learning and Product pages. Canonical wording
+       (an i18n key, shared fleet-wide): "Runs in your browser. Nothing you add
+       here is uploaded." Any outside request is named in the same line as a
+       .pl-also clause — the line must be literally true. */
+    /* Block, not flex: a sentence and its .pl-also clause flow as one paragraph. */
+    .privacy-line { display: block; margin: 0; padding-left: 20px; text-indent: -20px; font-family: var(--mono); font-size: var(--fs-label); line-height: 1.55; color: var(--text-muted); text-align: left; }
+    /* Inline with a hanging indent, so the lock stays on the first line
+       whatever padding a page gives the line. */
+    .privacy-line::before {
+      content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 8px; vertical-align: -1px; background: var(--ok);
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='11' width='16' height='10' rx='2'/%3E%3Cpath d='M8 11V7a4 4 0 0 1 8 0v4'/%3E%3C/svg%3E") center / contain no-repeat;
+              mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='11' width='16' height='10' rx='2'/%3E%3Cpath d='M8 11V7a4 4 0 0 1 8 0v4'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+    .privacy-line .pl-also { color: var(--text-sec); }
+    .short-hero .privacy-line { display: inline-block; text-align: left; }
+
+    /* ============ workspace shell ============
+       Tool chrome: a 340px settings rail on the LEFT, scrolling on its own,
+       beside a fluid pane. At 900px and below the rail becomes a drawer
+       opened by a [data-ws-toggle] button (carino-ui.js wires it). Use .col
+       for tools with three settings or fewer: one centred 900px column. */
+    .ws { display: flex; min-height: calc(100dvh - var(--nav-h)); background: var(--bg); }
+    .ws-rail {
+      width: 340px; flex: none; display: flex; flex-direction: column; gap: 14px; padding: 16px;
+      background: var(--bg-card); border-right: 1px solid var(--border); overflow-y: auto;
+    }
+    .ws-rail-foot { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border); }
+    .ws-rail .field { min-width: 0; }
+    .ws-pane { flex: 1; min-width: 0; overflow: auto; padding: 20px; }
+    .ws-toggle { display: none; }
+    .ws-scrim { display: none; }
+    .col { width: min(900px, 100%); margin: 0 auto; padding: 24px 16px 48px; display: flex; flex-direction: column; gap: 16px; }
+    @media (max-width: 900px) {
+      .ws-toggle { display: inline-flex; }
+      .ws-rail {
+        position: fixed; top: var(--nav-h); bottom: 0; left: 0; z-index: 1001; width: min(340px, 86vw);
+        transform: translateX(-100%); transition: transform 0.22s ease;
+      }
+      /* the shadow only while open: closed, it would bleed onto the page edge */
+      .ws.drawer-open .ws-rail { transform: none; box-shadow: 0 0 40px rgba(0,0,0,0.6); }
+      .ws.drawer-open .ws-scrim { display: block; position: fixed; inset: var(--nav-h) 0 0 0; z-index: 1000; background: rgba(0,0,0,0.55); }
+      .ws-pane { padding: 16px; }
+      /* .ws-stack: the rail stacks above the pane instead of becoming a
+         drawer — for suites whose files-in sits in the rail (dcm, Media). */
+      .ws.ws-stack { flex-direction: column; min-height: 0; }
+      .ws.ws-stack .ws-rail { position: static; transform: none; width: auto; box-shadow: none; border-right: 0; border-bottom: 1px solid var(--border); overflow: visible; }
+      .ws.ws-stack .ws-pane { overflow: visible; }
+      .ws.ws-stack .ws-toggle { display: none; }
+    }
+    @media (max-width: 900px) and (prefers-reduced-motion: reduce) { .ws-rail { transition: none; } }
+
+    /* ============ slice menu ============
+       A Suite's (and Learning's) module chooser. Overview: full slices that
+       widen on hover. .collapsed (or body.state-module): a 44px bar sticky at
+       the top of the page while a module is open. Phones stack the overview
+       and show the bar as labels only, equal width, scrolling sideways when
+       there are more than four. carino-ui.js has the #module router. */
+    .slice-menu { display: flex; min-height: 200px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #060606; }
+    .slice-menu .slice {
+      flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px;
+      padding: 16px; border: 0; border-right: 1px solid var(--border); background: #060606; color: var(--text);
+      font: inherit; text-align: left; text-decoration: none; cursor: pointer; transition: 0.25s;
+    }
+    .slice-menu .slice:last-child { border-right: none; }
+    .slice-menu .slice::before { content: ""; position: absolute; inset: 0; background: radial-gradient(400px 180px at 50% 120%, var(--accent-glow) 0%, transparent 70%); opacity: 0; transition: 0.25s; pointer-events: none; }
+    .slice-menu .slice:hover, .slice-menu .slice:focus-visible { flex: 1.6; background: #0a0a0a; outline: none; }
+    .slice-menu .slice:hover::before, .slice-menu .slice:focus-visible::before { opacity: 1; }
+    .slice .s-num { font-family: var(--display); font-weight: 900; font-size: 1.8rem; line-height: 1; color: rgba(234,179,8,0.2); }
+    .slice .s-text { font-family: var(--display); font-weight: 900; text-transform: uppercase; font-size: var(--fs-sec); letter-spacing: 0.5px; }
+    .slice .s-blurb { font-size: var(--fs-sm); color: var(--text-sec); line-height: 1.45; }
+    .slice-menu.collapsed, body.state-module .slice-menu {
+      position: sticky; top: 0; z-index: 40; min-height: 0; height: 44px; border-radius: 0; border-width: 0 0 1px;
+    }
+    .slice-menu.collapsed .slice, body.state-module .slice-menu .slice { flex-direction: row; align-items: center; justify-content: center; gap: 10px; padding: 0 12px; }
+    .slice-menu.collapsed .slice:hover, body.state-module .slice-menu .slice:hover { flex: 1; }
+    .slice-menu.collapsed .s-num, body.state-module .slice-menu .s-num { font-size: var(--fs-body); color: rgba(234,179,8,0.35); }
+    .slice-menu.collapsed .s-text, body.state-module .slice-menu .s-text { font-size: var(--fs-btn); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .slice-menu.collapsed .s-blurb, body.state-module .slice-menu .s-blurb { display: none; }
+    .slice-menu .slice.active { background: #0a0a0a; box-shadow: inset 0 2px 0 var(--accent); }
+    .slice-menu .slice.active .s-text { color: var(--accent); }
+    @media (max-width: 640px) {
+      .slice-menu:not(.collapsed) { flex-direction: column; }
+      body.state-module .slice-menu { flex-direction: row; }
+      .slice-menu:not(.collapsed) .slice { flex: none; min-height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+      body.state-module .slice-menu .slice { flex: 1 0 auto; min-height: 0; border-bottom: none; border-right: 1px solid var(--border); }
+      .slice-menu.collapsed, body.state-module .slice-menu { overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+      .slice-menu.collapsed .slice, body.state-module .slice-menu .slice,
+      .slice-menu.collapsed .slice:hover, body.state-module .slice-menu .slice:hover { flex: 1 0 25%; scroll-snap-align: start; padding: 0 8px; }
+      .slice-menu.collapsed .s-num, body.state-module .slice-menu .s-num { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) { .slice-menu .slice, .slice-menu .slice::before { transition: none; } .slice-menu .slice:hover { flex: 1; } }
+
+    /* ============ filter chips ============
+       A Reference page's first control: a sticky bar of facet chips, one
+       radio group per facet (click again to clear), a Clear chip once any is
+       on and the "N shown" count. One line that scrolls sideways on phones.
+       A search box never comes first; past ~300 entries a Find may follow
+       the chips. Reference: Law. */
+    .fchips {
+      position: sticky; top: 0; z-index: 50; display: flex; flex-wrap: wrap; align-items: center; gap: 7px;
+      padding: 10px 0; background: rgba(5,5,5,0.88); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: var(--fs-label);
+    }
+    .fchip-lbl { color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; font-size: var(--fs-micro); }
+    .fchip {
+      border: 1px solid var(--border); border-radius: 20px; padding: 4px 10px; background: transparent; color: var(--text-sec);
+      font-family: var(--mono); font-size: var(--fs-label); white-space: nowrap; cursor: pointer; transition: 0.15s;
+    }
+    .fchip:hover, .fchip:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+    .fchip.active, .fchip[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-faint); }
+    .fchip.clear { border-style: dashed; }
+    /* a rule, not a "·": on a wrapping bar a glyph ends up orphaned at a line end */
+    .fchip-sep { width: 1px; height: 15px; background: var(--border); margin: 0 2px; flex: none; }
+    .fchips-count { margin-left: auto; color: var(--text-muted); white-space: nowrap; }
+    @media (max-width: 640px) {
+      .fchips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+      .fchips::-webkit-scrollbar { display: none; }
+    }
+
+    /* ============ entry card + source line ============
+       The dense card of a Reference page: left-aligned, no lift on hover,
+       a two-line description, badges, and a source line at its foot. */
+    .card.entry { padding: 14px 16px; gap: 6px; border-radius: 10px; }
+    .card.entry:hover { transform: none; box-shadow: none; background: var(--bg-card); }
+    .e-title { font-weight: 700; font-size: var(--fs-lg); line-height: 1.3; }
+    .e-sub { font-family: var(--mono); font-size: var(--fs-label); color: var(--text-muted); }
+    .e-desc { font-size: var(--fs-sm); color: var(--text-sec); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .e-badges { display: flex; flex-wrap: wrap; gap: 5px; }
+    .card.entry .src-line { margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+    /* "Source: domain ↗ · checked YYYY-MM" — every entry carries one */
+    .src-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-family: var(--mono); font-size: var(--fs-label); color: var(--text-muted); }
+    .src-line a { color: var(--text-sec); text-decoration: none; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+    .src-line a:hover { color: var(--accent); border-color: var(--accent); }
+    .src-line .src-date { white-space: nowrap; }
+    .pill.muted { color: var(--text-muted); border-color: var(--border); background: transparent; }
+
+    /* ============ live data: freshness ============
+       .live-chip is the source badge; each state looks different, and none
+       is silent. .fresh is the "Updated 15:49:13" stamp beside it, .is-stale
+       dims a panel still showing its last good copy. */
+    .live-chip.delayed, .live-chip.stale { color: var(--warn); border-color: rgba(234,179,8,0.45); }
+    .live-chip.err { color: var(--err); border-color: rgba(239,68,68,0.5); }
+    .live-chip.paused { color: var(--text-muted); border-style: dashed; }
+    .live-chip.sample { color: var(--info); border-color: color-mix(in srgb, var(--info) 50%, transparent); }
+    .fresh { display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: var(--fs-label); color: var(--text-sec); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .fresh::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+    .fresh.stale::before { background: var(--warn); }
+    .fresh.err::before { background: var(--err); }
+    .fresh.paused::before { background: var(--text-muted); }
+    .is-stale .num, .is-stale .st-value, .is-stale .spark { opacity: 0.5; }
+    .stale-note { font-family: var(--mono); font-size: var(--fs-label); color: var(--warn); }
+    /* the one-line source footer of a Live page */
+    .data-foot { font-family: var(--mono); font-size: var(--fs-label); color: var(--text-muted); line-height: 1.6; padding: 10px 0; border-top: 1px solid var(--border); }
+
+    /* ============ lab ============
+       Learning's "something you try". Inline form sits in the page at the
+       stage it teaches; the step player walks an algorithm one step at a
+       time (Play · Step · Back · Reset · speed), keyboard Space and ←/→. */
+    .lab { border: 1px solid var(--accent-dim); border-radius: var(--radius); background: var(--bg-card); padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+    .lab-kicker { font-family: var(--mono); font-size: var(--fs-label); text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); }
+    .lab h3 { font-family: var(--display); font-weight: 900; font-size: var(--fs-h3); text-transform: uppercase; margin: 0; }
+    .lab-blurb { color: var(--text-sec); font-size: var(--fs-sec); margin: 0; }
+    .lab-mount { min-height: 120px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-elev); padding: 14px; min-width: 0; overflow-x: auto; }
+    .step-player { display: flex; flex-direction: column; gap: 10px; }
+    .sp-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .sp-count { margin-left: auto; font-family: var(--mono); font-size: var(--fs-sm); color: var(--text-sec); font-variant-numeric: tabular-nums; }
+    .sp-stage { border: 1px solid var(--border); border-radius: 8px; background: #000; padding: 14px; font-family: var(--mono); font-size: var(--fs-sm); color: var(--text); overflow-x: auto; }
+    .sp-stage .hot { color: var(--accent); }
+    /* overall progress for a course: "12 / 40 steps · 30%" */
+    .progress-pill { display: inline-flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: var(--fs-label); color: var(--text-sec); border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; font-variant-numeric: tabular-nums; }
+    .progress-pill .progress { width: 90px; height: 5px; }
+
+    /* ============ footer ============
+       Hub, Reference, Learning and Product pages end in one. Links are
+       short and mono; the line below names licence and source honestly. */
+    .site-foot { border-top: 1px solid var(--border); padding: 18px 0 28px; display: flex; flex-direction: column; gap: 8px; font-family: var(--mono); font-size: var(--fs-label); color: var(--text-muted); }
+    .sf-links { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+    .sf-links a { color: var(--text-sec); text-decoration: none; }
+    .sf-links a:hover { color: var(--accent); }
+    .sf-line { line-height: 1.6; }
+
+    /* ============ play stage ============
+       Games and ambient pieces: the body is a column, the navbar on top and
+       the stage taking every remaining pixel (never top:60px offsets). The
+       dock is the optional floating control bar. Help and pause use .modal. */
+    body.play-body { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    .play-stage { flex: 1; min-height: 0; position: relative; overflow: hidden; background: var(--bg); }
+    .play-stage > canvas { display: block; width: 100%; height: 100%; }
+    .play-dock {
+      position: absolute; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 20;
+      display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; padding: 6px;
+      background: rgba(5,5,5,0.82); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+      border: 1px solid var(--border); border-radius: 10px; max-width: calc(100% - 16px);
+    }
+    @media (max-width: 640px) { .play-dock { left: 8px; right: 8px; transform: none; } }

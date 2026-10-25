@@ -63,6 +63,13 @@ while ((t = TAG.exec(html))) {
   if (/\btype\s*=\s*["']?application\/ld\+json/i.test(attrs)) { JSON.parse(t[2]); continue; }
   if (/\btype\s*=/i.test(attrs)) throw new Error('domshim: unexpected <script' + attrs + '> in index.html');
   const src = /\bsrc\s*=\s*["']([^"']+)["']/i.exec(attrs);
+  /* The fleet chrome (navbar, language, i18n, the help overlay's ui.js) is not the city: build.js
+   * writes those tags after the bundle, deferred, and they need a real browser. They are named
+   * here one by one, so a stray script anywhere else still fails below, and each must exist. */
+  if (src && /^(carino-navbar|carino-lang|i18n|ui)\.js$/.test(src[1]) && /\bdefer\b/i.test(attrs)) {
+    if (!fs.existsSync(path.join(ROOT, src[1]))) throw new Error('domshim: index.html loads ' + src[1] + ', which does not exist');
+    continue;
+  }
   if (src) {
     /* The ?v= is build.js's cache-buster, the chunk's own content hash — and it is CHECKED, not
      * just stripped: a tag whose hash disagrees with the file beside it is exactly the stale pair

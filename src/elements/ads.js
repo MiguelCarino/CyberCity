@@ -1,4 +1,5 @@
 /* CyberCity ads — storey-scale lit media bolted to the building faces. Layer 34.
+ * Diegetic signage drawn into the city, not advertising: no third-party content, no network.
  *
  * WHAT THIS IS AND WHAT IT IS NOT. elements/signage.js owns everything at SHOPFRONT scale: the
  * tubes over a door (neon, 30), the junction heads (31), the translucent panels (holo, 33) and the

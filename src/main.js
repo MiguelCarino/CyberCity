@@ -98,9 +98,19 @@
     return w * zoom;
   }
 
+  /* The stage the canvas sits in: everything under the fleet navbar, or the whole screen once the
+   * navbar has slid away (fullscreen, or idle). Without a laid-out parent (the DOM shim) it is
+   * the window, as it always was. */
+  function stageSize() {
+    var p = canvas && canvas.parentNode;
+    var w = p && p.clientWidth, h = p && p.clientHeight;
+    return (w > 0 && h > 0) ? [w, h] : [window.innerWidth, window.innerHeight];
+  }
+
   function layout() {
-    var vw = Math.max(window.innerWidth || 320, 200);
-    var vh = Math.max(window.innerHeight || 240, 160);
+    var sz = stageSize();
+    var vw = Math.max(sz[0] || 320, 200);
+    var vh = Math.max(sz[1] || 240, 160);
     /* Capped at 2. A phone at dpr 3 would triple the fill rate of the bloom taps to sharpen glyphs
      * that are already sub-pixel-crisp at 2, and the bloom is where the frame budget goes. */
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -331,7 +341,24 @@
   /* ---- DOM plumbing --------------------------------------------------------------------------
    * Kept to the minimum the contract allows main to own: one canvas, one resize, one fullscreen
    * gesture. The fade-out hint is pure CSS in index.html precisely so no code here has to know
-   * about it or ever remove it. */
+   * about it or ever remove it. The fleet chrome (navbar, help overlay, pause button) lives in
+   * ui.js and talks to this file only through four window events, so the bundle still leaks
+   * nothing to window:
+   *   cybercity:help    main -> ui   H or ? was pressed; open the help overlay
+   *   cybercity:paused  main -> ui   photo mode changed, detail {paused}
+   *   cybercity:pause   ui -> main   set photo mode, detail {paused}
+   *   cybercity:modal   ui -> main   a dialog opened or closed, detail {open}; while open the
+   *                                  keys belong to the dialog and nothing goes fullscreen */
+  var modalOpen = false;
+  function emit(name, detail) {
+    try { window.dispatchEvent(new CustomEvent(name, { detail: detail })); } catch (err) { }
+  }
+  /* A gesture on the city (the canvas) asks for fullscreen and the mouse-look; one on the navbar,
+   * a dialog or a button is about that control and asks for neither. */
+  function onStage(e) {
+    var t = e && e.target;
+    return !modalOpen && !!e && !(t && t.closest && t.closest('#carinoNav, .modal-scrim, [data-carino-actions]'));
+  }
   var rzT = 0;
   function onResize() {
     window.clearTimeout(rzT);
@@ -368,6 +395,11 @@
     }
     /* Before ANY module initialises: elements read CC.reducedMotion at init time as well as in
      * update, so setting it after boot would leave half the city un-damped. */
+    /* A coarse pointer means a thumb, so the stencil hint speaks touch from its first frame rather
+     * than after the first tap. Asked before the motion query, which is the one kept live. */
+    try {
+      if (CC.Control && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) CC.Control.touch = 1;
+    } catch (err) { }
     var mq = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
     CC.reducedMotion = !!(mq && mq.matches);
     if (mq && mq.addEventListener)
@@ -399,6 +431,15 @@
 
     window.addEventListener('resize', onResize, { passive: true });
     window.addEventListener('orientationchange', onResize, { passive: true });
+    /* The stage also changes size with no window event: the navbar sliding away or back
+     * (carino:navbar), or arriving at all after boot. */
+    if (typeof ResizeObserver === 'function' && canvas.parentNode && canvas.parentNode.nodeType === 1)
+      new ResizeObserver(onResize).observe(canvas.parentNode);
+    window.addEventListener('carino:navbar', onResize);
+    window.addEventListener('cybercity:modal', function (e) { modalOpen = !!(e && e.detail && e.detail.open); });
+    window.addEventListener('cybercity:pause', function (e) {
+      if (CC.Control && CC.Control.setPaused) CC.Control.setPaused(!!(e && e.detail && e.detail.paused));
+    });
     document.addEventListener('fullscreenchange', onResize);
     // goFullscreen already reaches for the webkit entry point; without its event too, a Safari
     // that DID go fullscreen would keep drawing at the old grid until something else resized it.
@@ -414,9 +455,9 @@
       if (ns !== null && ns !== seed) moved = 1;   // same reason: navigating to #0 is a real move
       if (moved) build(ns === null ? seed : ns);
     });
-    window.addEventListener('pointerdown', goFullscreen, { passive: true });
+    window.addEventListener('pointerdown', function (e) { if (onStage(e)) goFullscreen(); }, { passive: true });
     window.addEventListener('keydown', function (e) {
-      if (!e.metaKey && !e.ctrlKey && !e.altKey) goFullscreen();
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && onStage(e) && e.key !== 'Escape') goFullscreen();
     });
 
     /* The keys. `hooks` is how control.js reaches back into main without importing it — it owns
@@ -426,6 +467,9 @@
         city: function () { return city; },
         now: function () { return simT; },
         fullscreen: goFullscreen,
+        help: function () { emit('cybercity:help', {}); },
+        blocked: function () { return modalOpen; },
+        paused: function (p) { emit('cybercity:paused', { paused: !!p }); },
         reseed: function () {
           var ns = (Math.random() * 4294967296) >>> 0;
           seed = ns;
@@ -447,8 +491,8 @@
       });
       /* Pointer lock is a mouse-look, and a mouse-look nobody asked for is a trap: it is only
        * requested on a real click, which is also the gesture that goes fullscreen. */
-      window.addEventListener('pointerdown', function () {
-        if (CC.Control.requestLook) CC.Control.requestLook();
+      window.addEventListener('pointerdown', function (e) {
+        if (onStage(e) && CC.Control.requestLook) CC.Control.requestLook();
       }, { passive: true });
     }
 

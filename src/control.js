@@ -476,6 +476,13 @@
     hintClose = t + HINT_IN + HINT_HOLD;
   }
 
+  /* Photo mode on and off, from P, Space or the page's pause button. hooksRef.paused hears every
+   * change so the page's own button and overlay can follow it. */
+  function setPaused(v) {
+    paused = v ? 1 : 0; Control.paused = paused;
+    if (hooksRef && hooksRef.paused) hooksRef.paused(paused);
+  }
+
   /* ---- DOM ------------------------------------------------------------------------------------
    * Everything below this line is skipped entirely when there is no window, which is what keeps
    * the offline reference frame honest. */
@@ -519,13 +526,18 @@
                                   hooks && hooks.now ? hooks.now() : 0); idle = 0;
             if (doc.exitPointerLock) doc.exitPointerLock();
             break;
-          case 'KeyH': hintToggle(hooks && hooks.now ? hooks.now() : 0); break;
+          /* H (and ?) toggle the stencil hint as they always did, and also open the page's DOM
+           * help overlay when main.js wires one: the translated, readable twin of the stencil. */
+          case 'KeyH':
+            hintToggle(hooks && hooks.now ? hooks.now() : 0);
+            if (hooks && hooks.help) hooks.help();
+            break;
           /* Photo mode. The flag is all this file owns — main.js reads Control.paused and stops
            * stepping the world; what happens HERE is that the autopilot's clock is frozen with it
            * (see update), so the pose under a paused city holds still whether or not a viewer is
            * driving. Look and walk both keep working, which is the point: a still is something
            * you compose, not something you take by accident. */
-          case 'KeyP': paused = paused ? 0 : 1; Control.paused = paused; break;
+          case 'KeyP': case 'Space': setPaused(!paused); e.preventDefault(); break;
           case 'KeyF': if (hooks && hooks.fullscreen) hooks.fullscreen(); break;
           case 'KeyN': if (hooks && hooks.reseed) hooks.reseed(); break;
           /* ---- the clock ------------------------------------------------------------------------
@@ -563,6 +575,11 @@
          * for Digit1 on a US layout, '"' on a UK one, and so on), so the key path cannot read the
          * digit and only the code path handles the weather — which is why the shifted branch is
          * code-only and the unshifted one keeps both. */
+        // ? by the character it types, whatever key makes it on this layout.
+        if (!hit && h === '?') {
+          if (hooks && hooks.help) hooks.help(); else hintToggle(hooks && hooks.now ? hooks.now() : 0);
+          hit = 2;
+        }
         var dg = /^Digit[1-9]$/.test(c) ? parseInt(c.slice(5), 10)
                : (h && h.length === 1 && h >= '1' && h <= '9' ? h.charCodeAt(0) - 48 : 0);
         if (!hit && dg) {
@@ -608,6 +625,12 @@
 
     win.addEventListener('keydown', function (e) {
       if (e.metaKey || e.ctrlKey && e.code !== 'ControlLeft' || e.altKey) return;
+      /* A dialog over the stage (the help overlay) owns the keyboard until it closes, a text field
+       * keeps its keys, and Space on a focused button presses the button, not photo mode. */
+      if (hooks && hooks.blocked && hooks.blocked()) return;
+      var tg = e.target;
+      if (tg && (tg.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName || ''))) return;
+      if (e.code === 'Space' && tg && /^(BUTTON|A)$/.test(tg.tagName || '')) return;
       if (e.repeat) { K.any = 1; return; }
       if (set(e, 1) && e.code !== 'Tab') { /* handled */ }
     });
@@ -646,12 +669,12 @@
       if (el.setPointerCapture) { try { el.setPointerCapture(e.pointerId); } catch (err) {} }
       if (!isTouch(e)) { mouseDrag = 1; mlx = e.clientX; mly = e.clientY; return; }
       /* The one bit elements/hud.js needs to know: this viewer has a thumb, not a keyboard, so the
-       * hint must talk about halves of the screen rather than about WASD. It is latched on the
-       * FIRST touch and never cleared — a device does not stop having a touchscreen, and clearing
+       * hint must talk about halves of the screen rather than about WASD. It is set at boot (main.js)
+       * on a coarse pointer, else latched on the FIRST touch, and never cleared — a device does not stop having a touchscreen, and clearing
        * it in reset() would make N (which a touch viewer cannot press anyway) rewrite the hint.
        * Never set without a DOM, so the offline reference frame keeps the keyboard wording. */
       Control.touch = 1;
-      var w = win.innerWidth || el.clientWidth || 800;
+      var w = el.clientWidth || win.innerWidth || 800;
       if (e.clientX < w * 0.5) {
         if (stickId < 0) { stickId = e.pointerId; stickX0 = e.clientX; stickY0 = e.clientY; }
       } else if (lookId < 0) { lookId = e.pointerId; llx = e.clientX; lly = e.clientY; }
@@ -738,6 +761,7 @@
     /* Photo mode, published for main.js to read. This file only owns the flag — see the KeyP
      * case for what still has to happen at the other end. */
     paused: 0,
+    setPaused: function (v) { setPaused(v); },
     /* The hint overlay's envelope, as a pure function of the simulation clock. elements/hud.js is
      * the only caller; it gets t handed to its draw() and asks here rather than keeping a clock of
      * its own, so that H and the eight-second timer have exactly one implementation. */
@@ -758,6 +782,7 @@
       /* N rebuilds the city and calls through here, and a new city that arrives paused is a viewer
        * staring at a still they did not ask for. */
       paused = 0; Control.paused = 0;
+      if (hooksRef && hooksRef.paused) hooksRef.paused(0);
       hintOpen = 0; hintClose = HINT_IN + HINT_HOLD;
     }
   };
