@@ -29,7 +29,9 @@
      window.CarinoLang.set(code)          // programmatic switch
      window.addEventListener('carino:langchange', (e) => e.detail.lang)
    An app with no dictionary simply stays English — the choice
-   still persists for the sites that do translate.
+   still persists for the sites that do translate. The switcher's
+   own words (its tooltip, "Auto", the legal shield's tooltip) are
+   translated here, with a site's window.t winning when it has them.
 
    Self-contained: styles are inlined and scoped under #cnLangBtn /
    #cnLangBox with hard-coded colours, so it is safe on light-themed
@@ -199,7 +201,11 @@
     updateBtn();
     renderRows();
     window.dispatchEvent(new CustomEvent('carino:langchange', { detail: { lang: current } }));
+    // Again a tick later, once the site's own handler has switched window.t.
+    setTimeout(relabel, 0);
   }
+
+  function relabel() { updateBtn(); renderRows(); }
 
   function label(code) {
     for (var i = 0; i < LANGS.length; i++) if (LANGS[i][0] === code) return LANGS[i][1];
@@ -221,9 +227,28 @@
   var LEGAL = { en: 'Legal notice & privacy', es: 'Aviso legal y privacidad', 'pt-BR': 'Aviso legal e privacidade',
                 ja: '法的通知とプライバシー', ru: 'Правовая информация и конфиденциальность' };
 
+  var TIP = 'Language — Auto follows your browser';
+  var L10N = {
+    es: { 'Language — Auto follows your browser': 'Idioma: Auto sigue a tu navegador', 'Auto': 'Auto' },
+    'pt-BR': { 'Language — Auto follows your browser': 'Idioma: Auto segue o seu navegador', 'Auto': 'Auto' },
+    ja: { 'Language — Auto follows your browser': '言語 — 自動はブラウザーの設定に従います', 'Auto': '自動' },
+    ru: { 'Language — Auto follows your browser': 'Язык — «Авто» следует настройкам браузера', 'Auto': 'Авто' },
+  };
+  function tr(s) {
+    if (typeof window.t === 'function') {
+      try { var v = window.t(s); if (typeof v === 'string' && v && v !== s) return v; } catch (e) { /* not i18n */ }
+    }
+    var d = L10N[current];
+    return (d && d[s]) || s;
+  }
+
   function updateBtn() {
     var btn = document.getElementById('cnLangBtn');
-    if (btn) btn.innerHTML = ICON + '<span class="lbl">' + (manual ? label(current) : 'AUTO') + '</span>';
+    if (btn) {
+      btn.innerHTML = ICON + '<span class="lbl">' + (manual ? label(current) : 'AUTO') + '</span>';
+      btn.title = tr(TIP);
+      btn.setAttribute('aria-label', btn.title);
+    }
     var legal = document.getElementById('cnLegal');
     if (legal) { legal.title = LEGAL[current] || LEGAL.en; legal.setAttribute('aria-label', legal.title); }
   }
@@ -235,7 +260,7 @@
     var auto = document.createElement('button');
     auto.type = 'button';
     auto.className = manual ? '' : 'active';
-    auto.innerHTML = '<span>Auto</span><span class="code">' + label(resolve(navigator.language) || 'en') + '</span>';
+    auto.innerHTML = '<span>' + tr('Auto') + '</span><span class="code">' + label(resolve(navigator.language) || 'en') + '</span>';
     auto.addEventListener('click', function (e) {
       e.stopPropagation();
       set('auto');
@@ -267,11 +292,14 @@
     var btn = document.createElement('button');
     btn.id = 'cnLangBtn';
     btn.type = 'button';
-    btn.title = 'Language — Auto follows your browser';
     btn.setAttribute('aria-haspopup', 'true');
 
     if (beforeEl) right.insertBefore(btn, beforeEl); else right.appendChild(btn);
     updateBtn();
+    // window.t (the site's i18n.js) loads after this file, still before
+    // DOMContentLoaded; adding the listener once that has passed is harmless.
+    document.addEventListener('DOMContentLoaded', function () { setTimeout(relabel, 0); });
+    setTimeout(relabel, 0);
 
     var box = document.createElement('div');
     box.id = 'cnLangBox';

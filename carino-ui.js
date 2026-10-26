@@ -4,8 +4,8 @@
    copies it into each site. Load it deferred, after carino-navbar.js:
      <script src="carino-ui.js" defer></script>
 
-   Three pieces, all opt-in by markup, so loading the file on a page that
-   uses none of them does nothing:
+   Four pieces, all opt-in by markup or call, so loading the file on a
+   page that uses none of them does nothing:
 
    1. Workspace drawer. Below 900px .ws-rail is an off-canvas drawer.
       Any [data-ws-toggle] button opens and closes it; the scrim, Esc and
@@ -26,6 +26,27 @@
    3. Export menu. Every .cs-menu: its [aria-haspopup] button opens the
       .cs-menu-panel; choosing an item, clicking away or Esc closes it.
       Items keep their own handlers; the menu only governs visibility.
+
+   4. Modal. Works on both markups: a .modal-scrim[hidden] holding a
+      .modal, or a native <dialog class="modal">. Pass the scrim, the
+      .modal inside it, the <dialog>, or an element id.
+        CarinoUI.modal.open(el, {
+          returnFocus: btn,      // optional: default is what had focus
+          onDismiss(reason) { … }, // optional: Esc / scrim / [data-close]
+          onClose(reason) { … },   // optional: after it has closed
+        });
+        CarinoUI.modal.close(el);  // also .isOpen(el), .top()
+      Open moves focus to the first control inside (or the card itself)
+      and keeps Tab inside (a card holding an iframe gets two hidden
+      focus edges, so Tab out of the iframe wraps back too). Esc, a click on the scrim or ::backdrop, and
+      any [data-close] button inside dismiss the topmost modal: without
+      onDismiss that closes it; with onDismiss the page decides (confirm
+      unsaved changes, then call close). Close restores focus to the
+      opener and fires "carino:modalclose" on the scrim or <dialog>
+      (detail.reason: "escape", "backdrop", "button" or whatever was
+      passed to close). A page with its own Esc handler leaves Esc alone
+      while CarinoUI.modal.top() is set, or calls preventDefault() when it
+      handles the key itself; this one skips a prevented Esc.
    ============================================================ */
 (function () {
   'use strict';
@@ -122,6 +143,159 @@
     set(false);
   }
 
+  // ---- 4. Modal ----
+  var FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])';
+  var stack = []; // open modals, topmost last: { root, box, opts, back }
+
+  // root = what is shown and hidden (the scrim or the <dialog>); box = the card.
+  function resolve(el) {
+    if (typeof el === 'string') el = document.getElementById(el);
+    if (!el) return null;
+    if (el.tagName === 'DIALOG') return { root: el, box: el };
+    var scrim = el.classList.contains('modal-scrim') ? el : el.closest('.modal-scrim');
+    if (!scrim) return null;
+    return { root: scrim, box: scrim.querySelector('.modal') || scrim };
+  }
+  function entryOf(root) {
+    for (var i = stack.length - 1; i >= 0; i--) if (stack[i].root === root) return stack[i];
+    return null;
+  }
+  function focusables(box) {
+    return Array.prototype.filter.call(box.querySelectorAll(FOCUSABLE), function (n) {
+      return n.getClientRects().length > 0 && !n.hasAttribute('data-modal-sentinel');
+    });
+  }
+  // Tab out of a cross-origin iframe never reaches our keydown, so a focusable
+  // edge at each end of the card catches it and wraps it back inside.
+  function sentinel(box, edge) {
+    var s = document.createElement('span');
+    s.tabIndex = 0;
+    s.setAttribute('data-modal-sentinel', edge);
+    s.setAttribute('aria-hidden', 'true');
+    s.style.position = 'fixed'; s.style.top = '0'; s.style.left = '0';
+    s.style.width = '1px'; s.style.height = '1px'; s.style.overflow = 'hidden';
+    s.style.opacity = '0'; s.style.pointerEvents = 'none';
+    if (edge === 'start') box.insertBefore(s, box.firstChild); else box.appendChild(s);
+    return s;
+  }
+  function dismiss(entry, reason) {
+    if (typeof entry.opts.onDismiss !== 'function') { closeModal(entry.root, reason); return; }
+    // The page's own close path calls close(el) with no reason; it gets this one.
+    entry.reason = reason;
+    try { entry.opts.onDismiss(reason); } finally { entry.reason = null; }
+  }
+  function wireModal(m) {
+    if (m.root.dataset.modalReady) return;
+    m.root.dataset.modalReady = '1';
+    // A scrim click counts only when the press started on the scrim too, so
+    // selecting text in the card and releasing outside does not close it.
+    var downOnRoot = false;
+    m.root.addEventListener('pointerdown', function (e) { downOnRoot = e.target === m.root; });
+    m.root.addEventListener('click', function (e) {
+      var entry = entryOf(m.root);
+      if (!entry) return;
+      var x = e.target.closest && e.target.closest('[data-close]');
+      if (x && m.root.contains(x)) { dismiss(entry, 'button'); return; }
+      if (e.target !== m.root || !downOnRoot) return;
+      if (m.root.tagName === 'DIALOG') {
+        // The <dialog> is the card, so only a click outside its box is the backdrop.
+        var r = m.root.getBoundingClientRect();
+        if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) return;
+      }
+      dismiss(entry, 'backdrop');
+    });
+    if (m.root.tagName === 'DIALOG') {
+      m.root.addEventListener('cancel', function (e) {
+        e.preventDefault();
+        var entry = entryOf(m.root);
+        if (entry) dismiss(entry, 'escape');
+      });
+      // dialog.close() or a <form method="dialog"> closes without us: tidy up.
+      // The event is queued, so it can arrive after closeModal has already
+      // run and the page has opened the dialog again; that one is stale.
+      m.root.addEventListener('close', function () {
+        if (entryOf(m.root) && !m.root.open) closeModal(m.root, m.root.returnValue || 'native');
+      });
+    }
+  }
+  function openModal(el, opts) {
+    var m = resolve(el);
+    if (!m) return null;
+    opts = opts || {};
+    var open = entryOf(m.root);
+    if (open) {
+      open.opts = opts;
+      // Closed natively a moment ago, its 'close' event not yet handled: show it again.
+      if (m.root.tagName === 'DIALOG' && !m.root.open) m.root.showModal();
+      return m.root;
+    }
+    wireModal(m);
+    var prev = document.activeElement;
+    var back = opts.returnFocus || (prev && prev !== document.body ? prev : null);
+    var edges = m.box.querySelector('iframe') ? [sentinel(m.box, 'start'), sentinel(m.box, 'end')] : [];
+    stack.push({ root: m.root, box: m.box, opts: opts, back: back, edges: edges });
+    if (m.root.tagName === 'DIALOG') { if (!m.root.open) m.root.showModal(); }
+    else m.root.hidden = false;
+    // The page may focus a particular field right after this.
+    var f = focusables(m.box);
+    if (f.length) f[0].focus({ preventScroll: true });
+    else {
+      if (!m.box.hasAttribute('tabindex')) m.box.setAttribute('tabindex', '-1');
+      m.box.focus({ preventScroll: true });
+    }
+    return m.root;
+  }
+  function closeModal(el, reason) {
+    var m = resolve(el);
+    var entry = m && entryOf(m.root);
+    if (!entry) return;
+    stack.splice(stack.indexOf(entry), 1);
+    entry.edges.forEach(function (s) { if (s.parentNode) s.parentNode.removeChild(s); });
+    var active = document.activeElement;
+    var hadFocus = !active || active === document.body || m.root.contains(active);
+    if (m.root.tagName === 'DIALOG') { if (m.root.open) m.root.close(); }
+    else m.root.hidden = true;
+    // A modal opened from inside this one returns to this one's opener.
+    stack.forEach(function (o) { if (o.back && m.root.contains(o.back)) o.back = entry.back; });
+    var back = entry.back;
+    if (hadFocus && back && document.contains(back) && back.focus) back.focus({ preventScroll: true });
+    reason = reason || entry.reason || 'close';
+    if (typeof entry.opts.onClose === 'function') entry.opts.onClose(reason);
+    m.root.dispatchEvent(new CustomEvent('carino:modalclose', { bubbles: true, detail: { reason: reason } }));
+  }
+  function topModal() { return stack.length ? stack[stack.length - 1].root : null; }
+
+  // Capture phase, so the modal answers Esc before the drawer or a menu does.
+  window.addEventListener('keydown', function (e) {
+    var entry = stack[stack.length - 1];
+    if (!entry) return;
+    if (e.key === 'Escape') {
+      if (e.defaultPrevented) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dismiss(entry, 'escape');
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    var f = focusables(entry.box);
+    if (!f.length) { e.preventDefault(); return; }
+    var first = f[0], last = f[f.length - 1], a = document.activeElement;
+    if (!entry.box.contains(a)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && (a === first || a === entry.box)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && a === last) { e.preventDefault(); first.focus(); }
+  }, true);
+  // Focus that leaves anyway (Tab out of an iframe, a click on the page behind
+  // a scrim the page made see-through) comes back to the top modal.
+  document.addEventListener('focusin', function (e) {
+    var entry = stack[stack.length - 1];
+    if (!entry) return;
+    var edge = e.target.getAttribute && e.target.getAttribute('data-modal-sentinel');
+    if (!edge && entry.box.contains(e.target)) return;
+    var f = focusables(entry.box);
+    var to = edge === 'start' ? f[f.length - 1] : f[0];
+    (to || entry.box).focus({ preventScroll: true });
+  });
+
   function boot() {
     Array.prototype.forEach.call(document.querySelectorAll('.ws'), initDrawer);
     Array.prototype.forEach.call(document.querySelectorAll('.cs-menu'), initMenu);
@@ -129,5 +303,11 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 
-  window.CarinoUI = { slices: slices, drawer: initDrawer, menu: initMenu, parseHash: parseHash };
+  window.CarinoUI = {
+    slices: slices, drawer: initDrawer, menu: initMenu, parseHash: parseHash,
+    modal: {
+      open: openModal, close: closeModal, top: topModal,
+      isOpen: function (el) { var m = resolve(el); return !!(m && entryOf(m.root)); },
+    },
+  };
 })();

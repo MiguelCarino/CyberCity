@@ -70,6 +70,13 @@
    needs it only some of the time (Asobi: while a game is open, not on
    its scrolling chooser) switches it at run time instead:
    window.CarinoNav.immersive(true | false).
+
+   Language. The bar's own words (tooltips, aria-labels, the greeting,
+   "More") come from a small dictionary in this file for es, pt-BR, ja
+   and ru, picked by CarinoLang.current (or <html lang>), so a site with
+   no i18n.js of its own still gets them. A site's window.t wins when it
+   has the string. They re-render on carino:langchange, one tick late so
+   the site's own handler has switched its dictionary first.
    ============================================================ */
 (function () {
   'use strict';
@@ -146,11 +153,91 @@
   var LEGAL_URL = 'https://carino.systems/legal.html';
   var LEGAL = 'Legal notice & privacy';
 
+  var L10N = {
+    es: {
+      'Carino Systems — back to hub': 'Carino Systems — volver al hub',
+      '{app} — reload': '{app} — recargar',
+      '{repo} on GitHub': '{repo} en GitHub',
+      'LinkedIn profile': 'Perfil en LinkedIn',
+      'More': 'Más',
+      'Ready.': 'Listo.',
+      'Late shift.': 'Turno nocturno.',
+      'Good morning.': 'Buenos días.',
+      'Good afternoon.': 'Buenas tardes.',
+      'Good evening.': 'Buenas noches.',
+    },
+    'pt-BR': {
+      'Carino Systems — back to hub': 'Carino Systems — voltar ao hub',
+      '{app} — reload': '{app} — recarregar',
+      '{repo} on GitHub': '{repo} no GitHub',
+      'LinkedIn profile': 'Perfil no LinkedIn',
+      'More': 'Mais',
+      'Ready.': 'Pronto.',
+      'Late shift.': 'Turno da noite.',
+      'Good morning.': 'Bom dia.',
+      'Good afternoon.': 'Boa tarde.',
+      'Good evening.': 'Boa noite.',
+    },
+    ja: {
+      'Carino Systems — back to hub': 'Carino Systems — ハブに戻る',
+      '{app} — reload': '{app} — 再読み込み',
+      '{repo} on GitHub': 'GitHub の {repo}',
+      'LinkedIn profile': 'LinkedIn プロフィール',
+      'More': 'その他',
+      'Ready.': '準備完了。',
+      'Late shift.': '夜勤お疲れさま。',
+      'Good morning.': 'おはようございます。',
+      'Good afternoon.': 'こんにちは。',
+      'Good evening.': 'こんばんは。',
+    },
+    ru: {
+      'Carino Systems — back to hub': 'Carino Systems — вернуться в хаб',
+      '{app} — reload': '{app} — перезагрузить',
+      '{repo} on GitHub': '{repo} на GitHub',
+      'LinkedIn profile': 'Профиль в LinkedIn',
+      'More': 'Ещё',
+      'Ready.': 'Готово.',
+      'Late shift.': 'Ночная смена.',
+      'Good morning.': 'Доброе утро.',
+      'Good afternoon.': 'Добрый день.',
+      'Good evening.': 'Добрый вечер.',
+    },
+  };
+
+  function langNow() {
+    var l = String((window.CarinoLang && window.CarinoLang.current) || document.documentElement.lang || 'en');
+    return /^pt/i.test(l) ? 'pt-BR' : l.slice(0, 2).toLowerCase();
+  }
+  // A site's window.t answers first; only a string it does not know (t
+  // hands the key back) falls to the dictionary above. `literal` is the
+  // finished English ("Learn — reload"), which is how site dictionaries key
+  // it; `key` is the template with {name} slots, tried after it.
+  function tr(key, vars, literal) {
+    var fill = function (s) {
+      return String(s).replace(/\{(\w+)\}/g, function (m, k) { return vars && k in vars ? vars[k] : m; });
+    };
+    var en = literal || fill(key);
+    if (typeof window.t === 'function') {
+      try {
+        var v = window.t(en);
+        if (typeof v === 'string' && v && v !== en) return v;
+        if (vars) { v = window.t(key); if (typeof v === 'string' && v && v !== key) return fill(v); }
+      } catch (e) { /* not an i18n function after all */ }
+    }
+    var d = L10N[langNow()];
+    return d && d[key] ? fill(d[key]) : en;
+  }
+  function label(el, text, aria) {
+    if (!el) return;
+    el.title = text;
+    if (aria) el.setAttribute('aria-label', text);
+  }
+
   var MARKUP = ''
     + '<header class="top-header" id="carinoNav">'
     + '<div class="cn-left">'
     + '<span class="cn-brand">'
-    + '<a class="brand-name" href="https://carino.systems/" title="Carino Systems — back to hub">Carino</a>'
+    + '<a class="brand-name" href="https://carino.systems/">Carino</a>'
     + '<a class="app-tag" href="./"></a>'
     + '</span>'
     + '<div class="header-clock">'
@@ -161,8 +248,8 @@
     + '<div class="cn-right">'
     + '<div class="social-row">'
     + '<a href="' + LEGAL_URL + '" class="icon-btn" id="cnLegal" title="' + LEGAL + '" aria-label="' + LEGAL + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="' + SHIELD + '"></path></svg></a>'
-    + '<a href="' + GH_URL + '" target="_blank" rel="noopener" class="icon-btn" title="' + (REPO ? REPO + ' on GitHub' : 'GitHub') + '" aria-label="GitHub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="' + GH + '"></path></svg></a>'
-    + '<a href="https://www.linkedin.com/in/miguelcarino94/" target="_blank" rel="noopener" class="icon-btn" title="LinkedIn" aria-label="LinkedIn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="' + LI + '"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle></svg></a>'
+    + '<a href="' + GH_URL + '" target="_blank" rel="noopener" class="icon-btn" id="cnGitHub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="' + GH + '"></path></svg></a>'
+    + '<a href="https://www.linkedin.com/in/miguelcarino94/" target="_blank" rel="noopener" class="icon-btn" id="cnLinkedIn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="' + LI + '"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle></svg></a>'
     + '</div>'
     + '</div>'
     + '</header>';
@@ -176,14 +263,33 @@
   function greet() {
     var h = new Date().getHours();
     var s = h < 5 ? 'Late shift.' : h < 12 ? 'Good morning.' : h < 18 ? 'Good afternoon.' : 'Good evening.';
-    set('cnGreeting', (typeof window.t === 'function') ? window.t(s) : s);
+    set('cnGreeting', tr(s));
   }
-  window.addEventListener('carino:langchange', greet);
-  // carino-navbar.js is deferred and executes BEFORE i18n.js, so window.t does
-  // not exist yet when inject() first calls greet(). Each site's i18n.js adopts
-  // the fleet locale in its own DOMContentLoaded handler, registered after this
-  // one — so re-render on a timeout, once every handler has finished.
-  document.addEventListener('DOMContentLoaded', function () { setTimeout(greet, 0); });
+
+  // Tooltips and aria-labels. The app tag's visible text is the app's name
+  // and stays as it is.
+  function relabel() {
+    var nav = document.getElementById('carinoNav');
+    if (!nav) return;
+    label(nav.querySelector('.brand-name'), tr('Carino Systems — back to hub'));
+    if (TAG) label(nav.querySelector('.app-tag'), tr('{app} — reload', { app: TAG }));
+    label(nav.querySelector('#cnGitHub'), REPO ? tr('{repo} on GitHub', { repo: REPO }) : 'GitHub', true);
+    label(nav.querySelector('#cnLinkedIn'), tr('LinkedIn profile'), true);
+    var more = nav.querySelector('.cn-more');
+    if (more) label(more, tr('More'), true);
+  }
+
+  // carino-navbar.js is deferred and executes BEFORE carino-lang.js and the
+  // site's i18n.js, so neither the language nor window.t exists yet when
+  // inject() first renders. Each site's i18n.js adopts the fleet locale in its
+  // own DOMContentLoaded or carino:langchange handler, registered after this
+  // one, so re-render on a timeout, once every handler has finished; the
+  // refit waits one tick more, for carino-clock.js to repaint its label too.
+  function rerender() {
+    setTimeout(function () { relabel(); greet(); setTimeout(queueFit, 0); }, 0);
+  }
+  window.addEventListener('carino:langchange', rerender);
+  document.addEventListener('DOMContentLoaded', rerender);
 
   function loadClockModule() {
     if (document.querySelector('script[data-carino-clock]')) return;
@@ -223,8 +329,6 @@
   // that fits wins.
   var fitting = false, fitQueued = false, fitPending = false, fitObserver = null;
 
-  function moreLabel() { return (typeof window.t === 'function') ? window.t('More') : 'More'; }
-
   function ensureMore(nav) {
     var btn = nav.querySelector('.cn-more');
     if (btn) return btn;
@@ -248,10 +352,7 @@
     right.appendChild(keep);
     right.appendChild(btn);
     nav.appendChild(menu);
-    function label() { var l = moreLabel(); btn.title = l; btn.setAttribute('aria-label', l); }
-    label();
-    window.addEventListener('carino:langchange', label);
-    document.addEventListener('DOMContentLoaded', function () { setTimeout(label, 0); });
+    label(btn, tr('More'), true);
     function open(on) {
       menu.hidden = !on;
       btn.setAttribute('aria-expanded', on ? 'true' : 'false');
@@ -378,7 +479,6 @@
 
   function watchFit(nav) {
     window.addEventListener('resize', queueFit);
-    window.addEventListener('carino:langchange', queueFit);
     // carino-lang.js, carino-diag.js and the app add to the bar after this
     // runs, and apps show or hide their own controls; refit on any of it.
     // Only the right cluster and the menu are watched (the clock ticks every
@@ -456,12 +556,13 @@
     wrap.innerHTML = MARKUP;
     var nav = wrap.firstElementChild;
     document.body.insertBefore(nav, document.body.firstChild);
-    if (TAG) { var t = nav.querySelector('.app-tag'); if (t) { t.textContent = TAG; t.title = TAG + ' — reload'; } }
+    if (TAG) { var t = nav.querySelector('.app-tag'); if (t) t.textContent = TAG; }
     // On the legal page itself the shield would only link back to this page.
     if (/\/legal(\.html)?$/.test(location.pathname)) {
       var legal = nav.querySelector('#cnLegal');
       if (legal) legal.remove();
     }
+    relabel();
     relocateActions(nav);
     watchFit(nav);
     immersive(nav);
