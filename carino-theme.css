@@ -265,7 +265,8 @@
 :root[data-carino-theme="color"] body.state-module .slice-menu .s-num { color: var(--slice-c, var(--accent)); opacity: .8; }
 :root[data-carino-theme="color"] .slice-menu .slice:nth-child(4n+1) { --slice-c: var(--ct-blue); }
 :root[data-carino-theme="color"] .slice-menu .slice:nth-child(4n+2) { --slice-c: var(--ct-red); }
-:root[data-carino-theme="color"] .slice-menu .slice:nth-child(4n+3) { --slice-c: var(--ct-amber); }
+/* amber mixed toward --text: pure amber is 2.5:1 on white at the collapsed bar's .8 opacity */
+:root[data-carino-theme="color"] .slice-menu .slice:nth-child(4n+3) { --slice-c: color-mix(in srgb, var(--ct-amber) 70%, var(--text)); }
 :root[data-carino-theme="color"] .slice-menu .slice:nth-child(4n+4) { --slice-c: var(--ct-green); }
 
 /* ============================================================
@@ -350,6 +351,12 @@
 :root[data-carino-theme="color"] .pt-card:nth-child(8n+7) { --pt-c: var(--ct-pink); }
 :root[data-carino-theme="color"] .pt-card:nth-child(8n+8) { --pt-c: var(--ct-indigo); }
 
+/* section numbers 01-36: one section shows at a time, so one accent per view.
+   body:not(.pdf-mode) so a Colourful PDF export keeps carino-branding.css's print colour */
+:root[data-carino-theme="color"] body:not(.pdf-mode) main > .spec:nth-of-type(3n+1) .spec-num { color: var(--ct-purple); }
+:root[data-carino-theme="color"] body:not(.pdf-mode) main > .spec:nth-of-type(3n+2) .spec-num { color: var(--ct-pink); }
+:root[data-carino-theme="color"] body:not(.pdf-mode) main > .spec:nth-of-type(3n+3) .spec-num { color: var(--ct-indigo); }
+
 /* play stage: daylight instead of night */
 :root[data-carino-theme="color"] .play-art {
   background:
@@ -396,3 +403,34 @@
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-new(root) { animation: none; }
 }
+
+/* ============================================================
+   7. colour accents — identity and categorisation take the
+      category hues; --accent stays for what is interactive
+   ============================================================ */
+/* hero second line: identity, not a link, so it leaves the interactive blue.
+   blue > purple > pink only: --ct-hero-text ends in amber (2.8:1 on --bg).
+   Purple arrives by 40% and pink holds the last fifth, so even a short line
+   shows all three; dark mixes each pastel toward its base hue to keep it vivid
+   (4.8:1 or better on the dark page). */
+:root[data-carino-theme="color"] :is(.landing-hero, .short-hero) h1 .gold {
+  --hg-1: var(--ct-blue); --hg-2: var(--ct-purple); --hg-3: var(--ct-pink);
+  background-image: linear-gradient(90deg, var(--hg-1) 0%, var(--hg-2) 40%, var(--hg-3) 80%);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent; -webkit-text-fill-color: transparent;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-carino-theme="color"]:not([data-theme="light"]) :is(.landing-hero, .short-hero) h1 .gold {
+    --hg-1: color-mix(in srgb, var(--ct-blue) 60%, var(--ct-h0b));
+    --hg-2: color-mix(in srgb, var(--ct-purple) 60%, var(--ct-h4b));
+    --hg-3: color-mix(in srgb, var(--ct-pink) 60%, var(--ct-h6b));
+  }
+}
+/* list markers: one quiet hue so the › glyphs stop reading as link arrows.
+   Compass's .how list sits beside its ok/warn/err scale words, so it is left out */
+:root[data-carino-theme="color"] .lh-situations:not(.how) li::before { color: var(--ct-purple); }
+/* the aria-hidden motif: rebind the token inside the SVG only, so each site's
+   stroke/fill: var(--accent) draws teal; Compass's slider has its own scale colours */
+:root[data-carino-theme="color"] .lh-motif:not(.cp-motif) { --accent: var(--ct-teal); }
+/* a heading kicker, not a control: it should not match the Play button below it */
+:root[data-carino-theme="color"] .lab-kicker { color: var(--ct-purple); }
