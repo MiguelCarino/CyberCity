@@ -282,6 +282,14 @@
 :root[data-carino-theme="color"] #carinoNav .clock-tz { color: var(--ct-on-accent); }
 :root[data-carino-theme="color"] #carinoNav .icon-btn:hover { color: var(--ct-on-accent); box-shadow: var(--ct-shadow-1); }
 :root[data-carino-theme="color"] #carinoNav .cn-more-menu { background: var(--bg-card); border-color: var(--border); box-shadow: var(--ct-shadow-3); }
+:root[data-carino-theme="color"] #carinoNav .cn-help { background: var(--ct-scrim); }
+:root[data-carino-theme="color"] #carinoNav .cn-help-card { background: var(--bg-card); border-color: var(--border); box-shadow: var(--ct-shadow-3); }
+:root[data-carino-theme="color"] #carinoNav .cn-way { background: var(--bg-elev); }
+:root[data-carino-theme="color"] #carinoNav .cn-ab-page { background: color-mix(in srgb, var(--accent) 12%, transparent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+:root[data-carino-theme="color"] #carinoNav .cn-way:hover,
+:root[data-carino-theme="color"] #carinoNav .cn-way:focus-visible,
+:root[data-carino-theme="color"] #carinoNav .cn-pill:hover,
+:root[data-carino-theme="color"] #carinoNav .cn-pill:focus-visible { background: var(--accent-faint); }
 :root[data-carino-theme="color"] #cnLangBtn { border-color: var(--border); color: var(--text-muted); }
 :root[data-carino-theme="color"] #cnLangBtn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-faint); }
 :root[data-carino-theme="color"] #cnLangBox { background: var(--bg-card); border-color: var(--border); box-shadow: var(--ct-shadow-3); }

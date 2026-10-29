@@ -763,14 +763,10 @@
     .progress-pill { display: inline-flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: var(--fs-label); color: var(--text-sec); border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; font-variant-numeric: tabular-nums; }
     .progress-pill .progress { width: 90px; height: 5px; }
 
-    /* ============ footer ============
-       Hub, Reference, Learning and Product pages end in one. Links are
-       short and mono; the line below names licence and source honestly. */
-    .site-foot { border-top: 1px solid var(--border); padding: 18px 0 28px; display: flex; flex-direction: column; gap: 8px; font-family: var(--mono); font-size: var(--fs-label); color: var(--text-muted); }
-    .sf-links { display: flex; flex-wrap: wrap; gap: 6px 16px; }
-    .sf-links a { color: var(--text-sec); text-decoration: none; }
-    .sf-links a:hover { color: var(--accent); }
-    .sf-line { line-height: 1.6; }
+    /* ============ no footer ============
+       Pages end where their content ends. What a footer used to say lives
+       in the page's [data-carino-about] block, which carino-navbar.js moves
+       into the shield's About & legal panel. */
 
     /* ============ play stage ============
        Games and ambient pieces: the body is a column, the navbar on top and

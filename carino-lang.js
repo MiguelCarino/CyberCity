@@ -221,9 +221,11 @@
 
   /* ---- UI ---- */
 
-  // The shield link to carino.systems/legal.html (#cnLegal) sits in every
-  // header, shared or bespoke. Its tooltip is translated here, the one script
-  // all of those headers load, rather than in each site's own dictionary.
+  // The shield (#cnLegal) sits in every header, shared or bespoke. Its
+  // tooltip is translated here, the one script all of those headers load,
+  // rather than in each site's own dictionary. In the shared navbar it is a
+  // button, About, that opens the about popup and names itself; a bespoke header's shield is
+  // still a plain link to carino.systems/legal.html.
   var LEGAL = { en: 'Legal notice & privacy', es: 'Aviso legal y privacidad', 'pt-BR': 'Aviso legal e privacidade',
                 ja: '法的通知とプライバシー', ru: 'Правовая информация и конфиденциальность' };
 
@@ -250,7 +252,8 @@
       btn.setAttribute('aria-label', btn.title);
     }
     var legal = document.getElementById('cnLegal');
-    if (legal) { legal.title = LEGAL[current] || LEGAL.en; legal.setAttribute('aria-label', legal.title); }
+    // the shared navbar's About button names itself; only a plain link is ours
+    if (legal && legal.tagName === 'A') { legal.title = LEGAL[current] || LEGAL.en; legal.setAttribute('aria-label', legal.title); }
   }
 
   function renderRows() {

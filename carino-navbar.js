@@ -41,11 +41,20 @@
      1  the app's own controls (.cn-actions)
      2  status     (carino-diag.js, or an app's own toggle)
      3  language   (carino-lang.js)
-     4  legal + GitHub + LinkedIn — always last
+     4  About + GitHub + LinkedIn — always last
 
-   The shield in that last group opens carino.systems/legal.html, the one
-   legal notice, privacy and cookie page for every site. carino-lang.js
-   translates its tooltip (it finds the link by its id, #cnLegal).
+   The labelled About button that leads that last group opens the about
+   popup (after the hub's help pane). Sites
+   carry no footer: whatever a page must say (a data credit, a "not
+   advice" line, a trademark notice, which outside services it calls, its
+   licence and version, a changelog or manual link) goes in a
+   <div data-carino-about hidden> anywhere in the page. That node is moved
+   (not cloned) into the popup, so ids, handlers and data-i18n survive and
+   a script may keep rewriting a line in it. The popup opens with the
+   site's own description, then that block, then how to get in touch and
+   carino.systems/legal.html, the one legal notice, privacy and cookie
+   page for every site. The navbar names the button itself; carino-lang.js
+   only translates the tooltip of a bespoke header's plain shield link.
    The legal page itself leaves the shield out.
 
    Fitting. The brand must never be squeezed out and the clock must stay
@@ -90,6 +99,18 @@
   // The GitHub button points at THIS project's repository, not the profile.
   var REPO = (SCRIPT && SCRIPT.getAttribute('data-repo')) || TAG;
   var GH_URL = 'https://github.com/MiguelCarino' + (REPO ? '/' + REPO : '');
+  // The repo's licence as its SPDX id (data-license="AGPL-3.0"); the About
+  // popup links it to the licence's own home, not to a copy. None, no card.
+  var LICENCE = (SCRIPT && SCRIPT.getAttribute('data-license')) || '';
+  var LICENCE_HOME = {
+    'AGPL-3.0': 'https://www.gnu.org/licenses/agpl-3.0.html',
+    'AGPL-3.0-or-later': 'https://www.gnu.org/licenses/agpl-3.0.html',
+    'GPL-3.0': 'https://www.gnu.org/licenses/gpl-3.0.html',
+    'GPL-3.0-or-later': 'https://www.gnu.org/licenses/gpl-3.0.html',
+    'MIT': 'https://opensource.org/license/mit',
+    'MPL-2.0': 'https://www.mozilla.org/en-US/MPL/2.0/',
+    'Apache-2.0': 'https://www.apache.org/licenses/LICENSE-2.0'
+  }[LICENCE] || (LICENCE ? 'https://spdx.org/licenses/' + LICENCE + '.html' : '');
   var CLOCK_SRC = 'carino-clock.js'; // local copy shipped in each site (no CDN)
 
   var CSS = ''
@@ -146,6 +167,49 @@
     + '#carinoNav .cn-more-menu .cn-actions{flex-wrap:wrap;overflow:visible;gap:8px;}'
     + '#carinoNav .cn-more-menu .social-row{border:0;padding:0;margin:0;justify-content:flex-start;}'
     + '#carinoNav .cn-more-menu .social-row:not(:first-child){border-top:1px solid var(--cn-border);padding-top:12px;}'
+    // About: a labelled button, and the popup it opens (the hub's help pane,
+    // in the bar's own colours): a scrim under the bar, one centred card.
+    + '#carinoNav .cn-help-btn{width:auto;gap:6px;padding:0 10px;font-family:var(--cn-mono);font-size:.8rem;text-transform:uppercase;letter-spacing:.1em;white-space:nowrap;}'
+    + '#carinoNav .cn-help-btn svg{width:15px;height:15px;flex:none;}'
+    // never folds into "⋯": on a phone it keeps its place, as its icon
+    + '#carinoNav .cn-right > .cn-help-btn{order:4;}'
+    + '@media(max-width:640px){#carinoNav .cn-help-btn{width:32px;padding:0;}#carinoNav .cn-help-btn .lbl{display:none;}}'
+    + '#carinoNav .cn-help{position:fixed;inset:60px 0 0 0;z-index:5;display:flex;align-items:center;justify-content:center;'
+    + 'padding:clamp(12px,3vh,40px) 16px;background:rgba(0,0,0,.66);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);animation:cn-fade .25s ease both;}'
+    + '#carinoNav .cn-help[hidden]{display:none;}'
+    + '#carinoNav .cn-help-card{position:relative;width:min(100%,760px);max-height:100%;overflow-y:auto;overscroll-behavior:contain;'
+    + 'border-radius:22px;border:1px solid var(--cn-border);background:linear-gradient(180deg,#161616,#0b0b0b);'
+    + 'box-shadow:0 30px 80px rgba(0,0,0,.7);color:var(--cn-text);font-family:var(--cn-sans);animation:cn-rise .42s cubic-bezier(.16,1,.3,1) both;}'
+    + '#carinoNav .cn-help-txt{padding:clamp(22px,4vh,36px) clamp(20px,4vw,44px) 0;text-align:center;}'
+    + '#carinoNav .cn-help-txt h2{margin:0;font-family:"Red Hat Display",var(--cn-sans);font-weight:900;letter-spacing:-.02em;font-size:clamp(1.4rem,1rem + 1.4vh,2rem);line-height:1.15;}'
+    + '#carinoNav .cn-help-txt p{margin:10px auto 0;max-width:52ch;color:var(--cn-muted);font-size:1rem;line-height:1.5;}'
+    + '#carinoNav .cn-ways{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px;padding:clamp(18px,3vh,26px) clamp(20px,4vw,44px) 0;}'
+    + '#carinoNav .cn-way{display:flex;align-items:center;gap:14px;padding:15px 18px;border-radius:16px;text-decoration:none;color:var(--cn-text);'
+    + 'border:1px solid var(--cn-border);background:rgba(255,255,255,.025);transition:border-color .2s ease,transform .35s cubic-bezier(.16,1,.3,1),background .2s ease;}'
+    + '#carinoNav .cn-way svg{width:26px;height:26px;flex:none;color:var(--cn-accent);}'
+    + '#carinoNav .cn-way b{display:block;font-family:"Red Hat Display",var(--cn-sans);font-weight:800;font-size:1.02rem;}'
+    + '#carinoNav .cn-way small{display:block;margin-top:2px;color:var(--cn-muted);font-size:.84rem;line-height:1.4;}'
+    + '#carinoNav .cn-way:hover,#carinoNav .cn-way:focus-visible{border-color:var(--cn-accent);background:rgba(234,179,8,.08);transform:translateY(-2px);outline:none;}'
+    // what the page must say: a highlighted box in the accent
+    + '#carinoNav .cn-ab-page{max-width:60ch;margin:16px auto 0;padding:12px 16px;text-align:center;border-radius:12px;'
+    + 'background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.35);}'
+    + '#carinoNav .cn-ab-page p{margin:0 0 8px;max-width:none;width:auto;text-align:center;color:var(--cn-text);font-size:.9rem;line-height:1.55;}'
+    + '#carinoNav .cn-ab-page p:last-child{margin-bottom:0;}'
+    + '#carinoNav .cn-ab-page a{color:var(--cn-accent);}'
+    + '#carinoNav .cn-ab-page .cn-ab-meta{font-family:var(--cn-mono);font-size:.72rem;color:var(--cn-muted);}'
+    + '#carinoNav .cn-issues{margin:clamp(14px,2.4vh,20px) clamp(20px,4vw,44px) 0;text-align:center;color:var(--cn-muted);font-size:.88rem;line-height:1.5;}'
+    + '#carinoNav .cn-issues a{display:inline-flex;align-items:center;gap:6px;color:var(--cn-accent);font-weight:600;text-decoration:none;}'
+    + '#carinoNav .cn-issues a:hover,#carinoNav .cn-issues a:focus-visible{text-decoration:underline;outline:none;}'
+    + '#carinoNav .cn-issues svg{width:15px;height:15px;}'
+    + '#carinoNav .cn-help-back{display:flex;justify-content:center;padding:clamp(16px,2.6vh,24px) 20px clamp(18px,3vh,28px);}'
+    + '#carinoNav .cn-pill{display:inline-flex;align-items:center;gap:8px;height:46px;padding:0 20px 0 14px;border-radius:999px;cursor:pointer;'
+    + 'border:1px solid var(--cn-accent);background:transparent;color:var(--cn-text);font:inherit;font-weight:700;font-size:1rem;}'
+    + '#carinoNav .cn-pill svg{width:18px;height:18px;}'
+    + '#carinoNav .cn-pill:hover,#carinoNav .cn-pill:focus-visible{background:rgba(234,179,8,.08);outline:none;}'
+    + '@keyframes cn-fade{from{opacity:0}to{opacity:1}}'
+    + '@keyframes cn-rise{from{opacity:0;transform:translate3d(0,18px,0) scale(.975)}to{opacity:1;transform:none}}'
+    + '@media(max-width:640px){#carinoNav .cn-help{align-items:flex-end;padding:10px 10px calc(10px + env(safe-area-inset-bottom,0px));}}'
+    + '@media(prefers-reduced-motion:reduce){#carinoNav .cn-help,#carinoNav .cn-help-card{animation:none;}#carinoNav .cn-way{transition:none;}}'
     // Immersive: collapse the bar's own height so the stage below takes it.
     + '#carinoNav{transition:margin-top .25s ease,opacity .25s ease;}'
     // Back in the flow while hidden, or sticking would hold it at the top.
@@ -155,6 +219,9 @@
   var GH = 'M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22';
   var LI = 'M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z';
   var SHIELD = 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z';
+  // an i in a circle: the About button
+  var INFO = '<circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path>';
+  var DOC = '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path><path d="M9 13h6"></path><path d="M9 17h6"></path>';
   var LEGAL_URL = 'https://carino.systems/legal.html';
   var LEGAL = 'Legal notice & privacy';
 
@@ -164,6 +231,18 @@
       '{app} — reload': '{app} — recargar',
       '{repo} on GitHub': '{repo} en GitHub',
       'LinkedIn profile': 'Perfil en LinkedIn',
+      'About': 'Acerca de',
+      'Licence': 'Licencia',
+      '{licence}: read the full terms.': '{licence}: lee los términos completos.',
+      'GitHub project': 'Proyecto en GitHub',
+      'The source code and its history.': 'El código fuente y su historial.',
+      'Found a problem or have an idea?': '¿Encontraste un problema o tienes una idea?',
+      'Open an issue on GitHub': 'Abre un issue en GitHub',
+      'Close': 'Cerrar',
+      'Contact': 'Contacto',
+      'Write to me on LinkedIn.': 'Escríbeme en LinkedIn.',
+      'Legal notice & privacy': 'Aviso legal y privacidad',
+      'Who runs this, what is stored, and cookies.': 'Quién lo opera, qué se guarda y las cookies.',
       'More': 'Más',
       'Ready.': 'Listo.',
       'Late shift.': 'Turno nocturno.',
@@ -176,6 +255,18 @@
       '{app} — reload': '{app} — recarregar',
       '{repo} on GitHub': '{repo} no GitHub',
       'LinkedIn profile': 'Perfil no LinkedIn',
+      'About': 'Sobre',
+      'Licence': 'Licença',
+      '{licence}: read the full terms.': '{licence}: leia os termos completos.',
+      'GitHub project': 'Projeto no GitHub',
+      'The source code and its history.': 'O código-fonte e seu histórico.',
+      'Found a problem or have an idea?': 'Encontrou um problema ou tem uma ideia?',
+      'Open an issue on GitHub': 'Abra uma issue no GitHub',
+      'Close': 'Fechar',
+      'Contact': 'Contato',
+      'Write to me on LinkedIn.': 'Escreva-me no LinkedIn.',
+      'Legal notice & privacy': 'Aviso legal e privacidade',
+      'Who runs this, what is stored, and cookies.': 'Quem mantém, o que é guardado e os cookies.',
       'More': 'Mais',
       'Ready.': 'Pronto.',
       'Late shift.': 'Turno da noite.',
@@ -188,6 +279,18 @@
       '{app} — reload': '{app} — 再読み込み',
       '{repo} on GitHub': 'GitHub の {repo}',
       'LinkedIn profile': 'LinkedIn プロフィール',
+      'About': '概要',
+      'Licence': 'ライセンス',
+      '{licence}: read the full terms.': '{licence}：条文の全文を読む。',
+      'GitHub project': 'GitHub プロジェクト',
+      'The source code and its history.': 'ソースコードとその履歴。',
+      'Found a problem or have an idea?': '問題を見つけた、またはアイデアがありますか？',
+      'Open an issue on GitHub': 'GitHub で Issue を作成',
+      'Close': '閉じる',
+      'Contact': 'お問い合わせ',
+      'Write to me on LinkedIn.': 'LinkedIn でご連絡ください。',
+      'Legal notice & privacy': '法的事項とプライバシー',
+      'Who runs this, what is stored, and cookies.': '運営者、保存される情報、Cookie について。',
       'More': 'その他',
       'Ready.': '準備完了。',
       'Late shift.': '夜勤お疲れさま。',
@@ -200,6 +303,18 @@
       '{app} — reload': '{app} — перезагрузить',
       '{repo} on GitHub': '{repo} на GitHub',
       'LinkedIn profile': 'Профиль в LinkedIn',
+      'About': 'О сайте',
+      'Licence': 'Лицензия',
+      '{licence}: read the full terms.': '{licence}: полный текст лицензии.',
+      'GitHub project': 'Проект на GitHub',
+      'The source code and its history.': 'Исходный код и его история.',
+      'Found a problem or have an idea?': 'Нашли проблему или есть идея?',
+      'Open an issue on GitHub': 'Откройте issue на GitHub',
+      'Close': 'Закрыть',
+      'Contact': 'Связаться',
+      'Write to me on LinkedIn.': 'Напишите мне в LinkedIn.',
+      'Legal notice & privacy': 'Правовая информация и конфиденциальность',
+      'Who runs this, what is stored, and cookies.': 'Кто ведёт сайт, что хранится и cookie.',
       'More': 'Ещё',
       'Ready.': 'Готово.',
       'Late shift.': 'Ночная смена.',
@@ -251,8 +366,8 @@
     + '<span class="brand-greeting" id="cnGreeting">Ready.</span>'
     + '</div></div>'
     + '<div class="cn-right">'
+    + '<button type="button" class="icon-btn cn-help-btn" id="cnLegal" aria-haspopup="dialog" aria-expanded="false" aria-controls="cnAbout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + INFO + '</svg><span class="lbl" data-cn-t="About"></span></button>'
     + '<div class="social-row">'
-    + '<a href="' + LEGAL_URL + '" class="icon-btn" id="cnLegal" title="' + LEGAL + '" aria-label="' + LEGAL + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="' + SHIELD + '"></path></svg></a>'
     + '<a href="' + GH_URL + '" target="_blank" rel="noopener" class="icon-btn" id="cnGitHub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="' + GH + '"></path></svg></a>'
     + '<a href="https://www.linkedin.com/in/miguelcarino94/" target="_blank" rel="noopener" class="icon-btn" id="cnLinkedIn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="' + LI + '"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle></svg></a>'
     + '</div>'
@@ -280,6 +395,17 @@
     if (TAG) label(nav.querySelector('.app-tag'), tr('{app} — reload', { app: TAG }));
     label(nav.querySelector('#cnGitHub'), REPO ? tr('{repo} on GitHub', { repo: REPO }) : 'GitHub', true);
     label(nav.querySelector('#cnLinkedIn'), tr('LinkedIn profile'), true);
+    label(nav.querySelector('#cnLegal'), tr('About'), true);
+    var ht = nav.querySelector('#cnHelpTitle');
+    if (ht) ht.textContent = PRODUCT;
+    var lc = nav.querySelector('#cnLicence small');
+    if (lc) lc.textContent = tr('{licence}: read the full terms.', { licence: LICENCE });
+    var hl = nav.querySelector('#cnHelpLine');
+    if (hl) hl.textContent = pageLine();
+    var ab = nav;
+    if (ab) {
+      Array.prototype.forEach.call(ab.querySelectorAll('[data-cn-t]'), function (el) { el.textContent = tr(el.getAttribute('data-cn-t')); });
+    }
     var more = nav.querySelector('.cn-more');
     if (more) label(more, tr('More'), true);
   }
@@ -324,6 +450,80 @@
       right.insertBefore(actions, right.querySelector('.social-row'));
     }
     if (strip && strip !== actions && strip.parentNode) strip.remove();
+  }
+
+  // ---- about -----------------------------------------------------------
+  // The About button's popup, after the hub's help pane: the product's name
+  // and description (in the visitor's language), what this page must say
+  // ([data-carino-about]), then the licence, contact, the GitHub project and
+  // the legal page, and under them where to open an issue. A child of the
+  // bar, not of the "⋯" menu.
+  // The site's one short line (sites.json "line", written into the head
+  // block as carino:line and translated in #carino-head-i18n); the long
+  // description is the fallback for a page the generator has not reached.
+  function pageLine() {
+    var lang = langNow(), d = '';
+    try {
+      var j = JSON.parse((document.getElementById('carino-head-i18n') || {}).textContent || '{}');
+      if (lang !== 'en' && j[lang]) d = j[lang].line || j[lang].desc || '';
+    } catch (e) { /* no translations */ }
+    if (!d) {
+      var m = document.querySelector('meta[name="carino:line"]') || document.querySelector('meta[name="description"]');
+      d = m ? m.content : '';
+    }
+    return d;
+  }
+  // The product's name: "Carino" and the app tag, unless the tag has it.
+  var PRODUCT = /^carino\b/i.test(TAG) ? TAG : 'Carino' + (TAG ? ' ' + TAG : ' Systems');
+  function about(nav) {
+    var btn = nav.querySelector('#cnLegal');
+    if (!btn) return;
+    var svg = function (body) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + body + '</svg>'; };
+    var WAYS = [
+      LICENCE && [LICENCE_HOME, svg(DOC), 'Licence', '', 'cnLicence'],
+      ['https://www.linkedin.com/in/miguelcarino94/', svg('<path d="' + LI + '"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle>'), 'Contact', 'Write to me on LinkedIn.'],
+      [GH_URL, svg('<path d="' + GH + '"></path>'), 'GitHub project', 'The source code and its history.'],
+      [LEGAL_URL, svg('<path d="' + SHIELD + '"></path>'), 'Legal notice & privacy', 'Who runs this, what is stored, and cookies.']
+    ].filter(Boolean);
+    var ISSUES = 'https://github.com/MiguelCarino/' + (REPO || 'Carino-Systems') + '/issues';
+    var pop = document.createElement('div');
+    pop.className = 'cn-help';
+    pop.id = 'cnAbout';
+    pop.hidden = true;
+    pop.innerHTML = '<div class="cn-help-card" role="dialog" aria-modal="true" aria-labelledby="cnHelpTitle">'
+      + '<div class="cn-help-txt"><h2 id="cnHelpTitle"></h2><p id="cnHelpLine"></p></div>'
+      + '<nav class="cn-ways">' + WAYS.map(function (w) {
+        var ext = w[0] === LEGAL_URL ? '' : ' target="_blank" rel="noopener"';
+        return '<a class="cn-way" href="' + w[0] + '"' + ext + (w[4] ? ' id="' + w[4] + '"' : '') + '>' + w[1]
+          + '<span><b data-cn-t="' + w[2] + '"></b><small' + (w[3] ? ' data-cn-t="' + w[3] + '"' : '') + '></small></span></a>';
+      }).join('') + '</nav>'
+      + '<p class="cn-issues"><span data-cn-t="Found a problem or have an idea?"></span> '
+      + '<a href="' + ISSUES + '" target="_blank" rel="noopener">' + svg('<path d="' + GH + '"></path>') + '<span data-cn-t="Open an issue on GitHub"></span></a></p>'
+      + '<div class="cn-help-back"><button type="button" class="cn-pill">' + svg('<path d="M18 6 6 18"></path><path d="m6 6 12 12"></path>') + '<span data-cn-t="Close"></span></button></div>'
+      + '</div>';
+    var own = document.querySelector('[data-carino-about]');
+    if (own) {
+      own.hidden = false;
+      own.classList.add('cn-ab-page');
+      pop.querySelector('.cn-help-txt').appendChild(own);
+    }
+    nav.appendChild(pop);
+    var back = pop.querySelector('.cn-pill');
+    function open(on) {
+      pop.hidden = !on;
+      btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+      if (on) {
+        var menu = nav.querySelector('.cn-more-menu'); if (menu) menu.hidden = true;
+        back.focus({ preventScroll: true });
+      }
+    }
+    btn.addEventListener('click', function (e) { e.stopPropagation(); open(pop.hidden); });
+    back.addEventListener('click', function () { open(false); btn.focus(); });
+    // the scrim, not the card, closes it
+    pop.addEventListener('click', function (e) { if (e.target === pop) open(false); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !pop.hidden) { open(false); btn.focus(); }
+    });
   }
 
   // ---- fitting ----------------------------------------------------------
@@ -567,6 +767,7 @@
       var legal = nav.querySelector('#cnLegal');
       if (legal) legal.remove();
     }
+    about(nav);
     relabel();
     relocateActions(nav);
     watchFit(nav);
