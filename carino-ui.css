@@ -36,7 +36,7 @@
       --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
       --display: 'Red Hat Display', var(--sans);
       --radius: 10px;
-      --nav-h: 60px;     /* carino-navbar.js height; it scrolls with the page */
+      --nav-h: 60px;     /* carino-navbar.js height; it stays on screen, so stick things under it */
       /* Breakpoints (media queries cannot read a token, so these are the rule):
          900px and below, a workspace settings rail becomes a drawer;
          640px and below, the phone layout. Nothing else. */
@@ -643,7 +643,7 @@
     .slice .s-text { font-family: var(--display); font-weight: 900; text-transform: uppercase; font-size: var(--fs-sec); letter-spacing: 0.5px; }
     .slice .s-blurb { font-size: var(--fs-sm); color: var(--text-sec); line-height: 1.45; }
     .slice-menu.collapsed, body.state-module .slice-menu {
-      position: sticky; top: 0; z-index: 40; min-height: 0; height: 44px; border-radius: 0; border-width: 0 0 1px;
+      position: sticky; top: var(--nav-h); z-index: 40; min-height: 0; height: 44px; border-radius: 0; border-width: 0 0 1px;
     }
     .slice-menu.collapsed .slice, body.state-module .slice-menu .slice { flex-direction: row; align-items: center; justify-content: center; gap: 10px; padding: 0 12px; }
     .slice-menu.collapsed .slice:hover, body.state-module .slice-menu .slice:hover { flex: 1; }
@@ -690,7 +690,7 @@
        A search box never comes first; past ~300 entries a Find may follow
        the chips. Reference: Law. */
     .fchips {
-      position: sticky; top: 0; z-index: 50; display: flex; flex-wrap: wrap; align-items: center; gap: 7px;
+      position: sticky; top: var(--nav-h); z-index: 50; display: flex; flex-wrap: wrap; align-items: center; gap: 7px;
       padding: 10px 0; background: rgba(5,5,5,0.88); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
       border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: var(--fs-label);
     }

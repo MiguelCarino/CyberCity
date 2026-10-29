@@ -25,6 +25,10 @@
    The Status diagnostics dropdown lives only on carino.systems
    itself — every sub-project's navbar omits it.
 
+   The bar stays on screen: it sticks to the top of the page at every
+   width, so anything else a page makes sticky sits under it, at
+   top: var(--nav-h) (carino-ui.css), never at top: 0.
+
    Brand links: "Carino" goes to the hub (carino.systems); the
    app-tag next to it links to the app's own root — clicking it
    acts as a fresh reload of the current site.
@@ -94,7 +98,7 @@
     + '--cn-sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;'
     + 'height:60px;flex-shrink:0;box-sizing:border-box;background:linear-gradient(180deg,#0f0f0f 0%,#050505 100%);'
     + 'border-bottom:1px solid var(--cn-border);display:flex;align-items:center;justify-content:space-between;'
-    + 'gap:16px;padding:0 20px;position:relative;z-index:2147483000;font-family:var(--cn-sans);}'
+    + 'gap:16px;padding:0 20px;position:sticky;top:0;z-index:2147483000;font-family:var(--cn-sans);}'
     + '#carinoNav *,#carinoNav *::before,#carinoNav *::after{box-sizing:border-box;}'
     + '#carinoNav .cn-left{display:flex;align-items:center;gap:18px;min-width:0;flex:1 1 auto;overflow:hidden;}'
     + '#carinoNav .cn-right{display:flex;align-items:center;gap:10px;flex-shrink:0;}'
@@ -144,7 +148,8 @@
     + '#carinoNav .cn-more-menu .social-row:not(:first-child){border-top:1px solid var(--cn-border);padding-top:12px;}'
     // Immersive: collapse the bar's own height so the stage below takes it.
     + '#carinoNav{transition:margin-top .25s ease,opacity .25s ease;}'
-    + '#carinoNav.cn-immersed{margin-top:-60px;opacity:0;pointer-events:none;}'
+    // Back in the flow while hidden, or sticking would hold it at the top.
+    + '#carinoNav.cn-immersed{position:relative;margin-top:-60px;opacity:0;pointer-events:none;}'
     + '@media(prefers-reduced-motion:reduce){#carinoNav{transition:none;}}';
 
   var GH = 'M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22';

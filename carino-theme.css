@@ -1,0 +1,390 @@
+/* ============================================================
+   carino-theme.css — the Colourful theme and the theme switch.
+   Link it AFTER carino-ui.css (and after a site's own sheet); load
+   carino-theme.js for the switch. Nothing here applies until <html>
+   carries data-carino-theme="color", so a missing attribute (no JS, a
+   failed head script) is Gold & Black, the fleet default, untouched.
+
+     <html data-carino-theme="gold">    Gold & Black — carino-ui.css as is
+     <html data-carino-theme="color">   Colourful — light; a dark variant
+                                         follows prefers-color-scheme, and
+                                         <html data-theme="light"> opts out
+
+   Three layers:
+     1. carino-ui.css's own tokens remapped (--bg, --accent, --text …), so
+        every component that reads a token follows on its own.
+     2. --ct-* tokens that exist only in Colourful: the colour on a filled
+        accent, tonal fills, shadows, glass bars, the eight category colours
+        (.ct-cat-*: --c fill, --on text on it, --t tonal, --tt tonal text)
+        and the icon hues (.ct-hue-0..6: --ta light, --tb base).
+     3. Overrides for the values carino-ui.css hard-codes for black
+        (#050505 on gold, #000 wells, dark scrims, pale alert text), plus
+        the Branding page's own chrome from carino-branding.css.
+   The marks' gold ring stays gold in both themes; only pictograms change
+   (marks/<stem>-color.svg). Spec: SoftwareCatalog/docs/THEMES.md.
+   ============================================================ */
+
+/* ---------- 1 + 2. tokens: Colourful light ---------- */
+:root[data-carino-theme="color"] {
+  --bg:            #eef3fc;   /* a pale blue page under white cards */
+  --bg-elev:       #e3eaf6;   /* wells: inputs, code, sketches        */
+  --bg-card:       #ffffff;   /* cards and demo frames, on a hairline */
+  --accent:        #0b57d0;   /* the one interactive blue (6.4:1)     */
+  --accent-faint:  rgba(11,87,208,0.06);
+  --accent-glow:   rgba(11,87,208,0.14);
+  --accent-dim:    rgba(11,87,208,0.32);
+  --border:        #d2dcec;
+  --border-hv:     #0b57d0;
+  --text:          #1f1f1f;   /* 16.1:1 */
+  --text-sec:      #444746;   /*  9.4:1 */
+  --text-muted:    #5f6368;   /*  6.1:1 on white, 5.0:1 on --bg-elev */
+  --ok:            #137333;
+  --warn:          #9a5b00;
+  --err:           #c5221f;
+  --info:          #007b83;
+  --stage-grad:    radial-gradient(760px 340px at 18% -14%, rgba(66,133,244,0.16) 0%, transparent 70%),
+                   radial-gradient(640px 300px at 84% -10%, rgba(234,67,53,0.09) 0%, transparent 70%),
+                   radial-gradient(700px 260px at 50% 118%, rgba(52,168,83,0.08) 0%, transparent 70%),
+                   linear-gradient(180deg,#e7effc 0%,#eef3fc 100%);
+  /* the wordmark stays gold, deepened so it holds on white (>= 3.9:1) */
+  --gold-text:     linear-gradient(130deg,#c26a06 0%,#b45309 55%,#92400e 100%);
+
+  --ct-on-accent:     #ffffff;
+  --ct-accent-strong: #0842a0;            /* a filled accent under the pointer */
+  --ct-tonal:         #d3e3fd;
+  --ct-on-tonal:      #041e49;
+  --ct-hover:         rgba(68,71,70,0.08);
+  --ct-cover:         #e8eef9;            /* neutral surface an icon sits on */
+  --ct-glass:         rgba(238,243,252,0.88);
+  --ct-scrim:         rgba(32,33,36,0.32);
+  --ct-scroll:        #c4c7c5;
+  --ct-shadow-1:      0 1px 2px rgba(60,64,67,.16), 0 1px 3px 1px rgba(60,64,67,.08);
+  --ct-shadow-2:      0 1px 3px rgba(60,64,67,.22), 0 4px 10px 3px rgba(60,64,67,.12);
+  --ct-shadow-3:      0 8px 28px rgba(60,64,67,.24), 0 2px 6px rgba(60,64,67,.14);
+  /* the page title: the four mark colours, each deepened for white */
+  --ct-hero-text:     linear-gradient(90deg,#188038 0%,#1a73e8 33%,#d93025 70%,#e37400 100%);
+
+  /* the eight category strokes (--ct-blue … --ct-indigo) */
+  --ct-blue:   #1a73e8;  --ct-red:    #d93025;  --ct-amber: #e37400;
+  --ct-green:  #188038;  --ct-purple: #8430ce;  --ct-teal:  #00838f;
+  --ct-pink:   #c2185b;  --ct-indigo: #4f5bd5;
+  /* icon hues, light → base */
+  --ct-h0a: #5e97f6; --ct-h0b: #1a73e8;
+  --ct-h1a: #f07368; --ct-h1b: #d93025;
+  --ct-h2a: #fbc02d; --ct-h2b: #ea8600;
+  --ct-h3a: #4cc06b; --ct-h3b: #1e8e3e;
+  --ct-h4a: #b373f0; --ct-h4b: #8430ce;
+  --ct-h5a: #33c3d4; --ct-h5b: #00838f;
+  --ct-h6a: #f06aa8; --ct-h6b: #c2185b;
+
+  /* status surfaces (alerts, toasts): text / fill / hairline */
+  --ct-ok-fg:   #0d652d; --ct-ok-bg:   #e6f4ea; --ct-ok-line:   #a8dab5;
+  --ct-warn-fg: #8a4b00; --ct-warn-bg: #fef7e0; --ct-warn-line: #f6d47a;
+  --ct-err-fg:  #a50e0e; --ct-err-bg:  #fce8e6; --ct-err-line:  #f4b4ae;
+  --ct-info-fg: #00585e; --ct-info-bg: #e0f4f5; --ct-info-line: #93d5db;
+  --ct-inline-code: rgba(31,31,31,0.07);
+
+  /* command block: a light well, green output */
+  --ct-term-bg: #f6f8fc; --ct-term-ink: #137333;
+
+  /* the day/night map, redrawn for paper */
+  --ct-map-bg: #e8f0fe; --ct-map-ocean: #cfe0fa; --ct-map-land: #b9dcc2; --ct-map-coast: #8fc29e;
+  --ct-map-night: rgba(32,33,58,0.30); --ct-map-city: #ffffff; --ct-map-city-line: #5f6368;
+  --ct-map-label: #1f1f1f; --ct-map-halo: #ffffff;
+
+  color-scheme: light;
+}
+
+/* ---------- tokens: Colourful dark ---------- */
+@media (prefers-color-scheme: dark) {
+  :root[data-carino-theme="color"]:not([data-theme="light"]) {
+    --bg:            #0e1420;
+    --bg-elev:       #222c3d;
+    --bg-card:       #172031;
+    --accent:        #a8c7fa;
+    --accent-faint:  rgba(168,199,250,0.08);
+    --accent-glow:   rgba(168,199,250,0.16);
+    --accent-dim:    rgba(168,199,250,0.36);
+    --border:        #33415a;
+    --border-hv:     #a8c7fa;
+    --text:          #e3e3e3;
+    --text-sec:      #c4c7c5;
+    --text-muted:    #9aa0a6;   /* 5.4:1 on --bg-elev */
+    --ok:            #81c995;
+    --warn:          #fdd663;
+    --err:           #f28b82;
+    --info:          #78d9ec;
+    --stage-grad:    radial-gradient(760px 340px at 18% -14%, rgba(138,180,248,0.14) 0%, transparent 70%),
+                     radial-gradient(640px 300px at 84% -10%, rgba(242,139,130,0.08) 0%, transparent 70%),
+                     radial-gradient(700px 260px at 50% 118%, rgba(129,201,149,0.06) 0%, transparent 70%),
+                     linear-gradient(180deg,#121a28 0%,#0e1420 100%);
+    --gold-text:     linear-gradient(130deg,#fef08a 0%,#eab308 50%,#b45309 100%);
+
+    --ct-on-accent:     #062e6f;
+    --ct-accent-strong: #d3e3fd;
+    --ct-tonal:         #004a77;
+    --ct-on-tonal:      #c2e7ff;
+    --ct-hover:         rgba(227,227,227,0.08);
+    --ct-cover:         #131b28;
+    --ct-glass:         rgba(14,20,32,0.86);
+    --ct-scrim:         rgba(0,0,0,0.6);
+    --ct-scroll:        #5f6368;
+    --ct-shadow-1:      0 1px 2px rgba(0,0,0,.5);
+    --ct-shadow-2:      0 2px 6px 2px rgba(0,0,0,.45);
+    --ct-shadow-3:      0 12px 36px rgba(0,0,0,.6);
+    --ct-hero-text:     linear-gradient(90deg,#81c995 0%,#8ab4f8 33%,#f28b82 70%,#fdd663 100%);
+
+    --ct-blue:   #8ab4f8;  --ct-red:    #f28b82;  --ct-amber: #fdd663;
+    --ct-green:  #81c995;  --ct-purple: #c58af9;  --ct-teal:  #78d9ec;
+    --ct-pink:   #ff8bcb;  --ct-indigo: #aab2f5;
+
+    --ct-ok-fg:   #a8dab5; --ct-ok-bg:   rgba(129,201,149,0.12); --ct-ok-line:   rgba(129,201,149,0.42);
+    --ct-warn-fg: #fde293; --ct-warn-bg: rgba(253,214,99,0.10);  --ct-warn-line: rgba(253,214,99,0.40);
+    --ct-err-fg:  #f6aea9; --ct-err-bg:  rgba(242,139,130,0.12); --ct-err-line:  rgba(242,139,130,0.45);
+    --ct-info-fg: #a1e4f2; --ct-info-bg: rgba(120,217,236,0.10); --ct-info-line: rgba(120,217,236,0.42);
+    --ct-inline-code: rgba(227,227,227,0.10);
+
+    --ct-term-bg: #0e0e0f; --ct-term-ink: #81c995;
+
+    /* the fleet's own night palette, which already reads on dark */
+    --ct-map-bg: #0b1017; --ct-map-ocean: #2b3a4e; --ct-map-land: #57604a; --ct-map-coast: #6b7355;
+    --ct-map-night: rgba(4,8,20,0.78); --ct-map-city: #dce6f2; --ct-map-city-line: #101826;
+    --ct-map-label: #ffffff; --ct-map-halo: #0e1420;
+
+    color-scheme: dark;
+  }
+}
+
+/* ---------- category colours and icon hues (opt-in classes) ---------- */
+:root[data-carino-theme="color"] .ct-cat-blue   { --c: #1a73e8; --on: #fff;    --t: #e3edfd; --tt: #1958b7; }
+:root[data-carino-theme="color"] .ct-cat-red    { --c: #d93025; --on: #fff;    --t: #fce8e6; --tt: #a50e0e; }
+:root[data-carino-theme="color"] .ct-cat-amber  { --c: #f9ab00; --on: #1f1f1f; --t: #fef3d0; --tt: #8a4b00; }
+:root[data-carino-theme="color"] .ct-cat-green  { --c: #188038; --on: #fff;    --t: #e2f3e7; --tt: #0d652d; }
+:root[data-carino-theme="color"] .ct-cat-purple { --c: #8430ce; --on: #fff;    --t: #f1e6fc; --tt: #7024b5; }
+:root[data-carino-theme="color"] .ct-cat-teal   { --c: #00838f; --on: #fff;    --t: #ddf3f5; --tt: #005f66; }
+:root[data-carino-theme="color"] .ct-cat-pink   { --c: #c2185b; --on: #fff;    --t: #fce4ee; --tt: #a3134b; }
+:root[data-carino-theme="color"] .ct-cat-grey   { --c: #3c4043; --on: #fff;    --t: #eef0f2; --tt: #3c4043; }
+.ct-hue-0 { --ta: var(--ct-h0a); --tb: var(--ct-h0b); } .ct-hue-1 { --ta: var(--ct-h1a); --tb: var(--ct-h1b); }
+.ct-hue-2 { --ta: var(--ct-h2a); --tb: var(--ct-h2b); } .ct-hue-3 { --ta: var(--ct-h3a); --tb: var(--ct-h3b); }
+.ct-hue-4 { --ta: var(--ct-h4a); --tb: var(--ct-h4b); } .ct-hue-5 { --ta: var(--ct-h5a); --tb: var(--ct-h5b); }
+.ct-hue-6 { --ta: var(--ct-h6a); --tb: var(--ct-h6b); }
+@media (prefers-color-scheme: dark) {
+  :root[data-carino-theme="color"]:not([data-theme="light"]) .ct-cat-blue   { --c: #8ab4f8; --on: #0b1f45; --t: rgba(138,180,248,.15); --tt: #a8c7fa; }
+  :root[data-carino-theme="color"]:not([data-theme="light"]) .ct-cat-red    { --c: #f28b82; --on: #3b0907; --t: rgba(242,139,130,.15); --tt: #f6aea9; }
+  :root[data-carino-theme="color"]:not([data-theme="light"]) .ct-cat-amber  { --c: #fdd663; --on: #1f1f1f; --t: rgba(253,214,99,.14);  --tt: #fdd663; }
+  :root[data-carino-theme="color"]:not([data-theme="light"]) .ct-cat-green  { --c: #81c995; --on: #072711; --t: rgba(129,201,149,.15); --tt: #a8dab5; }
+  :root[data-carino-theme="color"]:not([data-theme="light"]) .ct-cat-purple { --c: #c58af9; --on: #2a0a4a; --t: rgba(197,138,249,.15); --tt: #d7aefb; }
+  :root[data-carino-theme="color"]:not([data-theme="light"]) .ct-cat-teal   { --c: #78d9ec; --on: #00363d; --t: rgba(120,217,236,.14); --tt: #a1e4f2; }
+  :root[data-carino-theme="color"]:not([data-theme="light"]) .ct-cat-pink   { --c: #ff8bcb; --on: #3e0021; --t: rgba(255,139,203,.14); --tt: #ffb0db; }
+  :root[data-carino-theme="color"]:not([data-theme="light"]) .ct-cat-grey   { --c: #e3e3e3; --on: #1f1f1f; --t: rgba(227,227,227,.09); --tt: #e3e3e3; }
+  /* on dark the lighter hue carries the icon */
+  :root[data-carino-theme="color"]:not([data-theme="light"]) [class*="ct-hue-"] { --tb: var(--ta); }
+}
+
+/* ============================================================
+   3. carino-ui.css components: the values it hard-codes for black
+   ============================================================ */
+:root[data-carino-theme="color"] { scrollbar-color: var(--ct-scroll) transparent; }
+:root[data-carino-theme="color"] ::-webkit-scrollbar-thumb { background: var(--ct-scroll); }
+
+/* filled accent: text and marks on it */
+:root[data-carino-theme="color"] .btn-primary,
+:root[data-carino-theme="color"] .cs-btn.primary,
+:root[data-carino-theme="color"] .toggle-btn.active,
+:root[data-carino-theme="color"] .chip-tz { color: var(--ct-on-accent); }
+:root[data-carino-theme="color"] .btn-primary:hover,
+:root[data-carino-theme="color"] .cs-btn.primary:hover { background: var(--ct-accent-strong); border-color: var(--ct-accent-strong); color: var(--ct-on-accent); box-shadow: var(--ct-shadow-1); }
+:root[data-carino-theme="color"] .icon-btn-demo:hover { color: var(--ct-on-accent); }
+:root[data-carino-theme="color"] .rule-row .switch.on::after { background: var(--ct-on-accent); }
+:root[data-carino-theme="color"] .select option { background: var(--bg-card); color: var(--text); }
+
+/* status: alerts, toasts, pills, source badges */
+:root[data-carino-theme="color"] .alert.ok,   :root[data-carino-theme="color"] .toast.ok   { color: var(--ct-ok-fg);   background: var(--ct-ok-bg);   border-color: var(--ct-ok-line); }
+:root[data-carino-theme="color"] .alert.warn, :root[data-carino-theme="color"] .toast.warn { color: var(--ct-warn-fg); background: var(--ct-warn-bg); border-color: var(--ct-warn-line); }
+:root[data-carino-theme="color"] .alert.err,  :root[data-carino-theme="color"] .toast.err  { color: var(--ct-err-fg);  background: var(--ct-err-bg);  border-color: var(--ct-err-line); }
+:root[data-carino-theme="color"] .alert.info, :root[data-carino-theme="color"] .toast.info { color: var(--ct-info-fg); background: var(--ct-info-bg); border-color: var(--ct-info-line); }
+:root[data-carino-theme="color"] .alert code { background: var(--ct-inline-code); color: inherit; }
+:root[data-carino-theme="color"] .alert b { color: inherit; }
+:root[data-carino-theme="color"] .toast { box-shadow: var(--ct-shadow-2); }
+:root[data-carino-theme="color"] .pill.ok   { border-color: color-mix(in srgb, var(--ok) 40%, transparent);   background: color-mix(in srgb, var(--ok) 8%, transparent); }
+:root[data-carino-theme="color"] .pill.warn { border-color: color-mix(in srgb, var(--warn) 40%, transparent); background: color-mix(in srgb, var(--warn) 8%, transparent); }
+:root[data-carino-theme="color"] .pill.err  { border-color: color-mix(in srgb, var(--err) 40%, transparent);  background: color-mix(in srgb, var(--err) 8%, transparent); }
+:root[data-carino-theme="color"] .live-chip.live { border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+:root[data-carino-theme="color"] .live-chip.delayed,
+:root[data-carino-theme="color"] .live-chip.stale { border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+:root[data-carino-theme="color"] .delta.up   { background: color-mix(in srgb, var(--ok) 10%, transparent); }
+:root[data-carino-theme="color"] .delta.down { background: color-mix(in srgb, var(--err) 10%, transparent); }
+:root[data-carino-theme="color"] .copy-btn.done { background: color-mix(in srgb, var(--ok) 8%, transparent); }
+:root[data-carino-theme="color"] .cs-menu-item.danger { color: var(--err); }
+:root[data-carino-theme="color"] .cs-menu-item.danger:hover { background: color-mix(in srgb, var(--err) 8%, transparent); }
+
+/* the AI Bloat seal: accent half carries the on-accent ink */
+:root[data-carino-theme="color"] .cert-badge .cert-l { color: var(--ct-on-accent); }
+:root[data-carino-theme="color"] .cert-badge .cert-rosette { fill: var(--ct-on-accent); }
+
+/* cards and panels: a soft lift instead of a gold glow on black */
+:root[data-carino-theme="color"] .card:not(.entry):hover { background: var(--bg-card); box-shadow: var(--ct-shadow-3); }
+:root[data-carino-theme="color"] .panel-num { color: color-mix(in srgb, var(--accent) 16%, transparent); }
+
+/* floating surfaces */
+:root[data-carino-theme="color"] .diag-dropdown,
+:root[data-carino-theme="color"] .cs-menu-panel { box-shadow: var(--ct-shadow-3); }
+:root[data-carino-theme="color"] .modal { box-shadow: var(--ct-shadow-3); }
+:root[data-carino-theme="color"] .modal-scrim,
+:root[data-carino-theme="color"] dialog.modal::backdrop { background: var(--ct-scrim); }
+:root[data-carino-theme="color"] .ws.drawer-open .ws-rail { box-shadow: var(--ct-shadow-3); }
+:root[data-carino-theme="color"] .ws.drawer-open .ws-scrim { background: var(--ct-scrim); }
+
+/* code and terminals: wells, not black boxes */
+:root[data-carino-theme="color"] pre.code { color: var(--text); }
+:root[data-carino-theme="color"] .terminal { background: var(--ct-term-bg); }
+:root[data-carino-theme="color"] .terminal code { color: var(--ct-term-ink); }
+:root[data-carino-theme="color"] .term-copy { background: var(--bg-card); }
+:root[data-carino-theme="color"] .sp-stage { background: var(--bg-elev); }
+
+/* sticky glass bars */
+:root[data-carino-theme="color"] .fchips { background: var(--ct-glass); }
+:root[data-carino-theme="color"] .play-dock { background: var(--ct-glass); box-shadow: var(--ct-shadow-2); }
+
+/* landing hero */
+:root[data-carino-theme="color"] .landing-hero {
+  background: radial-gradient(620px 300px at 30% -14%, rgba(66,133,244,.12), transparent 70%),
+              radial-gradient(560px 280px at 72% -12%, rgba(251,188,4,.10), transparent 70%);
+}
+:root[data-carino-theme="color"] .lh-lede,
+:root[data-carino-theme="color"] .lh-situations { color: var(--text-sec); }
+
+/* slice menu: card surfaces; each slice's numeral takes a category colour */
+:root[data-carino-theme="color"] .slice-menu,
+:root[data-carino-theme="color"] .slice-menu .slice { background: var(--bg-card); }
+:root[data-carino-theme="color"] .slice-menu .slice:hover,
+:root[data-carino-theme="color"] .slice-menu .slice:focus-visible,
+:root[data-carino-theme="color"] .slice-menu .slice.active { background: var(--bg-elev); }
+:root[data-carino-theme="color"] .slice .s-num { color: var(--slice-c, var(--accent)); opacity: .55; }
+:root[data-carino-theme="color"] .slice-menu.collapsed .s-num,
+:root[data-carino-theme="color"] body.state-module .slice-menu .s-num { color: var(--slice-c, var(--accent)); opacity: .8; }
+:root[data-carino-theme="color"] .slice-menu .slice:nth-child(4n+1) { --slice-c: var(--ct-blue); }
+:root[data-carino-theme="color"] .slice-menu .slice:nth-child(4n+2) { --slice-c: var(--ct-red); }
+:root[data-carino-theme="color"] .slice-menu .slice:nth-child(4n+3) { --slice-c: var(--ct-amber); }
+:root[data-carino-theme="color"] .slice-menu .slice:nth-child(4n+4) { --slice-c: var(--ct-green); }
+
+/* ============================================================
+   4. the shared navbar (carino-navbar.js / carino-lang.js inject their
+      CSS later, so these carry the theme attribute to outrank it)
+   ============================================================ */
+:root[data-carino-theme="color"] #carinoNav {
+  --cn-accent: var(--accent); --cn-bg: var(--bg); --cn-border: var(--border);
+  --cn-text: var(--text); --cn-muted: var(--text-muted);
+  background: var(--bg); border-bottom-color: var(--border);
+}
+:root[data-carino-theme="color"] #carinoNav .brand-name { background-image: var(--gold-text); }
+:root[data-carino-theme="color"] #carinoNav .app-tag:hover { background: var(--accent-faint); }
+:root[data-carino-theme="color"] #carinoNav .clock-tz { color: var(--ct-on-accent); }
+:root[data-carino-theme="color"] #carinoNav .icon-btn:hover { color: var(--ct-on-accent); box-shadow: var(--ct-shadow-1); }
+:root[data-carino-theme="color"] #carinoNav .cn-more-menu { background: var(--bg-card); border-color: var(--border); box-shadow: var(--ct-shadow-3); }
+:root[data-carino-theme="color"] #cnLangBtn { border-color: var(--border); color: var(--text-muted); }
+:root[data-carino-theme="color"] #cnLangBtn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-faint); }
+:root[data-carino-theme="color"] #cnLangBox { background: var(--bg-card); border-color: var(--border); box-shadow: var(--ct-shadow-3); }
+:root[data-carino-theme="color"] #cnLangBox button { color: var(--text); }
+:root[data-carino-theme="color"] #cnLangBox button:hover { background: var(--accent-faint); color: var(--accent); }
+:root[data-carino-theme="color"] #cnLangBox button .code { color: var(--text-muted); }
+:root[data-carino-theme="color"] #cnLangBox button.active,
+:root[data-carino-theme="color"] #cnLangBox button.active .code { color: var(--accent); }
+
+/* ============================================================
+   5. the Branding reference page (carino-branding.css, carino-anim.css)
+   ============================================================ */
+/* the sweep spans the words, not the whole row, so all four colours show */
+:root[data-carino-theme="color"] .guide-hero h1 { background-image: var(--ct-hero-text); width: fit-content; margin-inline: auto; }
+/* two lines on a phone: the box shrinks to the longer word, so its first letter starts green */
+@media (max-width: 480px) { :root[data-carino-theme="color"] .guide-hero h1 { width: min-content; } }
+:root[data-carino-theme="color"] .mark-big { filter: none; }
+:root[data-carino-theme="color"] .toc { background: var(--ct-glass); }
+:root[data-carino-theme="color"] .toc a.active { background: var(--ct-tonal); border-color: transparent; color: var(--ct-on-tonal); }
+
+/* day/night map */
+:root[data-carino-theme="color"] .tzmap-wrap { background: var(--ct-map-bg); }
+:root[data-carino-theme="color"] .tz-ocean { fill: var(--ct-map-ocean); }
+:root[data-carino-theme="color"] .tz-land { fill: var(--ct-map-land); stroke: var(--ct-map-coast); }
+:root[data-carino-theme="color"] .tz-night { fill: var(--ct-map-night); }
+:root[data-carino-theme="color"] .tz-city { fill: var(--ct-map-city); stroke: var(--ct-map-city-line); }
+:root[data-carino-theme="color"] .tz-dot { stroke: var(--ct-map-halo); }
+:root[data-carino-theme="color"] .tz-lbl { fill: var(--ct-map-label); stroke: var(--ct-map-halo); }
+:root[data-carino-theme="color"] .tz-hours .hll { stroke: var(--ct-map-halo); }
+:root[data-carino-theme="color"] .tzmap-legend { background: var(--ct-glass); color: var(--text-sec); }
+
+/* section animations: each category draws in its own colour */
+:root[data-carino-theme="color"] .anim-cell {
+  background: linear-gradient(180deg, var(--bg-card) 0%, var(--ct-cover) 100%);
+  box-shadow: none;
+}
+:root[data-carino-theme="color"] .canim { color: var(--accent); }
+:root[data-carino-theme="color"] .canim .lit { filter: drop-shadow(0 0 4px color-mix(in srgb, currentColor 45%, transparent)); }
+:root[data-carino-theme="color"] .canim-network .node,
+:root[data-carino-theme="color"] .canim-learn .stop { fill: var(--bg-card); }
+:root[data-carino-theme="color"] .canim-medical  { color: var(--ct-red); }
+:root[data-carino-theme="color"] .canim-files    { color: var(--ct-indigo); }
+:root[data-carino-theme="color"] .canim-network  { color: var(--ct-blue); }
+:root[data-carino-theme="color"] .canim-security { color: var(--ct-teal); }
+:root[data-carino-theme="color"] .canim-systems  { color: var(--ct-purple); }
+:root[data-carino-theme="color"] .canim-business { color: var(--ct-green); }
+:root[data-carino-theme="color"] .canim-media    { color: var(--ct-pink); }
+:root[data-carino-theme="color"] .canim-learn    { color: var(--ct-amber); }
+
+/* page types: each card wears one category colour along its top edge */
+:root[data-carino-theme="color"] .pt-card { box-shadow: inset 0 3px 0 var(--pt-c, var(--accent)); }
+:root[data-carino-theme="color"] .pt-card:nth-child(8n+1) { --pt-c: var(--ct-blue); }
+:root[data-carino-theme="color"] .pt-card:nth-child(8n+2) { --pt-c: var(--ct-red); }
+:root[data-carino-theme="color"] .pt-card:nth-child(8n+3) { --pt-c: var(--ct-amber); }
+:root[data-carino-theme="color"] .pt-card:nth-child(8n+4) { --pt-c: var(--ct-green); }
+:root[data-carino-theme="color"] .pt-card:nth-child(8n+5) { --pt-c: var(--ct-purple); }
+:root[data-carino-theme="color"] .pt-card:nth-child(8n+6) { --pt-c: var(--ct-teal); }
+:root[data-carino-theme="color"] .pt-card:nth-child(8n+7) { --pt-c: var(--ct-pink); }
+:root[data-carino-theme="color"] .pt-card:nth-child(8n+8) { --pt-c: var(--ct-indigo); }
+
+/* play stage: daylight instead of night */
+:root[data-carino-theme="color"] .play-art {
+  background:
+    radial-gradient(240px 160px at 30% 40%, color-mix(in srgb, var(--ct-blue) 22%, transparent), transparent 70%),
+    radial-gradient(300px 200px at 75% 65%, color-mix(in srgb, var(--ct-amber) 18%, transparent), transparent 70%),
+    linear-gradient(180deg, var(--ct-cover) 0%, var(--bg) 100%);
+}
+:root[data-carino-theme="color"] .ws-frame .ws.drawer-demo .ws-rail { box-shadow: var(--ct-shadow-3); }
+:root[data-carino-theme="color"] .ws-frame .ws.drawer-demo::after { background: var(--ct-scrim); }
+
+/* ============================================================
+   6. the theme switch — the site's mark, left of the navbar's
+      "Carino". It shows the current theme's mark and, under a real
+      pointer, the other one: the theme a click switches to.
+   ============================================================ */
+.ct-switch {
+  flex: none; width: 32px; height: 32px; margin: 0 8px 0 -4px; padding: 0;
+  border: 0; border-radius: 8px; background: transparent; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.ct-switch img { width: 28px; height: 28px; display: block; }
+.ct-switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ct-switch .ct-switch-color,
+:root[data-carino-theme="color"] .ct-switch .ct-switch-gold { display: none; }
+:root[data-carino-theme="color"] .ct-switch .ct-switch-color { display: block; }
+/* hover only where there is a real pointer: after a tap a sticky hover
+   would show the theme just left */
+@media (hover: hover) and (pointer: fine) {
+  .ct-switch:hover .ct-switch-gold { display: none; }
+  .ct-switch:hover .ct-switch-color { display: block; }
+  :root[data-carino-theme="color"] .ct-switch:hover .ct-switch-color { display: none; }
+  :root[data-carino-theme="color"] .ct-switch:hover .ct-switch-gold { display: block; }
+}
+
+/* the switch itself: a circle of the new theme grows out of the mark
+   (View Transitions; carino-theme.js sets --vt-x / --vt-y / --vt-r) */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+::view-transition-new(root) { animation: ct-reveal .62s cubic-bezier(.65, 0, .35, 1) both; }
+@keyframes ct-reveal {
+  from { clip-path: circle(0 at var(--vt-x, 0) var(--vt-y, 0)); }
+  to   { clip-path: circle(var(--vt-r, 150vmax) at var(--vt-x, 0) var(--vt-y, 0)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-new(root) { animation: none; }
+}

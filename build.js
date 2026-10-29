@@ -337,10 +337,27 @@ const HTML = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<meta name="theme-color" content="#000000">
 <title>CyberCity</title>
 <link rel="icon" type="image/webp" href="logo.webp">
-${BASELINE}<link rel="stylesheet" href="fonts/carino-fonts.css">
+${BASELINE}<!-- Theme before first paint, so neither theme flashes the other:
+     ?theme=gold|color (review links; not stored) > carino-theme cookie
+     (shared across *.carino.systems) > localStorage > Gold & Black. -->
+<meta name="theme-color" content="#050505" id="carinoThemeColor">
+<script>
+(function () {
+  var d = document.documentElement, t = null;
+  function pick(v) { return v === 'gold' ? 'gold' : (v === 'color' || v === 'colour') ? 'color' : null; }
+  try { t = pick(new URLSearchParams(location.search).get('theme')); } catch (e) {}
+  if (!t) { try { var m = document.cookie.match(/(?:^|;\\s*)carino-theme=([^;]*)/); if (m) t = pick(decodeURIComponent(m[1])); } catch (e) {} }
+  if (!t) { try { t = pick(localStorage.getItem('carino-theme')); } catch (e) {} }
+  t = t || 'gold';
+  d.setAttribute('data-carino-theme', t);
+  var dark = d.getAttribute('data-theme') !== 'light' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches;
+  var meta = document.getElementById('carinoThemeColor');
+  if (meta) meta.content = t === 'gold' ? '#050505' : (dark ? '#0e1420' : '#eef3fc');
+})();
+</script>
+<link rel="stylesheet" href="fonts/carino-fonts.css">
 <link rel="stylesheet" href="carino-ui.css">
 <style>
   html, body { margin: 0; padding: 0; background: #000; height: 100%; overflow: hidden; }
@@ -371,6 +388,13 @@ ${BASELINE}<link rel="stylesheet" href="fonts/carino-fonts.css">
   /* The help overlay: Branding's modal, .kbd-grid key list and .touch-only touch section. */
   .cc-keys { margin: 12px 0 0; }
   .cc-touch { margin: 14px 0 0; }
+</style>
+<!-- Colourful theme + the switch; nothing applies until data-carino-theme="color". -->
+<link rel="stylesheet" href="carino-theme.css">
+<style>
+  /* Colourful: the navbar and the help overlay follow the theme; the city does not. The stage is
+     the city itself, drawn on black, so it keeps the night inks the hint line reads. */
+  :root[data-carino-theme="color"] .play-stage { --text-sec: #a3a3a3; color-scheme: dark; }
 </style>
 </head>
 <body class="play-body">
@@ -419,6 +443,7 @@ ${BASELINE}<link rel="stylesheet" href="fonts/carino-fonts.css">
 ${chunks.map(c => '<script src="' + c.rel + '?v=' + crypto.createHash('sha1').update(c.text).digest('hex').slice(0, 10) + '"></script>\n').join('')}<script>
 ${bundle}</script>
 <script src="carino-navbar.js" data-app="CyberCity" data-repo="CyberCity" data-immersive defer></script>
+<script src="carino-theme.js" data-mark="logo.svg" data-mark-color="logo-color.svg" defer></script>
 <script src="carino-lang.js" defer></script>
 <script src="i18n.js" defer></script>
 <script src="ui.js" defer></script>
