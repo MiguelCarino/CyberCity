@@ -556,14 +556,14 @@
        it) and leaves as soon as there is work. Mark, a two-line claim with
        the second line gold, a lede of two lines at most, one input target,
        example chips, then the privacy line. .rail-head is the compact form
-       for tools that always open with content (Desk, Password, Aldis). */
+       for tools that always open with content (Desk, Password, Aldis): the
+       name and lede only, never the mark, which the navbar already shows. */
     .short-hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; max-width: 640px; margin: 0 auto; padding: 40px 16px; }
     .short-hero .mark { width: 48px; height: 48px; display: block; }
     .short-hero h1 { font-family: var(--sans); font-weight: 800; font-size: var(--fs-h1); line-height: 1.15; letter-spacing: -.01em; margin: 0; }
     .sh-lede { color: var(--text-sec); font-size: var(--fs-sec); line-height: 1.55; max-width: 52ch; margin: 0; }
     .sh-input { width: 100%; }
     .short-hero.rail-head { flex-direction: row; align-items: center; text-align: left; gap: 12px; max-width: none; margin: 0; padding: 0 0 14px; border-bottom: 1px solid var(--border); }
-    .short-hero.rail-head .mark { width: 32px; height: 32px; flex: none; }
     .short-hero.rail-head h1 { font-size: var(--fs-h3); }
     .short-hero.rail-head .sh-lede { font-size: var(--fs-sm); }
 
