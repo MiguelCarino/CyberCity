@@ -7,10 +7,12 @@
 
      <script src="carino-lang.js" defer></script>
 
-   It injects a compact language button (a language glyph + AUTO,
-   or the picked code: EN / ES / PT / 日本語 / RU) into the header's
-   right cluster, left of the Sys. Status control. Clicking it opens
-   a dropdown: Auto (follow the browser) plus the five languages.
+   Next to the shared navbar it draws no button: the navbar's About
+   window has a Language tab that calls CarinoLang.set(). Only a bespoke
+   header (the hub's inline one) still gets the compact language button
+   (a language glyph + AUTO, or the picked code: EN / ES / PT / 日本語 /
+   RU), left of its Sys. Status control, which opens a dropdown: Auto
+   (follow the browser) plus the five languages.
 
    AUTOMATIC: the language resolves without any user action —
      ?lang= in the URL  >  fleet-wide choice  >  browser language
@@ -336,6 +338,9 @@
   // injected navbar's .cn-right (carino-navbar.js). Sit LEFT of Sys. Status.
   function tryAttach() {
     var nav = document.getElementById('carinoNav');
+    // The shared navbar shows the languages in its About window (a Language
+    // tab that calls CarinoLang.set), so it gets no button here.
+    if (nav && nav.hasAttribute('data-cn-lang')) return true;
     if (nav) {
       var right = nav.querySelector('.cn-right');
       if (right) { build(right, document.getElementById('cnDiagBtn') || right.querySelector('.social-row')); return true; }

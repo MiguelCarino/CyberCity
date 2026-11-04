@@ -275,10 +275,15 @@
    ============================================================ */
 :root[data-carino-theme="color"] #carinoNav {
   --cn-accent: var(--accent); --cn-bg: var(--bg); --cn-border: var(--border);
-  --cn-text: var(--text); --cn-muted: var(--text-muted);
+  --cn-text: var(--text); --cn-muted: var(--text-muted); --cn-faint: var(--accent-faint);
   background: var(--bg); border-bottom-color: var(--border);
 }
-:root[data-carino-theme="color"] #carinoNav .brand-name { background-image: var(--gold-text); }
+:root[data-carino-theme="color"] #carinoNav .brand-name,
+:root[data-carino-theme="color"] #carinoNav .cn-fl b { background-image: var(--gold-text); }
+:root[data-carino-theme="color"] #carinoNav .cn-product:hover,
+:root[data-carino-theme="color"] #carinoNav .cn-product:focus-visible { text-shadow: none; color: var(--accent); -webkit-text-fill-color: var(--accent); }
+:root[data-carino-theme="color"] #carinoNav .cn-tab:hover { background: var(--bg-elev); }
+:root[data-carino-theme="color"] #carinoNav .cn-lang[aria-checked="true"] { color: var(--accent); }
 :root[data-carino-theme="color"] #carinoNav .app-tag:hover { background: var(--accent-faint); }
 :root[data-carino-theme="color"] #carinoNav .clock-tz { color: var(--ct-on-accent); }
 :root[data-carino-theme="color"] #carinoNav .icon-btn:hover { color: var(--ct-on-accent); box-shadow: var(--ct-shadow-1); }
