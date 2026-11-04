@@ -235,7 +235,7 @@
     + '#carinoNav .cn-help-card{position:relative;display:grid;grid-template-columns:184px minmax(0,1fr);width:min(100%,820px);height:min(100%,560px);overflow:hidden;'
     + 'border-radius:22px;border:1px solid var(--cn-border);background:linear-gradient(180deg,#161616,#0b0b0b);'
     + 'box-shadow:0 30px 80px rgba(0,0,0,.7);color:var(--cn-text);font-family:var(--cn-sans);animation:cn-rise .42s cubic-bezier(.16,1,.3,1) both;}'
-    + '#carinoNav .cn-tabs{display:flex;flex-direction:column;gap:4px;padding:18px 10px;border-right:1px solid var(--cn-border);overflow:auto;}'
+    + '#carinoNav .cn-abtabs{display:flex;flex-direction:column;gap:4px;padding:18px 10px;border-right:1px solid var(--cn-border);overflow:auto;}'
     + '#carinoNav .cn-tab{display:block;width:100%;text-align:left;padding:10px 14px;border:0;border-radius:10px;background:transparent;cursor:pointer;'
     + 'color:var(--cn-muted);font:600 .95rem/1.2 var(--cn-sans);white-space:nowrap;border-left:3px solid transparent;}'
     + '#carinoNav .cn-tab:hover{color:var(--cn-text);background:rgba(255,255,255,.04);}'
@@ -331,8 +331,8 @@
     + '@media(max-width:640px){'
     + '#carinoNav .cn-help{align-items:flex-end;padding:10px 10px calc(10px + env(safe-area-inset-bottom,0px));}'
     + '#carinoNav .cn-help-card{display:flex;flex-direction:column;height:auto;min-height:min(100%,420px);max-height:100%;border-radius:18px;}'
-    + '#carinoNav .cn-tabs{flex-direction:row;flex:none;margin-right:52px;padding:10px;border-right:0;border-bottom:1px solid var(--cn-border);overflow-x:auto;overflow-y:hidden;scrollbar-width:none;}'
-    + '#carinoNav .cn-tabs::-webkit-scrollbar{display:none;}'
+    + '#carinoNav .cn-abtabs{flex-direction:row;flex:none;margin-right:52px;padding:10px;border-right:0;border-bottom:1px solid var(--cn-border);overflow-x:auto;overflow-y:hidden;scrollbar-width:none;}'
+    + '#carinoNav .cn-abtabs::-webkit-scrollbar{display:none;}'
     + '#carinoNav .cn-tab{width:auto;flex:none;padding:8px 12px;border-left:0;border-bottom:3px solid transparent;border-radius:8px;}'
     + '#carinoNav .cn-tab[aria-selected="true"]{border-bottom-color:var(--cn-accent);}'
     + '#carinoNav .cn-panels{flex:1 1 auto;}#carinoNav .cn-p-about{padding-top:28px;}'
@@ -822,7 +822,7 @@
     pop.hidden = true;
     pop.innerHTML = '<div class="cn-help-card" role="dialog" aria-modal="true" aria-labelledby="cnHelpTitle">'
       + '<button type="button" class="cn-x">' + svg(CLOSE) + '</button>'
-      + '<div class="cn-tabs" role="tablist" aria-orientation="vertical">'
+      + '<div class="cn-abtabs" role="tablist" aria-orientation="vertical">'
       + TABS.map(function (t) {
         return '<button type="button" class="cn-tab" role="tab" id="cnTab-' + t[0] + '" aria-controls="cnPanel-' + t[0] + '" aria-selected="false" tabindex="-1"'
           + (t[2] ? ' hidden' : '') + ' data-cn-t="' + t[1] + '"></button>';
@@ -952,7 +952,7 @@
     // the scrim, not the card, closes it
     pop.addEventListener('click', function (e) { if (e.target === pop) open(false); });
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && !pop.hidden) { open(false); btn.focus(); }
+      if (e.key === 'Escape' && !pop.hidden) { e.preventDefault(); open(false); btn.focus(); }
     });
     // the mark follows the theme while the window is open
     window.addEventListener('carino:themechange', function () { setTimeout(function () { paintMark(nav); }, 0); });
