@@ -231,6 +231,7 @@
 :root[data-carino-theme="color"] .cs-menu-panel { box-shadow: var(--ct-shadow-3); }
 :root[data-carino-theme="color"] .modal { box-shadow: var(--ct-shadow-3); }
 :root[data-carino-theme="color"] .modal-scrim,
+:root[data-carino-theme="color"] .rpv-scrim,
 :root[data-carino-theme="color"] dialog.modal::backdrop { background: var(--ct-scrim); }
 :root[data-carino-theme="color"] .ws.drawer-open .ws-rail { box-shadow: var(--ct-shadow-3); }
 :root[data-carino-theme="color"] .ws.drawer-open .ws-scrim { background: var(--ct-scrim); }

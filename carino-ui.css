@@ -367,6 +367,95 @@
     .modal-body { padding: 18px; color: var(--text-sec); font-size: var(--fs-sec); overflow-y: auto; }
     .modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--border); }
 
+    /* ============ 18b. report preview ============ */
+    /* Every PDF or printed report opens here before anything is saved or printed.
+       One layout fleet-wide: everything the user reads or sets sits in the left
+       column (.rpv-side: title and ✕, status, options, file name), Print and
+       Download at the foot of that column (.rpv-actions, primary last), and the
+       document itself on the right (.rpv-stage) at paper width, scaled, never
+       reflowed. The scrim starts under the pinned navbar and stays below it, so
+       the navbar's own menus still open over it. On a phone the column folds:
+       head, status, options and name above the document, the buttons along the
+       bottom edge. Markup:
+         <div class="rpv-scrim" hidden><div class="rpv" role="dialog" aria-modal="true" aria-labelledby="…">
+           <aside class="rpv-side">
+             <div class="rpv-head"><h2 class="rpv-title" id="…">…</h2><button class="modal-x rpv-x" data-close>✕</button></div>
+             <p class="rpv-status" role="status" aria-live="polite"></p>
+             <div class="rpv-opts">…</div>
+             <p class="rpv-name"></p>
+             <div class="rpv-actions"><button class="btn">Print</button><button class="btn btn-primary">Download PDF</button></div>
+           </aside>
+           <div class="rpv-stage"><iframe class="rpv-frame"></iframe></div>
+         </div></div>
+       A page that opens and traps it with CarinoUI.modal keeps class="modal-scrim rpv-scrim".
+       A preview that must sit over another modal <dialog> can itself be
+       <dialog class="rpv-scrim"> opened with showModal() (that makes the navbar inert
+       while it is open; show() over the page does not). The options scroll inside the
+       column, so Print and Download never leave the screen. A stage whose frame is
+       scaled with a transform (phones) adds .rpv-fit so it does not scroll into the
+       unscaled box. */
+    .rpv-scrim, .modal-scrim.rpv-scrim {
+      position: fixed; inset: var(--nav-h, 0px) 0 0 0; z-index: 2147482000; padding: 16px;
+      display: flex; align-items: stretch; justify-content: center;
+      background: rgba(0,0,0,0.65); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    }
+    .rpv-scrim[hidden], .rpv-scrim.hidden { display: none; }
+    dialog.rpv-scrim { width: auto; height: auto; max-width: none; max-height: none; margin: 0; border: 0; color: var(--text); }
+    dialog.rpv-scrim:not([open]) { display: none; }
+    dialog.rpv-scrim::backdrop { background: transparent; }
+    .rpv {
+      display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+      width: 100%; max-width: 1240px; height: 100%; min-height: 0; overflow: hidden;
+      background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: 14px;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.75);
+    }
+    .rpv-side {
+      display: flex; flex-direction: column; gap: 14px; min-width: 0; min-height: 0;
+      padding: 16px; border-right: 1px solid var(--border); overflow: hidden;
+    }
+    .rpv-head, .rpv-status, .rpv-name, .rpv-actions { flex: none; }
+    .rpv-head { display: flex; align-items: flex-start; gap: 8px; }
+    .rpv-title {
+      flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere;
+      font-family: var(--display); font-weight: 900; font-size: var(--fs-lg);
+      text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.2;
+    }
+    .rpv-x { flex: none; margin: -4px -6px 0 0; }
+    .rpv-status { margin: 0; font-family: var(--mono); font-size: var(--fs-label); color: var(--text-muted); letter-spacing: 0.04em; }
+    .rpv-status:empty { display: none; }
+    .rpv-opts { display: flex; flex-direction: column; gap: 12px; flex: 0 1 auto; min-height: 0; overflow-y: auto; font-size: var(--fs-sec); color: var(--text); }
+    .rpv-opts[hidden], .rpv-opts:empty { display: none; }
+    .rpv-opts fieldset { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+    .rpv-opts legend { padding: 0; margin-bottom: 6px; font-family: var(--mono); font-size: var(--fs-label); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+    .rpv-opts label { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+    .rpv-opts input[type=checkbox], .rpv-opts input[type=radio] { flex: none; margin: 3px 0 0; }
+    .rpv-opts select { width: 100%; }
+    .rpv-name { margin: 0; font-family: var(--mono); font-size: var(--fs-label); color: var(--text-muted); overflow-wrap: anywhere; }
+    .rpv-name:empty { display: none; }
+    .rpv-actions {
+      margin-top: auto; display: flex; flex-direction: column; gap: 8px;
+      padding-top: 14px; border-top: 1px solid var(--border);
+    }
+    .rpv-actions > * { width: 100%; justify-content: center; text-align: center; margin: 0; height: auto; min-height: 38px; white-space: normal; line-height: 1.3; }
+    .rpv-stage { position: relative; min-width: 0; min-height: 0; overflow: auto; background: #d6d8dc; }
+    .rpv-frame { display: block; width: 100%; height: 100%; border: 0; background: #d6d8dc; }
+    .rpv-frame[hidden] { display: none; }
+    .rpv-stage.rpv-fit { overflow: hidden; }
+    @media (max-width: 700px) {
+      .rpv-scrim, .modal-scrim.rpv-scrim { padding: 0; }
+      .rpv { display: flex; flex-direction: column; gap: 8px; border: 0; border-radius: 0; box-shadow: none; }
+      .rpv-side { display: contents; }
+      .rpv-head { order: 1; padding: 12px 12px 0; }
+      .rpv-x { min-width: 44px; min-height: 44px; margin: -10px -8px 0 0; }
+      .rpv-status { order: 2; padding: 0 12px; }
+      .rpv-opts { order: 3; padding: 0 12px; gap: 8px; max-height: 42dvh; }
+      .rpv-name { order: 4; padding: 0 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
+      .rpv-stage { order: 5; flex: 1; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+      .rpv-actions { order: 6; flex-direction: row; margin: 0; padding: 0 12px calc(12px + env(safe-area-inset-bottom, 0px)); border-top: 0; }
+      .rpv-actions > * { flex: 1; width: auto; min-height: 44px; }
+    }
+    @media print { .rpv-scrim { display: none !important; } }
+
     /* copy button: the per-section Copy on the reference page and the
        floating copy on a command block (.copy-btn.term-copy) */
     .copy-btn {
@@ -617,7 +706,9 @@
       /* .ws-stack: the rail stacks above the pane instead of becoming a
          drawer — for suites whose files-in sits in the rail (dcm, Media). */
       .ws.ws-stack { flex-direction: column; min-height: 0; }
-      .ws.ws-stack .ws-rail { position: static; transform: none; width: auto; box-shadow: none; border-right: 0; border-bottom: 1px solid var(--border); overflow: visible; }
+      /* z-index auto: in flow, the drawer's 1001 would still stack the rail over the
+         pane's sticky bar and the menus it opens (Files' Export was unusable). */
+      .ws.ws-stack .ws-rail { position: static; z-index: auto; transform: none; width: auto; box-shadow: none; border-right: 0; border-bottom: 1px solid var(--border); overflow: visible; }
       .ws.ws-stack .ws-pane { overflow: visible; }
       .ws.ws-stack .ws-toggle { display: none; }
     }
