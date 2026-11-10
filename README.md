@@ -614,3 +614,15 @@ before the underpainting shipped, so they show the page as `CC.Compose.UNDER = 0
 and with no sky gradient. A current print is `topng.py f.txt out.png --u`. The font is Liberation
 Mono rather than whatever your browser picks, so the shapes of individual characters will differ
 slightly from what you get on screen.
+
+## Licensing
+
+**Mine: GNU Affero General Public License v3.0.** Everything in this repository *except* the
+paths listed below. Copyright © 2026 Miguel Carino. Full terms in [LICENSE](LICENSE).
+
+**Not mine.** [`fonts/`](fonts/) holds IBM Plex Mono, IBM Plex Sans and Red Hat Display under the
+SIL Open Font License 1.1 ([`fonts/OFL.txt`](fonts/OFL.txt)). This project's licence does not cover them.
+
+**The name and marks** (Carino, the gold C, `logo.*`, `og.jpg`) are not licensed. See the fleet
+[trademark policy](https://github.com/MiguelCarino/Branding/blob/main/TRADEMARK.md): a modified version
+must rebrand, and it keeps the copyright notices.
