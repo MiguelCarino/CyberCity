@@ -382,8 +382,12 @@
              <div class="rpv-head"><h2 class="rpv-title" id="…">…</h2><button class="modal-x rpv-x" data-close>✕</button></div>
              <p class="rpv-status" role="status" aria-live="polite"></p>
              <div class="rpv-opts">…</div>
+             <div class="rpv-format">…</div>      (CarinoPdf.formatSwitch(): File  PDF | HTML)
              <p class="rpv-name"></p>
              <div class="rpv-actions"><button class="btn">Print</button><button class="btn btn-primary">Download PDF</button></div>
+       Every report offers its file as PDF or HTML: the switch sits under the options,
+       never inside their scroll, and the one Download button follows it
+       (carino-pdf.js makes both files).
            </aside>
            <div class="rpv-stage"><iframe class="rpv-frame"></iframe></div>
          </div></div>
@@ -413,7 +417,7 @@
       display: flex; flex-direction: column; gap: 14px; min-width: 0; min-height: 0;
       padding: 16px; border-right: 1px solid var(--border); overflow: hidden;
     }
-    .rpv-head, .rpv-status, .rpv-name, .rpv-actions { flex: none; }
+    .rpv-head, .rpv-status, .rpv-format, .rpv-name, .rpv-actions { flex: none; }
     .rpv-head { display: flex; align-items: flex-start; gap: 8px; }
     .rpv-title {
       flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere;
@@ -430,6 +434,14 @@
     .rpv-opts label { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
     .rpv-opts input[type=checkbox], .rpv-opts input[type=radio] { flex: none; margin: 3px 0 0; }
     .rpv-opts select { width: 100%; }
+    .rpv-format { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .rpv-format[hidden] { display: none; }
+    .rpv-format-label { font-family: var(--mono); font-size: var(--fs-label); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+    .rpv-format-seg { display: inline-flex; }
+    .rpv-format-seg .toggle-btn { min-width: 64px; padding: 6px 12px; margin: 0; }
+    .rpv-format-seg .toggle-btn:first-child { border-radius: 4px 0 0 4px; }
+    .rpv-format-seg .toggle-btn:last-child { border-radius: 0 4px 4px 0; margin-left: -1px; }
+    .rpv-format-seg .toggle-btn:focus-visible { position: relative; z-index: 1; }
     .rpv-name { margin: 0; font-family: var(--mono); font-size: var(--fs-label); color: var(--text-muted); overflow-wrap: anywhere; }
     .rpv-name:empty { display: none; }
     .rpv-actions {
@@ -449,6 +461,7 @@
       .rpv-x { min-width: 44px; min-height: 44px; margin: -10px -8px 0 0; }
       .rpv-status { order: 2; padding: 0 12px; }
       .rpv-opts { order: 3; padding: 0 12px; gap: 8px; max-height: 42dvh; }
+      .rpv-format { order: 4; padding: 0 12px; }
       .rpv-name { order: 4; padding: 0 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
       .rpv-stage { order: 5; flex: 1; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
       .rpv-actions { order: 6; flex-direction: row; margin: 0; padding: 0 12px calc(12px + env(safe-area-inset-bottom, 0px)); border-top: 0; }
